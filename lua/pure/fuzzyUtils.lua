@@ -3,6 +3,7 @@ local func = require('configs.functions')
 local terms = require('pure.terms')
 local cache_dir = vim.fn.stdpath("cache") if vim.fn.isdirectory(cache_dir) == 0 then vim.fn.mkdir(cache_dir, "p") end
 
+---@param opts table The options for fuzzy logic.
 function M.fuzzyLogic(opts)
   local win,buf = func.createWindow(opts.title, opts.ratio)
   local temp = vim.fn.stdpath("cache") .. "/opts_run"
@@ -16,7 +17,14 @@ function M.fuzzyLogic(opts)
 
       if vim.fn.filereadable(temp) == 1 then
         local f = io.open(temp, "r")
-        if f then data = f:read("*all"):gsub("%s+$", "") f:close() end
+        if f then
+          local last_line = ""
+          for line in f:lines() do
+            last_line = line
+          end
+          f:close()
+          data = last_line:gsub("%s+$", "")
+        end
         os.remove(temp)
       end
 
@@ -24,15 +32,17 @@ function M.fuzzyLogic(opts)
         if vim.api.nvim_win_is_valid(win) then vim.api.nvim_win_close(win, true) end
         if vim.api.nvim_buf_is_valid(buf) then vim.api.nvim_buf_delete(buf, { force = true }) end
 
-        if data ~= "" and vim.fn.filereadable(data) ~= nil then
+        if data ~= "" then
           opts.callback(data)
         else
             vim.cmd("stopinsert")
         end
       end)
     end
-  })
-  vim.cmd("startinsert")
+    })
+  vim.defer_fn(function()
+    vim.cmd("startinsert")
+  end, 50)
 end
 
 function M.fuzzySearch(path)
@@ -364,6 +374,51 @@ function M.CompilerCommand()
       terms.toggleTerminal(input, 0.6)
     end
   end)
+end
+
+---@param path string|nil The directory path to explore. If nil, uses current working directory.
+function M.fuzzyExplorer(path)
+  if path == nil then path = vim.fn.getcwd() end
+
+  -- Use ls -ap to show hidden files and classify with indicators (/ for dirs)
+  local list_cmd = "ls -ap --color=always"
+
+  -- Preview command for fzf. It's executed in `path` directory.
+  -- Added --line-range to bat to avoid lagging on large files.
+  local preview_cmd = "if [ -d {} ]; ls -apF --color=always {}; else bat --color=always --style=numbers --line-range :500 {}; end"
+  local fzf_cmd = string.format("fzf --ansi --preview='%s' --print-query", preview_cmd)
+
+  M.fuzzyLogic({
+    title = "Explorer: " .. path,
+    ratio = 0.8,
+    cmd = string.format("cd %s && %s | %s", vim.fn.shellescape(path), list_cmd, fzf_cmd),
+          callback = function(selection)
+            if not selection or selection == "" or selection == "./" then
+              return -- Do nothing
+            end
+    
+            local new_path = vim.fn.resolve(path .. "/" .. selection)
+    
+            if selection:sub(-1) == '/' then
+              -- User intends to create/enter a directory
+              if vim.fn.isdirectory(new_path) == 0 then
+                -- Directory doesn't exist, create it
+                vim.fn.mkdir(new_path, "p")
+              end
+              -- Enter the directory
+              M.fuzzyExplorer(new_path)
+            else
+              -- User intends to open/create a file
+              if vim.fn.isdirectory(new_path) == 1 then
+                -- It's an existing directory, but no trailing slash was typed
+                -- so we enter it instead of trying to edit it as a file.
+                M.fuzzyExplorer(new_path)
+              else
+                -- It's a file (new or existing)
+                vim.cmd("edit! " .. vim.fn.fnameescape(new_path))
+              end
+            end
+          end  })
 end
 
 return M

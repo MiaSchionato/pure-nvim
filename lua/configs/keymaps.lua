@@ -41,19 +41,42 @@ map('n', "<leader>wq", "<cmd>tabclose<CR>", func.getOpts(opts, "Close Tab" ))
 map('n', "<leader>wo", "<cmd>tabonly<CR>", func.getOpts(opts, "Close all other Tabs" ))
 
 -- == Files mappings ==
-map('n', '<leader>e', "<cmd>Oil<cr>" , func.getOpts(opts, "Open Oil File Explorer" ))
-map("n", "<leader>oh","<cmd>Oil /Users/mia/<cr>", func.getOpts(opts, "Oil open Home Directory"))
-map("n", "<leader>op","<cmd>Oil /Users/mia/Projects/<cr>", func.getOpts(opts, "Oil open Projects Directory"))
-map("n", "<leader>on","<cmd>Oil /Users/mia/.config/nvim/<cr>", func.getOpts(opts, "Oil open Nvim config Directory"))
-map("n", "<leader>ol","<cmd>Oil /Users/mia/Documents/my_devops_journey/Languages/<cr>", func.getOpts(opts, "Oil open Languages Directory"))
-map('n', "<leader>o.","<cmd>Oil /Users/mia/.config/<cr>", func.getOpts(opts, "Oil open Directory"))
-map('n', "<leader>om","<cmd>Oil /Users/mia/Documents/MindGarden/<cr>", func.getOpts(opts, "Oil open Directory"))
+map('n', '<leader><leader>', fzf.fuzzyExplorer , func.getOpts(opts, "Explore current directory" ))
+map('n', '<leader>e', fzf.fuzzyExplorer , func.getOpts(opts, "Explore current directory" ))
+
+map("n", "<leader>E",function()
+fzf.fuzzyExplorer("/Users/mia/")
+end, func.getOpts(opts, "Explore Home Directory"))
+
+map("n", "<leader>et",function()
+fzf.fuzzyExplorer("/tmp/")
+end, func.getOpts(opts, "Explore tmp Directory"))
+
+map("n", "<leader>ep",function()
+fzf.fuzzyExplorer("/Users/mia/Projects/")
+end, func.getOpts(opts, "Explore Projects Directory"))
+
+map("n", "<leader>en",function()
+fzf.fuzzyExplorer("/Users/mia/.config/nvim/")
+end, func.getOpts(opts, "Explore Nvim config Directory"))
+
+map("n", "<leader>el",function()
+fzf.fuzzyExplorer("/Users/mia/Documents/my_devops_journey/Languages/")
+end, func.getOpts(opts, "Explore Languages Directory"))
+
+map('n', "<leader>e.",function()
+fzf.fuzzyExplorer("/Users/mia/.config/")
+end, func.getOpts(opts, "Explore Directory"))
+
+map('n', "<leader>em",function()
+fzf.fuzzyExplorer("/Users/mia/Documents/MindGarden/")
+end, func.getOpts(opts, "Explore Directory"))
 
 
 -- == Fuzzy Search ==
 -- Fuzzy Search Directories
-map("n", "<leader>fh",function()fzf.fuzzySearch("/Users/mia/")end, func.getOpts(opts, "Fuzzy Search Home Directory"))
-map("n", "<leader><leader>",function()fzf.fuzzySearch(vim.fn.expand("%:p:h:h").."/")end, func.getOpts(opts, "Fuzzy Search Home Directory"))
+map("n", "<leader>f~",function()fzf.fuzzySearch("/Users/mia/")end, func.getOpts(opts, "Fuzzy Search Home Directory"))
+map("n", "<leader>ff",function()fzf.fuzzySearch(vim.fn.expand("%:p:h:h").."/")end, func.getOpts(opts, "Fuzzy Search Home Directory"))
 map("n", "<leader>fp",function()fzf.fuzzySearch("/Users/mia/Projects/")end, func.getOpts(opts, "Fuzzy Search Projects Directory"))
 map("n", "<leader>fn",function()fzf.fuzzySearch("/Users/mia/.config/nvim/")end, func.getOpts(opts, "Fuzzy Search Nvim config Directory"))
 map("n", "<leader>fl",function()fzf.fuzzySearch("/Users/mia/Documents/my_devops_journey/Languages/")end, func.getOpts(opts, "Fuzzy Search Languages Directory"))
@@ -158,10 +181,11 @@ map('v', "<down>", ":m '>+1<CR>gv=gv", func.getOpts(opts, "Move selection down" 
 map('n', "J", "mzJ`z", func.getOpts(opts, "Join lines and keep cursor position" ))
 
 -- ==== Terminal mappings ===
+-- TODO: make a bottom terminal that can be toggled
+-- TODO: make different terminals instances (like tab or split terminals)
 map('n', '<leader>tt', term.toggleTerminal, func.getOpts(opts, 'Toggle bottom terminal'))
-map('n', '<leader>tg',function () term.toggleTerminal("gemini")end, func.getOpts(opts, 'Toggle bottom terminal'))
-map('n', '<leader>th',function () term.toggleTerminal("cd")end, func.getOpts(opts, 'Toggle bottom terminal'))
-map('t', 'qq', [[<C-\><C-n>]], func.getOpts(opts, 'Close on terminal mode'))
+map('n', '<leader>tg',function () term.toggleTerminal("gemini")end, func.getOpts(opts, 'Toggle Gemini terminal'))
+map('t', '<S-esc>', [[<C-\><C-n>]], func.getOpts(opts, 'Close on terminal mode'))
 
 
 -- LSP actions
@@ -298,37 +322,27 @@ vim.schedule( function()
     end, { expr = true, replace_keycodes = true})
 
 
-   map('i', '<CR>', function()
-    local pum = vim.fn.pumvisible()
-     if pum == 1 then
-       return "<C-y>"
-     end
-
-     if func.isBlank() then
-       return "<CR>"
-     end
-
-     return "<CR>"
-   end,{ expr = true, replace_keycodes = true})
+  map('i', '<CR>', 'copilot#Accept("\\<CR>")', {
+    expr = true,
+    replace_keycodes = false
+  })
 end)
 
--- vim.g.copilot_no_tab_map = true
-
-vim.keymap.set("i", "<CR>", function()
-  if vim.fn.pumvisible() == 1 then
-    -- Pega os dados do item selecionado antes de fechar o menu
-    local item = vim.fn.complete_info({ "selected" }).items[1]
-    
-    -- Se houver algo selecionado e for um snippet (ou vier do scls)
-    if item and item.word ~= "" then
-      vim.schedule(function()
-        -- Tenta expandir o que foi inserido usando o motor nativo
-        -- O scls envia o snippet no corpo, o Neovim 0.10+ detecta automaticamente
-        -- mas as vezes precisa desse trigger se o 'kind' for snippet.
-        vim.snippet.expand(item.word) 
-      end)
-    end
-    return "<C-y>"
-  end
-  return "<CR>"
-end, { expr = true })
+-- vim.keymap.set("i", "<CR>", function()
+--   if vim.fn.pumvisible() == 1 then
+--     -- Pega os dados do item selecionado antes de fechar o menu
+--     local item = vim.fn.complete_info({ "selected" }).items[1]
+--
+--     -- Se houver algo selecionado e for um snippet (ou vier do scls)
+--     if item and item.word ~= "" then
+--       vim.schedule(function()
+--         -- Tenta expandir o que foi inserido usando o motor nativo
+--         -- O scls envia o snippet no corpo, o Neovim 0.10+ detecta automaticamente
+--         -- mas as vezes precisa desse trigger se o 'kind' for snippet.
+--         vim.snippet.expand(item.word) 
+--       end)
+--     end
+--     return "<C-y>"
+--   end
+--   return "<CR>"
+-- end, { expr = true })

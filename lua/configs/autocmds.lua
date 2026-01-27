@@ -83,7 +83,8 @@ vim.api.nvim_create_autocmd("InsertCharPre", {
     if vim.fn.pumvisible() == 0 and vim.v.char:match("[%w_]") then
 
       vim.schedule(function()
-        if next(vim.lsp.get_clients({bufnr = 0})) then
+
+        if next(vim.lsp.get_clients({bufnr = 0})) and vim.bo.omnifunc ~= "" then
           vim.fn.feedkeys(vim.api.nvim_replace_termcodes("<C-x><C-o>", true, false, true), "n")
         else
           vim.fn.feedkeys(vim.api.nvim_replace_termcodes("<C-x><C-n>", true, false, true), "n")
