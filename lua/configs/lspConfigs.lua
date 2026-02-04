@@ -14,7 +14,6 @@ local servers = {
   'copilot',
   'csharp_ls',
   'scls',
-  -- 'ccls',
 }
 
 for _, server_name in ipairs(servers) do

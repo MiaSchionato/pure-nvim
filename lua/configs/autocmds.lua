@@ -93,6 +93,7 @@ vim.api.nvim_create_autocmd("InsertCharPre", {
     end
   end,
 })
+
 vim.api.nvim_create_autocmd("CompleteDone", {
   callback = function()
     local completed_item = vim.v.completed_item
@@ -100,3 +101,4 @@ vim.api.nvim_create_autocmd("CompleteDone", {
     end
   end
 })
+

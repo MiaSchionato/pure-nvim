@@ -74,6 +74,7 @@ return {
     'configure.ac', -- AutoTools
     '.git',
   },
+  root_dir = require('lsp.util').root_pattern('compile_commands.json'),
   capabilities = require('lsp.util').default_config.capabilities,
   on_attach = function(client, bufnr)
     vim.api.nvim_buf_create_user_command(bufnr, 'LspClangdSwitchSourceHeader', function()

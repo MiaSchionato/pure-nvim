@@ -23,16 +23,17 @@ function M.fuzzyLogic(opts)
             last_line = line
           end
           f:close()
+          os.remove(temp)
           data = last_line:gsub("%s+$", "")
         end
-        os.remove(temp)
+          os.remove(temp)
       end
 
       vim.schedule(function()
         if vim.api.nvim_win_is_valid(win) then vim.api.nvim_win_close(win, true) end
         if vim.api.nvim_buf_is_valid(buf) then vim.api.nvim_buf_delete(buf, { force = true }) end
 
-        if data ~= "" then
+        if data ~= "" or opts.isChooser then
           opts.callback(data)
         else
             vim.cmd("stopinsert")
@@ -113,11 +114,27 @@ function M.fuzzyGit()
 end
 
 
--- TODO: finish this func
 function M.fuzzyGitGrep()
-  local temp = vim.fn.stdpath("cache") .. "/git_log"
-  vim.cmd(string.format("!  git log --oneline > %s", temp))
-  M.fuzzyGrep(temp)
+  local git_grep = "git grep --line-number --column"
+  local fzf = "fzf --ansi --delimiter : --preview 'bat --style=numbers --color=always --highlight-line {2} {1}' --preview-window 'up,60\\%,border-bottom,+{2}+3/3'"
+  local path = vim.fn.expand("%:p:h")
+
+  M.fuzzyLogic({
+    title = "Fuzzy Git Grep",
+    ratio = 0.8,
+    cmd = string.format("cd %s && %s . | %s", path, git_grep, fzf),
+    callback = function(selection)
+      local full_path, line, col_str = selection:match("^([^:]+):(%d+):(%d+)")
+      if not full_path then return end
+      local col = tonumber(col_str)
+
+      vim.cmd("edit! " .. vim.fn.fnameescape(full_path))
+      if line and col then
+        vim.api.nvim_win_set_cursor(0, {tonumber(line), col})
+      end
+      vim.cmd("filetype detect")
+    end
+  })
 end
 
 function M.fuzzyJump()
@@ -145,6 +162,7 @@ function M.fuzzyJump()
     ratio = 0.8,
     cmd = string.format("cat %s | %s", temp, fzf),
     callback = function (selection)
+      os.remove(temp)
       local full_path, line, col = selection:match("^([^:]+):(%d+):(%d+)")
       vim.cmd("edit! " .. vim.fn.fnameescape(full_path))
       if full_path and line and col then
@@ -181,6 +199,7 @@ function M.fuzzyBuffers()
     ratio = 0.7,
     cmd = string.format("cat %s | fzf --keep-right --tiebreak=end", temp),
     callback = function (selection)
+        os.remove(temp)
         vim.cmd("edit " .. vim.fn.fnameescape(selection))
         vim.cmd("filetype detect")
     end
@@ -208,6 +227,7 @@ function M.fuzzyOldfiles()
       ratio = 0.7,
       cmd = string.format("cat %s | fzf",temp),
       callback = function(selection)
+        os.remove(temp)
         vim.cmd("edit " .. vim.fn.fnameescape(selection))
         vim.cmd("filetype detect")
       end
@@ -230,6 +250,7 @@ function M.fuzzyColorscheme()
       ratio = 0.7,
       cmd = string.format("cat %s | fzf",temp),
       callback = function(theme)
+        os.remove(temp)
         vim.cmd("colorscheme "  .. vim.fn.fnameescape(theme))
         vim.g.MY_THEME = theme
         if vim.g.neovide then
@@ -419,6 +440,30 @@ function M.fuzzyExplorer(path)
               end
             end
           end  })
+end
+
+function M.yaziExplorer(path)
+  if path == nil then path = vim.fn.getcwd() end
+  local temp = vim.fn.stdpath("cache") .. "/yazi_explorer"
+  local yazi = "yazi --chooser-file " .. temp
+
+  M.fuzzyLogic({
+    title = "Yazi: " .. path,
+    ratio = 0.8,
+    cmd = string.format("%s", yazi),
+    isChooser = true,
+    callback = function()
+        local f = io.open(temp, "r")
+        if f and vim.fn.filereadable(temp) then
+          local content = f:read("*a")
+          f:close()
+          vim.cmd("edit! " .. vim.fn.fnameescape(content))
+          os.remove(temp)
+        else
+          vim.notify("No file selected", vim.log.levels.WARN)
+        end
+      end
+    })
 end
 
 return M

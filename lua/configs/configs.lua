@@ -12,7 +12,8 @@ o.relativenumber = true                      -- Relative line numbers
 o.cursorline = false                          -- Highlight current line
 o.winborder = "rounded"                       -- Border of windows 
 o.wrap = true
-o.list = true
+o.list = false                             -- Show invisible characters
+
 o.listchars:append({ extends = "⟩", precedes = "⟨" })
 
 -- Indentation

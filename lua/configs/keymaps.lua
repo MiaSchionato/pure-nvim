@@ -42,34 +42,61 @@ map('n', "<leader>wo", "<cmd>tabonly<CR>", func.getOpts(opts, "Close all other T
 
 -- == Files mappings ==
 map('n', '<leader><leader>', fzf.fuzzyExplorer , func.getOpts(opts, "Explore current directory" ))
-map('n', '<leader>e', fzf.fuzzyExplorer , func.getOpts(opts, "Explore current directory" ))
+
+map('n', '<leader>e', function ()
+local ok =  pcall(fzf.yaziExplorer, vim.fn.expand("%:p:h").."/")
+  if not ok then
+    fzf.fuzzyExplorer(vim.fn.expand("%:p:h").."/")
+  end
+end, func.getOpts(opts, "Explore current directory" ))
 
 map("n", "<leader>E",function()
-fzf.fuzzyExplorer("/Users/mia/")
+local ok = pcall(fzf.yaziExplorer,"/Users/mia/")
+  if not ok then
+    fzf.fuzzyExplorer("/Users/mia/")
+  end
 end, func.getOpts(opts, "Explore Home Directory"))
 
 map("n", "<leader>et",function()
-fzf.fuzzyExplorer("/tmp/")
+local ok = pcall(fzf.fuzzyExplorer,"/tmp/")
+if not ok then
+  fzf.fuzzyExplorer("/tmp/")
+end
 end, func.getOpts(opts, "Explore tmp Directory"))
 
 map("n", "<leader>ep",function()
-fzf.fuzzyExplorer("/Users/mia/Projects/")
+local ok = pcall(fzf.fuzzyExplorer,"/Users/mia/Projects/")
+if not ok then
+  fzf.fuzzyExplorer("/Users/mia/Projects/")
+end
 end, func.getOpts(opts, "Explore Projects Directory"))
 
 map("n", "<leader>en",function()
-fzf.fuzzyExplorer("/Users/mia/.config/nvim/")
+local ok = pcall(fzf.fuzzyExplorer,"/Users/mia/.config/nvim/")
+if not ok then
+  fzf.fuzzyExplorer("/Users/mia/.config/nvim/")
+end
 end, func.getOpts(opts, "Explore Nvim config Directory"))
 
 map("n", "<leader>el",function()
-fzf.fuzzyExplorer("/Users/mia/Documents/my_devops_journey/Languages/")
+local ok = pcall(fzf.fuzzyExplorer,"/Users/mia/Documents/MyJourney/Languages/")
+if not ok then
+  fzf.fuzzyExplorer("/Users/mia/Documents/MyJourney/Languages/")
+end
 end, func.getOpts(opts, "Explore Languages Directory"))
 
 map('n', "<leader>e.",function()
-fzf.fuzzyExplorer("/Users/mia/.config/")
+local ok = pcall(fzf.fuzzyExplorer,"/Users/mia/.config/")
+if not ok then
+  fzf.fuzzyExplorer("/Users/mia/.config/")
+end
 end, func.getOpts(opts, "Explore Directory"))
 
 map('n', "<leader>em",function()
-fzf.fuzzyExplorer("/Users/mia/Documents/MindGarden/")
+local ok = pcall(fzf.fuzzyExplorer,"/Users/mia/Documents/MindGarden/")
+if not ok then
+  fzf.fuzzyExplorer("/Users/mia/Documents/MindGarden/")
+end
 end, func.getOpts(opts, "Explore Directory"))
 
 
@@ -79,7 +106,7 @@ map("n", "<leader>f~",function()fzf.fuzzySearch("/Users/mia/")end, func.getOpts(
 map("n", "<leader>ff",function()fzf.fuzzySearch(vim.fn.expand("%:p:h:h").."/")end, func.getOpts(opts, "Fuzzy Search Home Directory"))
 map("n", "<leader>fp",function()fzf.fuzzySearch("/Users/mia/Projects/")end, func.getOpts(opts, "Fuzzy Search Projects Directory"))
 map("n", "<leader>fn",function()fzf.fuzzySearch("/Users/mia/.config/nvim/")end, func.getOpts(opts, "Fuzzy Search Nvim config Directory"))
-map("n", "<leader>fl",function()fzf.fuzzySearch("/Users/mia/Documents/my_devops_journey/Languages/")end, func.getOpts(opts, "Fuzzy Search Languages Directory"))
+map("n", "<leader>fl",function()fzf.fuzzySearch("/Users/mia/Documents/MyJourney/Languages/")end, func.getOpts(opts, "Fuzzy Search Languages Directory"))
 map('n', "<leader>f.",function()fzf.fuzzySearch("/Users/mia/.config/")end, func.getOpts(opts, "Fuzzy .Config Directory"))
 map('n', "<leader>fm",function()fzf.fuzzySearch("/Users/mia/Documents/MindGarden/")end, func.getOpts(opts, "Fuzzy .Config Directory"))
 
@@ -95,19 +122,21 @@ map('n', '<leader>fgx', zet.insertTemplate , func.getOpts(opts, "Fuzzy Insert Te
 -- map('n', "<leader>fgx", function() fzf.fuzzy_git_grep()end)
 
 -- New File
-map("n", "<leader>nf",function () fzf.NewFile("/Users/mia/") end, func.getOpts(opts, "Fuzzy New File home dir"))
+map("n", "<leader>nf",function () fzf.NewFile("/" .. vim.fn.expand('%:p:h:h')) end, func.getOpts(opts, "Fuzzy New File home dir"))
+map("n", "<leader>nh",function () fzf.NewFile("/Users/mia/") end, func.getOpts(opts, "Fuzzy New File home dir"))
 map("n", "<leader>nt",function () fzf.NewFile("/tmp/") end, func.getOpts(opts, "Fuzzy New File scratch dir"))
 map("n", "<leader>nm",function () fzf.NewFile("/Users/mia/Documents/MindGarden/") end, func.getOpts(opts, "Fuzzy Search Files"))
 map("n", "<leader>np",function () fzf.NewFile("/Users/mia/Projects/") end, func.getOpts(opts, "Fuzzy Search Files"))
 map("n", "<leader>nn",function () fzf.NewFile("/Users/mia/.config/nvim/") end, func.getOpts(opts, "Fuzzy Search Files"))
 map("n", "<leader>n.",function () fzf.NewFile("/Users/mia/.config/") end, func.getOpts(opts, "Fuzzy Search Files"))
-map("n", "<leader>nl",function () fzf.NewFile("/Users/mia/Documents/my_devops_journey/Languages/") end, func.getOpts(opts, "Fuzzy Search Files"))
+map("n", "<leader>nl",function () fzf.NewFile("/Users/mia/Documents/MyJourney/Languages/") end, func.getOpts(opts, "Fuzzy Search Files"))
 
 
 
 -- Git stuff
-map('n', "<leader>gl", function() fzf.fuzzyGit()end, func.getOpts(opts,"Git Fuzzy Logs"))
-map('n', "<leader>gd", function() func.gitDiffToggle()end, func.getOpts(opts,"Git Diff"))
+map('n', "<leader>gl", fzf.fuzzyGit, func.getOpts(opts,"Git Fuzzy Logs"))
+map('n', "<leader>gg", fzf.fuzzyGitGrep, func.getOpts(opts,"Git Grep"))
+map('n', "<leader>gd", func.gitDiffToggle, func.getOpts(opts,"Git Diff"))
 
 -- == Visual mode mappings ==
 map('v', "<leader>s", [[:s/\%V]], {desc =  "Substitute selected" })
@@ -346,3 +375,6 @@ end)
 --   end
 --   return "<CR>"
 -- end, { expr = true })
+-- ============================================================================================================
+--                                                 test
+-- ============================================================================================================
