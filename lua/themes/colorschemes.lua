@@ -1,3 +1,10 @@
+-- The colorscheme applied at startup. This was never set anywhere, so
+-- g:MY_THEME was nil on every launch and the VimEnter handler in
+-- configs/autocmds.lua silently failed to apply any theme. "myghtfly" is the
+-- local colorscheme in colors/ and the only one that defines the statusline
+-- groups (BlueMode, IconsBlue, ...) that pure/statusline.lua renders.
+vim.g.MY_THEME = vim.g.MY_THEME or "myghtfly"
+
 local utils = require("configs.functions")
 local colorschemes = {
   ["solarized-osaka"]  =  "craftzdog/solarized-osaka.nvim",
@@ -22,17 +29,23 @@ local floatGrous = {
   FloatBorder = { bg = "NONE" },
 }
 
-local NeoSolarized = require("NeoSolarized")
-local Solarized_osaka = require("solarized-osaka")
+-- Required defensively: a bare require() here aborted this whole module when a
+-- theme plugin was missing or failed to clone, taking the transparency setup
+-- and the <leader>ctx mapping down with it.
+local okNeo, NeoSolarized = pcall(require, "NeoSolarized")
+local okOsaka, Solarized_osaka = pcall(require, "solarized-osaka")
 
-vim.schedule(function ()
-    if vim.g.neovide then
-    NeoSolarized.setup({ style = "dark", transparent = false,})
-    Solarized_osaka.setup({ style = "dark", transparent = false, })
+vim.schedule(function()
+  local transparent = not vim.g.neovide
+
+  if okNeo then
+    NeoSolarized.setup({ style = "dark", transparent = transparent })
+  end
+  if okOsaka then
+    Solarized_osaka.setup({ style = "dark", transparent = transparent })
+  end
+  if vim.g.neovide and okNeo then
     utils.ConfigHighlightByColorscheme("NeoSolarized", floatGrous)
-  else
-    NeoSolarized.setup({ style = "dark", transparent = true, })
-    Solarized_osaka.setup({ style = "dark", transparent = true, })
   end
 end)
 

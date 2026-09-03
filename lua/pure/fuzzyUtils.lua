@@ -47,7 +47,7 @@ function M.fuzzyLogic(opts)
 end
 
 function M.fuzzySearch(path)
-  if path == nil then path = "/Users/mia/" end
+  if path == nil then path = vim.uv.os_homedir():gsub("\\", "/") .. "/" end
   local fd = "fd --hidden --type file . --strip-cwd-prefix --base-directory  "
   local fzf = "fzf --keep-right --tiebreak=end"
 
@@ -73,7 +73,10 @@ function M.fuzzyGrep(path)
     ratio = 0.8,
     cmd = string.format("%s %s | %s",rg,path,fzf),
     callback = function(selection)
-      local full_path, line, col = selection:match("^([^:]+):(%d+):(%d+)")
+      -- Windows paths start with a drive letter, so the old '^([^:]+):'
+      -- pattern stopped at the 'C:' colon and returned nil. A lazy '.-'
+      -- matches up to the first ':line:col' pair instead.
+      local full_path, line, col = selection:match("^(.-):(%d+):(%d+)")
       if full_path and line and col then
         vim.cmd("edit! " .. vim.fn.fnameescape(full_path))
         vim.api.nvim_win_set_cursor(0, {tonumber(line),tonumber(col)})
@@ -124,7 +127,7 @@ function M.fuzzyGitGrep()
     ratio = 0.8,
     cmd = string.format("cd %s && %s . | %s", path, git_grep, fzf),
     callback = function(selection)
-      local full_path, line, col_str = selection:match("^([^:]+):(%d+):(%d+)")
+      local full_path, line, col_str = selection:match("^(.-):(%d+):(%d+)")
       if not full_path then return end
       local col = tonumber(col_str)
 
@@ -163,9 +166,15 @@ function M.fuzzyJump()
     cmd = string.format("cat %s | %s", temp, fzf),
     callback = function (selection)
       os.remove(temp)
-      local full_path, line, col = selection:match("^([^:]+):(%d+):(%d+)")
+      -- Windows paths start with a drive letter, so the old '^([^:]+):'
+      -- pattern stopped at the 'C:' colon and returned nil. A lazy '.-'
+      -- matches up to the first ':line:col' pair instead.
+      local full_path, line, col = selection:match("^(.-):(%d+):(%d+)")
+      -- fnameescape(full_path) ran before this guard, so a non-matching line
+      -- crashed with "expected string, got nil".
+      if not full_path then return end
       vim.cmd("edit! " .. vim.fn.fnameescape(full_path))
-      if full_path and line and col then
+      if line and col then
         vim.api.nvim_win_set_cursor(0, {tonumber(line),tonumber(col)})
         vim.cmd("filetype detect")
       end
@@ -382,7 +391,8 @@ function M.NewFile(path)
         if input and input ~= "" then
           vim.cmd("edit! " .. vim.fn.fnameescape(path .. selection .. "/" .. input))
         else
-          vim.cmd("edit! " .. vim.fn.fnameescape(path .. selection).. "Untitled")
+          -- was `path .. selection` .. "Untitled" -> ".../dirUntitled"
+          vim.cmd("edit! " .. vim.fn.fnameescape(path .. selection .. "/Untitled"))
         end
       end)
     end
@@ -406,7 +416,10 @@ function M.fuzzyExplorer(path)
 
   -- Preview command for fzf. It's executed in `path` directory.
   -- Added --line-range to bat to avoid lagging on large files.
-  local preview_cmd = "if [ -d {} ]; ls -apF --color=always {}; else bat --color=always --style=numbers --line-range :500 {}; end"
+  -- POSIX 'if/then/fi'. This was fish syntax ("if ...; ...; else ...; end"),
+  -- which the bash 'shell' set in init.lua rejects, so the preview pane only
+  -- ever rendered a syntax error.
+  local preview_cmd = "if [ -d {} ]; then ls -apF --color=always {}; else bat --color=always --style=numbers --line-range :500 {}; fi"
   local fzf_cmd = string.format("fzf --ansi --preview='%s' --print-query", preview_cmd)
 
   M.fuzzyLogic({
@@ -445,7 +458,9 @@ end
 function M.yaziExplorer(path)
   if path == nil then path = vim.fn.getcwd() end
   local temp = vim.fn.stdpath("cache") .. "/yazi_explorer"
-  local yazi = "yazi --chooser-file " .. temp
+  -- `path` was accepted and then dropped, so yazi always opened in the cwd and
+  -- <leader>E / <leader>e never landed where the mapping asked for.
+  local yazi = "yazi " .. vim.fn.shellescape(path) .. " --chooser-file " .. temp
 
   M.fuzzyLogic({
     title = "Yazi: " .. path,
@@ -454,11 +469,18 @@ function M.yaziExplorer(path)
     isChooser = true,
     callback = function()
         local f = io.open(temp, "r")
-        if f and vim.fn.filereadable(temp) then
+        if f then
           local content = f:read("*a")
           f:close()
-          vim.cmd("edit! " .. vim.fn.fnameescape(content))
+          -- yazi writes a trailing newline; without trimming it became part of
+          -- the filename passed to :edit.
+          content = content:gsub("%s+$", "")
           os.remove(temp)
+          if content == "" then
+            vim.notify("No file selected", vim.log.levels.WARN)
+            return
+          end
+          vim.cmd("edit! " .. vim.fn.fnameescape(content))
         else
           vim.notify("No file selected", vim.log.levels.WARN)
         end

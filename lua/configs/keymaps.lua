@@ -1,4 +1,5 @@
 local map = vim.keymap.set
+local home = vim.uv.os_homedir():gsub("\\", "/") .. "/"
 local term = require('pure.terms')
 local func = require('configs.functions')
 local fzf = require('pure.fuzzyUtils')
@@ -51,9 +52,9 @@ local ok =  pcall(fzf.yaziExplorer, vim.fn.expand("%:p:h").."/")
 end, func.getOpts(opts, "Explore current directory" ))
 
 map("n", "<leader>E",function()
-local ok = pcall(fzf.yaziExplorer,"/Users/mia/")
+local ok = pcall(fzf.yaziExplorer,home)
   if not ok then
-    fzf.fuzzyExplorer("/Users/mia/")
+    fzf.fuzzyExplorer(home)
   end
 end, func.getOpts(opts, "Explore Home Directory"))
 
@@ -65,50 +66,50 @@ end
 end, func.getOpts(opts, "Explore tmp Directory"))
 
 map("n", "<leader>ep",function()
-local ok = pcall(fzf.fuzzyExplorer,"/Users/mia/Projects/")
+local ok = pcall(fzf.fuzzyExplorer,home .. "Projects/")
 if not ok then
-  fzf.fuzzyExplorer("/Users/mia/Projects/")
+  fzf.fuzzyExplorer(home .. "Projects/")
 end
 end, func.getOpts(opts, "Explore Projects Directory"))
 
 map("n", "<leader>en",function()
-local ok = pcall(fzf.fuzzyExplorer,"/Users/mia/.config/nvim/")
+local ok = pcall(fzf.fuzzyExplorer,home .. ".config/nvim/")
 if not ok then
-  fzf.fuzzyExplorer("/Users/mia/.config/nvim/")
+  fzf.fuzzyExplorer(home .. ".config/nvim/")
 end
 end, func.getOpts(opts, "Explore Nvim config Directory"))
 
 map("n", "<leader>el",function()
-local ok = pcall(fzf.fuzzyExplorer,"/Users/mia/Documents/MyJourney/Languages/")
+local ok = pcall(fzf.fuzzyExplorer,home .. "Documents/MyJourney/Languages/")
 if not ok then
-  fzf.fuzzyExplorer("/Users/mia/Documents/MyJourney/Languages/")
+  fzf.fuzzyExplorer(home .. "Documents/MyJourney/Languages/")
 end
 end, func.getOpts(opts, "Explore Languages Directory"))
 
 map('n', "<leader>e.",function()
-local ok = pcall(fzf.fuzzyExplorer,"/Users/mia/.config/")
+local ok = pcall(fzf.fuzzyExplorer,home .. ".config/")
 if not ok then
-  fzf.fuzzyExplorer("/Users/mia/.config/")
+  fzf.fuzzyExplorer(home .. ".config/")
 end
 end, func.getOpts(opts, "Explore Directory"))
 
 map('n', "<leader>em",function()
-local ok = pcall(fzf.fuzzyExplorer,"/Users/mia/Documents/MindGarden/")
+local ok = pcall(fzf.fuzzyExplorer,home .. "Documents/MindGarden/")
 if not ok then
-  fzf.fuzzyExplorer("/Users/mia/Documents/MindGarden/")
+  fzf.fuzzyExplorer(home .. "Documents/MindGarden/")
 end
 end, func.getOpts(opts, "Explore Directory"))
 
 
 -- == Fuzzy Search ==
 -- Fuzzy Search Directories
-map("n", "<leader>f~",function()fzf.fuzzySearch("/Users/mia/")end, func.getOpts(opts, "Fuzzy Search Home Directory"))
+map("n", "<leader>f~",function()fzf.fuzzySearch(home)end, func.getOpts(opts, "Fuzzy Search Home Directory"))
 map("n", "<leader>ff",function()fzf.fuzzySearch(vim.fn.expand("%:p:h:h").."/")end, func.getOpts(opts, "Fuzzy Search Home Directory"))
-map("n", "<leader>fp",function()fzf.fuzzySearch("/Users/mia/Projects/")end, func.getOpts(opts, "Fuzzy Search Projects Directory"))
-map("n", "<leader>fn",function()fzf.fuzzySearch("/Users/mia/.config/nvim/")end, func.getOpts(opts, "Fuzzy Search Nvim config Directory"))
-map("n", "<leader>fl",function()fzf.fuzzySearch("/Users/mia/Documents/MyJourney/Languages/")end, func.getOpts(opts, "Fuzzy Search Languages Directory"))
-map('n', "<leader>f.",function()fzf.fuzzySearch("/Users/mia/.config/")end, func.getOpts(opts, "Fuzzy .Config Directory"))
-map('n', "<leader>fm",function()fzf.fuzzySearch("/Users/mia/Documents/MindGarden/")end, func.getOpts(opts, "Fuzzy .Config Directory"))
+map("n", "<leader>fp",function()fzf.fuzzySearch(home .. "Projects/")end, func.getOpts(opts, "Fuzzy Search Projects Directory"))
+map("n", "<leader>fn",function()fzf.fuzzySearch(home .. ".config/nvim/")end, func.getOpts(opts, "Fuzzy Search Nvim config Directory"))
+map("n", "<leader>fl",function()fzf.fuzzySearch(home .. "Documents/MyJourney/Languages/")end, func.getOpts(opts, "Fuzzy Search Languages Directory"))
+map('n', "<leader>f.",function()fzf.fuzzySearch(home .. ".config/")end, func.getOpts(opts, "Fuzzy .Config Directory"))
+map('n', "<leader>fm",function()fzf.fuzzySearch(home .. "Documents/MindGarden/")end, func.getOpts(opts, "Fuzzy .Config Directory"))
 
 -- Fuzzy Grep
 map('n', "<leader>fg", function() fzf.fuzzyGrep(vim.fn.expand('%:p:h:h'))end, func.getOpts(opts, "Fuzzy Grep"))
@@ -123,13 +124,13 @@ map('n', '<leader>fgx', zet.insertTemplate , func.getOpts(opts, "Fuzzy Insert Te
 
 -- New File
 map("n", "<leader>nf",function () fzf.NewFile("/" .. vim.fn.expand('%:p:h:h')) end, func.getOpts(opts, "Fuzzy New File home dir"))
-map("n", "<leader>nh",function () fzf.NewFile("/Users/mia/") end, func.getOpts(opts, "Fuzzy New File home dir"))
+map("n", "<leader>nh",function () fzf.NewFile(home) end, func.getOpts(opts, "Fuzzy New File home dir"))
 map("n", "<leader>nt",function () fzf.NewFile("/tmp/") end, func.getOpts(opts, "Fuzzy New File scratch dir"))
-map("n", "<leader>nm",function () fzf.NewFile("/Users/mia/Documents/MindGarden/") end, func.getOpts(opts, "Fuzzy Search Files"))
-map("n", "<leader>np",function () fzf.NewFile("/Users/mia/Projects/") end, func.getOpts(opts, "Fuzzy Search Files"))
-map("n", "<leader>nn",function () fzf.NewFile("/Users/mia/.config/nvim/") end, func.getOpts(opts, "Fuzzy Search Files"))
-map("n", "<leader>n.",function () fzf.NewFile("/Users/mia/.config/") end, func.getOpts(opts, "Fuzzy Search Files"))
-map("n", "<leader>nl",function () fzf.NewFile("/Users/mia/Documents/MyJourney/Languages/") end, func.getOpts(opts, "Fuzzy Search Files"))
+map("n", "<leader>nm",function () fzf.NewFile(home .. "Documents/MindGarden/") end, func.getOpts(opts, "Fuzzy Search Files"))
+map("n", "<leader>np",function () fzf.NewFile(home .. "Projects/") end, func.getOpts(opts, "Fuzzy Search Files"))
+map("n", "<leader>nn",function () fzf.NewFile(home .. ".config/nvim/") end, func.getOpts(opts, "Fuzzy Search Files"))
+map("n", "<leader>n.",function () fzf.NewFile(home .. ".config/") end, func.getOpts(opts, "Fuzzy Search Files"))
+map("n", "<leader>nl",function () fzf.NewFile(home .. "Documents/MyJourney/Languages/") end, func.getOpts(opts, "Fuzzy Search Files"))
 
 
 
@@ -154,7 +155,9 @@ map('v', ">", ">gv", func.getOpts(opts, "Indent right and reselect" ))
 map('n', "<leader>p", '"*p', func.getOpts(opts, "Clipboard Paste" ))
 map("x", "<leader>p", [["_dP]])
 map({ 'n', "v" }, "<leader>y", '"*y', func.getOpts(opts, "Clipboard Paste" ))
-map({ 'n', "v" },"<leader>dd", '"D', func.getOpts(opts, "Delete without yanking" ))
+-- '"D' selected register D and then waited for an operator that never came.
+-- The black-hole register is what "delete without yanking" actually needs.
+map({ 'n', "v" },"<leader>dd", '"_d', func.getOpts(opts, "Delete without yanking" ))
 
 map("n", "<leader>xf", "<cmd>!chmod +x %<CR>", {})
 map('n', "<leader>r", [[:%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><Left>]], {desc = "Rename selected word"})
@@ -289,14 +292,19 @@ map('n', '<leader>fx', fzf.fuzzyColorscheme )
 -- textobjects
 -- ============================================================================================================
 
-map({'x', 'o'}, 'is', 'i[',{expr = true, desc = "Inner Square Brackets []"})
-map({'x', 'o'}, 'as', 'a[',{expr = true, desc = "Outer Square Brackets []"})
+-- No expr=true here: with it the rhs is evaluated as a Vimscript *expression*,
+-- so 'i[' was parsed as the variable `i` and every one of these raised
+-- "E121: Undefined variable: i" instead of selecting anything. They are plain
+-- key sequences, and stay noremap so 'i.' reaches the builtin 'is' (sentence)
+-- rather than the 'is' remapped just above.
+map({'x', 'o'}, 'is', 'i[', { desc = "Inner Square Brackets []" })
+map({'x', 'o'}, 'as', 'a[', { desc = "Outer Square Brackets []" })
 
-map({'x', 'o'}, 'ic',[[i{]],{expr = true, desc = "Inner Curly Brackets []"})
-map({'x', 'o'}, 'ac',[[a}]],{expr = true, desc = "Outer Curly Brackets []"})
+map({'x', 'o'}, 'ic', [[i{]], { desc = "Inner Curly Brackets {}" })
+map({'x', 'o'}, 'ac', [[a}]], { desc = "Outer Curly Brackets {}" })
 
-map({'x', 'o'}, 'i.',[[is]],{expr = true, desc = "Inner Sentence "})
-map({'x', 'o'}, 'a.',[[as]],{expr = true, desc = "Outer Sentence "})
+map({'x', 'o'}, 'i.', [[is]], { desc = "Inner Sentence" })
+map({'x', 'o'}, 'a.', [[as]], { desc = "Outer Sentence" })
 
 map('n', '<C-p>',[[%]] )
 

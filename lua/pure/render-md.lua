@@ -8,12 +8,19 @@ vim.api.nvim_create_autocmd("FileType", {
     vim.opt_local.textwidth = 110
     vim.opt_local.formatoptions = "tcnq"
     vim.opt_local.spell = true
-    vim.opt_local.spelllang = {
-      "pt_br",
-      "en",
-      "it",
-      -- "fr",
-    }
+
+    -- Only enable languages whose word list is actually present. A missing one
+    -- makes Neovim warn ('Cannot find word list "pt.utf-8.spl"') every single
+    -- time a markdown buffer opens, and prompt to download it.
+    local wanted = { "pt_br", "en", "it" }
+    local available = {}
+    for _, lang in ipairs(wanted) do
+      local base = lang:gsub("_.*", "")   -- 'pt_br' looks for 'pt.<enc>.spl'
+      if vim.fn.globpath(vim.o.runtimepath, "spell/" .. base .. ".*.spl") ~= "" then
+        table.insert(available, lang)
+      end
+    end
+    vim.opt_local.spelllang = #available > 0 and available or { "en" }
     -- vim.opt_local.complete:append("kspell")
 
     -- Keep indentation

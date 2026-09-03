@@ -4,6 +4,6 @@ if vim.fn.exists("syntax_on") ~= 0 then
 end
 
 -- Vital: Set the global name variable so Neovim knows the theme is active
-vim.g.colors_name = "Myghtfly"
+vim.g.colors_name = "myghtfly"
 
 require("themes.myghtfly").setup()

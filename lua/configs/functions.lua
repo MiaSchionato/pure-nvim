@@ -122,32 +122,40 @@ function M.toggleDiagnostics()
   })
 end
 
+-- These probed `mini.session`, but `mini` here is require('plugins.mini'),
+-- which returns an empty table -- so every call raised "attempt to index a nil
+-- value". mini.snippets is currently commented out in plugins/mini.lua, hence
+-- the guard rather than a hard reference.
+local function snippetSessionActive()
+  return _G.MiniSnippets ~= nil and MiniSnippets.session.get() ~= nil
+end
+
 function M.snippetJumpNext()
-  if mini.session.get() then
+  if snippetSessionActive() then
     return '<Cmd>lua MiniSnippets.session.jump("next")<CR>'
-  else
-    return '<Right>'
   end
+  return '<Right>'
 end
 
 function M.snippetJumpPrev()
-  if mini.session.get() then
+  if snippetSessionActive() then
     return '<Cmd>lua MiniSnippets.session.jump("prev")<CR>'
-  else
-    return '<Right>'
   end
+  return '<Left>'   -- was '<Right>'
 end
 
 function M.snippetStop()
-  if MiniSnippets.session.get() then
+  if snippetSessionActive() then
     MiniSnippets.session.stop()
   end
   vim.cmd.stopinsert()
 end
 
--- TODO: not working
 function M.toggleInlayHints()
-  vim.lsp.inlay_hint.enable = not vim.lsp.inlay_hint.is_enabled()
+  -- This used to *assign* a boolean over vim.lsp.inlay_hint.enable, replacing
+  -- the function itself. After one press the API was gone, which also broke
+  -- toggleZenMode() above (it calls vim.lsp.inlay_hint.enable(...)).
+  vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled())
 end
 
 function M.getOpts(base_opts, desc)

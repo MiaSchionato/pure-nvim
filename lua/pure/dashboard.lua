@@ -54,6 +54,10 @@ function M.restore_ui_options()
   vim.opt.showtabline = M.state.user_showtabline
   vim.opt.winbar = M.state.user_winbar
   vim.opt.cursorline = M.state.user_cursorline
+  -- number/relativenumber were saved and hidden but never restored, so line
+  -- numbers stayed off for the rest of the session after leaving the dashboard.
+  vim.opt.number = M.state.user_number
+  vim.opt.relativenumber = M.state.user_relativenumber
 
   -- Reset state to indicate dashboard is no longer controlling the UI
   M.state.is_active = false

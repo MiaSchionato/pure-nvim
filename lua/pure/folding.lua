@@ -19,12 +19,15 @@ vim.api.nvim_create_autocmd("FileType", {
     callback = function()
         local ok, parser = pcall(vim.treesitter.get_parser)
 
+        -- The fallback used to sit *inside* the success branch, where `ok` is
+        -- always true, so it was dead code and buffers without a parser kept
+        -- whatever foldmethod happened to be set.
         if ok and parser then
             vim.opt_local.foldmethod = "expr"
             vim.opt_local.foldexpr = "v:lua.vim.treesitter.foldexpr()"
-
-        if not ok then vim.opt_local.foldmethod = "indent" end
-      end
+        else
+            vim.opt_local.foldmethod = "indent"
+        end
     end
 })
 

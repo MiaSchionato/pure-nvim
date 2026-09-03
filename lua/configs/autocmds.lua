@@ -2,11 +2,25 @@
 vim.api.nvim_create_autocmd("VimEnter", {
   nested = true,
   callback = function()
-    if vim.g.MY_THEME ~= 'solarized-osaka' then
-      local ok, theme = pcall(require, vim.g.MY_THEME)
+    local theme = vim.g.MY_THEME
 
-      if ok and theme then pcall(theme.setup, {transparent = true}) end
-      pcall(vim.cmd.colorscheme, vim.g.MY_THEME)
+    -- solarized-osaka applies itself over in themes/solarized-osaka.lua.
+    if theme and theme ~= 'solarized-osaka' then
+      -- Plugin themes expose a lua module named after the colorscheme and want
+      -- setup() before being applied. The local ones (myghtfly) do not, so this
+      -- step is best-effort.
+      local ok, mod = pcall(require, theme)
+      if ok and type(mod) == 'table' and type(mod.setup) == 'function' then
+        pcall(mod.setup, { transparent = true })
+      end
+
+      -- Report rather than swallow: a bare pcall here is what hid the fact that
+      -- no colorscheme was ever being applied.
+      local applied, err = pcall(vim.cmd.colorscheme, theme)
+      if not applied then
+        vim.notify('Could not apply colorscheme "' .. tostring(theme) .. '": '
+          .. tostring(err), vim.log.levels.WARN)
+      end
     end
     -- Disable annoying commenting while coding 
     vim.api.nvim_set_hl(0,"DiagnosticUnnecessary", {})
@@ -72,8 +86,17 @@ vim.api.nvim_create_autocmd("FileType", {
 vim.api.nvim_create_autocmd("VimLeave", {
   pattern = "*",
   callback = function()
-    os.remove(vim.fn.expand("~/.cache/nvim/*"))
-    os.remove(vim.fn.expand("~/.scratch/**/*"))
+    -- os.remove() takes a literal filename and never expands a glob, so these
+    -- calls could only ever try to delete files literally named "*" and did
+    -- nothing. Remove the scratch files this config actually creates.
+    local cache = vim.fn.stdpath('cache')
+    local scratch = {
+      'opts_run', 'Jump_list', 'buffer_list', 'oldfiles_list',
+      'colorscheme_list', 'ui_select', 'yazi_explorer',
+    }
+    for _, name in ipairs(scratch) do
+      os.remove(cache .. '/' .. name)
+    end
   end,
 })
 
