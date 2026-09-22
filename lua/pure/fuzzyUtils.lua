@@ -57,27 +57,9 @@ local function lsIgnores()
   return table.concat(parts, " ")
 end
 
--- fzf starts its child processes (--preview above all) through its own shell,
--- which on Windows is cmd.exe -- not Neovim's 'shell'. The preview commands in
--- this file are POSIX ("if [ -d {} ]; then ... fi"), so cmd.exe answered with
--- "-d was unexpected at this time." and the picker closed the instant it opened.
---
--- Point fzf at the same bash Neovim already validated in init.lua. Set through
--- FZF_DEFAULT_OPTS so every picker in this file inherits it. Needs fzf >= 0.52
--- for --with-shell; older builds ignore the unknown option in the env var.
 local function appendFzfOpts(extra)
   local existing = vim.env.FZF_DEFAULT_OPTS
   vim.env.FZF_DEFAULT_OPTS = existing and (existing .. " " .. extra) or extra
-end
-
-if vim.fn.has("win32") == 1 then
-  local sh = vim.o.shell
-  if not sh:lower():find("bash", 1, true) then
-    sh = vim.fn.exepath("bash")
-  end
-  if sh ~= "" then
-    appendFzfOpts('--with-shell "' .. vim.fs.normalize(sh) .. ' -c"')
-  end
 end
 
 -- These pickers already run inside a dedicated floating window, so fzf must not
