@@ -1,14 +1,73 @@
 local M = {}
 local func = require('configs.functions')
 local terms = require('pure.terms')
+-- Every path handed to the shell is shellescape()d: this user's home is
+-- "C:/Users/Mia Schionato", and an unquoted path broke at the space, so the
+-- command died instantly and the floating window just blinked shut.
 local cache_dir = vim.fn.stdpath("cache") if vim.fn.isdirectory(cache_dir) == 0 then vim.fn.mkdir(cache_dir, "p") end
+
+-- Directories the pickers never descend into. `fd --hidden` walks straight into
+-- .git and buries real results under dozens of internal files, and `ls -a`
+-- lists it too. ripgrep already skips it on its own, so fuzzyGrep needs nothing.
+--
+-- Override with, for example:
+--   vim.g.pure_fuzzy_ignore = { ".git", "node_modules", "target" }
+local function ignoredDirs()
+  return vim.g.pure_fuzzy_ignore or { ".git" }
+end
+
+--- @return string flags for fd, e.g. --exclude '.git'
+local function fdExcludes()
+  local parts = {}
+  for _, dir in ipairs(ignoredDirs()) do
+    table.insert(parts, "--exclude " .. vim.fn.shellescape(dir))
+  end
+  return table.concat(parts, " ")
+end
+
+--- @return string flags for ls, e.g. --ignore='.git'
+---
+--- Filtering inside ls rather than grepping its output is deliberate:
+--- `ls --color=always` emits the reset sequence *between* the name and the
+--- trailing slash (".git<ESC>[0m/"), so a plain `grep -v '\.git/$'` never
+--- matches. '.' and '..' survive --ignore, so navigation still works.
+local function lsIgnores()
+  local parts = {}
+  for _, dir in ipairs(ignoredDirs()) do
+    table.insert(parts, "--ignore=" .. vim.fn.shellescape(dir))
+  end
+  return table.concat(parts, " ")
+end
+
+-- fzf starts its child processes (--preview above all) through its own shell,
+-- which on Windows is cmd.exe -- not Neovim's 'shell'. The preview commands in
+-- this file are POSIX ("if [ -d {} ]; then ... fi"), so cmd.exe answered with
+-- "-d was unexpected at this time." and the picker closed the instant it opened.
+--
+-- Point fzf at the same bash Neovim already validated in init.lua. Set through
+-- FZF_DEFAULT_OPTS so every picker in this file inherits it. Needs fzf >= 0.52
+-- for --with-shell; older builds ignore the unknown option in the env var.
+if vim.fn.has("win32") == 1 then
+  local sh = vim.o.shell
+  if not sh:lower():find("bash", 1, true) then
+    sh = vim.fn.exepath("bash")
+  end
+  if sh ~= "" then
+    local with_shell = '--with-shell "' .. vim.fs.normalize(sh) .. ' -c"'
+    local existing = vim.env.FZF_DEFAULT_OPTS
+    vim.env.FZF_DEFAULT_OPTS = existing and (existing .. " " .. with_shell) or with_shell
+  end
+end
 
 ---@param opts table The options for fuzzy logic.
 function M.fuzzyLogic(opts)
   local win,buf = func.createWindow(opts.title, opts.ratio)
   local temp = vim.fn.stdpath("cache") .. "/opts_run"
   vim.api.nvim_set_option_value('bufhidden', 'wipe', {buf = buf})
-  vim.cmd(string.format("terminal %s > %s", opts.cmd, temp))
+  -- The redirect target must be quoted; stdpath("cache") sits under the home
+  -- directory, which contains a space, so "> C:/Users/Mia Schionato/..." was
+  -- read by the shell as "> C:/Users/Mia" and every picker failed at once.
+  vim.cmd(string.format("terminal %s > %s", opts.cmd, vim.fn.shellescape(temp)))
 
   vim.api.nvim_create_autocmd("TermClose", {
     buffer = buf,
@@ -48,13 +107,13 @@ end
 
 function M.fuzzySearch(path)
   if path == nil then path = vim.uv.os_homedir():gsub("\\", "/") .. "/" end
-  local fd = "fd --hidden --type file . --strip-cwd-prefix --base-directory  "
+  local fd = "fd --hidden " .. fdExcludes() .. " --type file . --strip-cwd-prefix --base-directory  "
   local fzf = "fzf --keep-right --tiebreak=end"
 
   M.fuzzyLogic({
     title = "Fuzzy Search",
     ratio = 0.6,
-    cmd = string.format("%s %s | %s", fd, path, fzf),
+    cmd = string.format("%s %s | %s", fd, vim.fn.shellescape(path), fzf),
     callback = function(selection)
       vim.cmd("edit! " .. vim.fn.fnameescape(path .. selection))
       vim.cmd("filetype detect")
@@ -71,7 +130,7 @@ function M.fuzzyGrep(path)
   M.fuzzyLogic({
     title = "Fuzzy Grep",
     ratio = 0.8,
-    cmd = string.format("%s %s | %s",rg,path,fzf),
+    cmd = string.format("%s %s | %s", rg, vim.fn.shellescape(path), fzf),
     callback = function(selection)
       -- Windows paths start with a drive letter, so the old '^([^:]+):'
       -- pattern stopped at the 'C:' colon and returned nil. A lazy '.-'
@@ -92,7 +151,7 @@ function M.fuzzyHelp()
   M.fuzzyLogic({
     title = "Fuzzy help",
     ratio = 0.6,
-    cmd = string.format("ls %s | fzf", doc_path),
+    cmd = string.format("ls %s | fzf", vim.fn.shellescape(doc_path)),
     callback = function (selection)
       vim.cmd("help " .. vim.fn.fnameescape(selection))
       vim.cmd("filetype detect")
@@ -109,7 +168,7 @@ function M.fuzzyGit()
   M.fuzzyLogic({
     title = "Fuzzy Git log",
     ratio = 0.8,
-    cmd = string.format("cd %s && %s | %s",path, git, fzf),
+    cmd = string.format("cd %s && %s | %s", vim.fn.shellescape(path), git, fzf),
     callback = function (selection)
       vim.cmd(string.format("edit %s", vim.fn.fnameescape(selection)))
     end
@@ -125,7 +184,7 @@ function M.fuzzyGitGrep()
   M.fuzzyLogic({
     title = "Fuzzy Git Grep",
     ratio = 0.8,
-    cmd = string.format("cd %s && %s . | %s", path, git_grep, fzf),
+    cmd = string.format("cd %s && %s . | %s", vim.fn.shellescape(path), git_grep, fzf),
     callback = function(selection)
       local full_path, line, col_str = selection:match("^(.-):(%d+):(%d+)")
       if not full_path then return end
@@ -163,7 +222,7 @@ function M.fuzzyJump()
   M.fuzzyLogic({
     title = "fuzzy jumps",
     ratio = 0.8,
-    cmd = string.format("cat %s | %s", temp, fzf),
+    cmd = string.format("cat %s | %s", vim.fn.shellescape(temp), fzf),
     callback = function (selection)
       os.remove(temp)
       -- Windows paths start with a drive letter, so the old '^([^:]+):'
@@ -206,7 +265,7 @@ function M.fuzzyBuffers()
   M.fuzzyLogic({
     title = "Fuzzy buffers",
     ratio = 0.7,
-    cmd = string.format("cat %s | fzf --keep-right --tiebreak=end", temp),
+    cmd = string.format("cat %s | fzf --keep-right --tiebreak=end", vim.fn.shellescape(temp)),
     callback = function (selection)
         os.remove(temp)
         vim.cmd("edit " .. vim.fn.fnameescape(selection))
@@ -234,7 +293,7 @@ function M.fuzzyOldfiles()
   M.fuzzyLogic({
       title = "Oldfiles",
       ratio = 0.7,
-      cmd = string.format("cat %s | fzf",temp),
+      cmd = string.format("cat %s | fzf", vim.fn.shellescape(temp)),
       callback = function(selection)
         os.remove(temp)
         vim.cmd("edit " .. vim.fn.fnameescape(selection))
@@ -257,7 +316,7 @@ function M.fuzzyColorscheme()
   M.fuzzyLogic({
       title = "Fuzzy Search",
       ratio = 0.7,
-      cmd = string.format("cat %s | fzf",temp),
+      cmd = string.format("cat %s | fzf", vim.fn.shellescape(temp)),
       callback = function(theme)
         os.remove(temp)
         vim.cmd("colorscheme "  .. vim.fn.fnameescape(theme))
@@ -298,7 +357,7 @@ function M.setup()
     M.fuzzyLogic({
       title = opts.prompt or "Select",
       ratio = 0.7,
-      cmd = string.format("cat %s | fzf", temp),
+      cmd = string.format("cat %s | fzf", vim.fn.shellescape(temp)),
       callback = function(selection)
         os.remove(temp)
         if selection and selection ~= "" then
@@ -380,12 +439,12 @@ function M.setup()
 end
 
 function M.NewFile(path)
-  local fd = "fd --hidden --type directory . --strip-cwd-prefix --base-directory  "
+  local fd = "fd --hidden " .. fdExcludes() .. " --type directory . --strip-cwd-prefix --base-directory  "
   local fzf = "fzf --keep-right --tiebreak=end"
   M.fuzzyLogic({
     title = "Select New File Path",
     ratio = 0.6,
-    cmd = string.format("%s %s | %s", fd, path, fzf),
+    cmd = string.format("%s %s | %s", fd, vim.fn.shellescape(path), fzf),
     callback = function(selection)
       vim.ui.input({prompt = "New file name: "}, function(input)
         if input and input ~= "" then
@@ -412,7 +471,7 @@ function M.fuzzyExplorer(path)
   if path == nil then path = vim.fn.getcwd() end
 
   -- Use ls -ap to show hidden files and classify with indicators (/ for dirs)
-  local list_cmd = "ls -ap --color=always"
+  local list_cmd = "ls -ap --color=always " .. lsIgnores()
 
   -- Preview command for fzf. It's executed in `path` directory.
   -- Added --line-range to bat to avoid lagging on large files.
@@ -460,7 +519,8 @@ function M.yaziExplorer(path)
   local temp = vim.fn.stdpath("cache") .. "/yazi_explorer"
   -- `path` was accepted and then dropped, so yazi always opened in the cwd and
   -- <leader>E / <leader>e never landed where the mapping asked for.
-  local yazi = "yazi " .. vim.fn.shellescape(path) .. " --chooser-file " .. temp
+  local yazi = "yazi " .. vim.fn.shellescape(path)
+    .. " --chooser-file " .. vim.fn.shellescape(temp)
 
   M.fuzzyLogic({
     title = "Yazi: " .. path,

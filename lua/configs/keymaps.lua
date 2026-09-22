@@ -42,7 +42,8 @@ map('n', "<leader>wq", "<cmd>tabclose<CR>", func.getOpts(opts, "Close Tab" ))
 map('n', "<leader>wo", "<cmd>tabonly<CR>", func.getOpts(opts, "Close all other Tabs" ))
 
 -- == Files mappings ==
-map('n', '<leader><leader>', fzf.fuzzyExplorer , func.getOpts(opts, "Explore current directory" ))
+-- map('n', '<leader><leader>', fzf.fuzzyExplorer , func.getOpts(opts, "Explore current directory" ))
+map("n", "<leader><leader>",function()fzf.fuzzySearch(vim.fn.expand("%:p:h:h:h").."/")end, func.getOpts(opts, "Fuzzy Search Home Directory"))
 
 map('n', '<leader>e', function ()
 local ok =  pcall(fzf.yaziExplorer, vim.fn.expand("%:p:h").."/")
@@ -218,6 +219,11 @@ map('n', "J", "mzJ`z", func.getOpts(opts, "Join lines and keep cursor position" 
 map('n', '<leader>tt', term.toggleTerminal, func.getOpts(opts, 'Toggle bottom terminal'))
 map('n', '<leader>tg',function () term.toggleTerminal("gemini")end, func.getOpts(opts, 'Toggle Gemini terminal'))
 map('t', '<S-esc>', [[<C-\><C-n>]], func.getOpts(opts, 'Close on terminal mode'))
+-- <S-Esc> only reaches Neovim on terminals that report it as a distinct key
+-- (CSI-u style); most send a plain <Esc>, so that mapping never fired and there
+-- was no working way out of terminal mode. <Esc><Esc> works everywhere and
+-- still leaves a single <Esc> for the shell and for TUIs running inside it.
+map('t', '<Esc><Esc>', [[<C-\><C-n>:q<CR>]], func.getOpts(opts, 'Leave terminal mode'))
 
 
 -- LSP actions
