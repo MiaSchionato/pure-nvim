@@ -108,9 +108,9 @@ map("n", "<leader>f~",function()fzf.fuzzySearch(home)end, func.getOpts(opts, "Fu
 map("n", "<leader>ff",function()fzf.fuzzySearch(vim.fn.expand("%:p:h:h").."/")end, func.getOpts(opts, "Fuzzy Search Home Directory"))
 map("n", "<leader>fp",function()fzf.fuzzySearch(home .. "Projects/")end, func.getOpts(opts, "Fuzzy Search Projects Directory"))
 map("n", "<leader>fn",function()fzf.fuzzySearch(home .. ".config/nvim/")end, func.getOpts(opts, "Fuzzy Search Nvim config Directory"))
-map("n", "<leader>fl",function()fzf.fuzzySearch(home .. "Documents/MyJourney/Languages/")end, func.getOpts(opts, "Fuzzy Search Languages Directory"))
+-- map("n", "<leader>fl",function()fzf.fuzzySearch(home .. "Documents/MyJourney/Languages/")end, func.getOpts(opts, "Fuzzy Search Languages Directory"))
 map('n', "<leader>f.",function()fzf.fuzzySearch(home .. ".config/")end, func.getOpts(opts, "Fuzzy .Config Directory"))
-map('n', "<leader>fm",function()fzf.fuzzySearch(home .. "Documents/MindGarden/")end, func.getOpts(opts, "Fuzzy .Config Directory"))
+map('n', "<leader>fm",function()fzf.fuzzySearch(home .. "iCloudDrive/Documents/Obsidian/Atlas")end, func.getOpts(opts, "Fuzzy .Config Directory"))
 
 -- Fuzzy Grep
 map('n', "<leader>fg", function() fzf.fuzzyGrep(vim.fn.expand('%:p:h:h'))end, func.getOpts(opts, "Fuzzy Grep"))
@@ -258,11 +258,15 @@ map('n', "<leader>cl", func.toggleHighlightSearch, func.getOpts(opts, "Clear sea
 map({ 'n', 'v' }, '<leader>lrn', func.toggleRelativenumber, func.getOpts(opts, ' Toggle relativenumber'))
 map({ 'n', 'v' }, '<leader>ln', function () func.toggleNumber() func.toggleRelativenumber() end, func.getOpts(opts, 'Toggle relativenumber'))
 
+-- Jumps 
+map( 'n', '<leader>jl', '<C-i>', func.getOpts(opts, ' Toggle relativenumber'))
+map( 'n', '<leader>jh', '<C-o>', func.getOpts(opts, ' Toggle relativenumber'))
+
 -- Snippets
 -- map('i', '<Right>', func.snippetJumpNext, func.getOpts(expr_opts, 'Jump to the next arg on snippets'))
 -- map('i', '<Left>', func.snippetJumpPrev, func.getOpts(expr_opts, ' Jump to the previous arg on snippets'))
 -- map('i', '<Esc>', func.snippetStop, func.getOpts(opts, 'Close snippet'))
-map("n", "<leader>ie", "oif err != nil {<CR>}<Esc>Oreturn err<Esc>")
+-- map("n", "<leader>ie", "oif err != nil {<CR>}<Esc>Oreturn err<Esc>")
 
 
 --  Undotree

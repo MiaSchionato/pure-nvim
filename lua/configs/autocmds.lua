@@ -125,3 +125,18 @@ vim.api.nvim_create_autocmd("CompleteDone", {
   end
 })
 
+vim.api.nvim_create_autocmd("User", {
+  pattern = "ObsidianNoteEnter",
+  callback = function(ev)
+    -- remove the default mappings
+    -- vim.keymap.del("n", "<CR>", { buffer = true })
+    -- vim.keymap.del("n", "]o", { buffer = true })
+    -- vim.keymap.del("n", "[o", { buffer = true })
+
+    -- add your own
+    -- vim.keymap.set("n", "<S-k>", require("obsidian.api").smart_action, { buffer = true })
+    -- vim.keymap.del("n", "]l", { buffer = true })
+    -- vim.keymap.del("n", "[l", { buffer = true })
+  end,
+})
+

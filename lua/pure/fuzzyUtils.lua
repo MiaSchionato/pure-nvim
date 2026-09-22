@@ -10,10 +10,28 @@ local cache_dir = vim.fn.stdpath("cache") if vim.fn.isdirectory(cache_dir) == 0 
 -- .git and buries real results under dozens of internal files, and `ls -a`
 -- lists it too. ripgrep already skips it on its own, so fuzzyGrep needs nothing.
 --
+-- ".obsidian" is the vault's own config directory: it holds hundreds of json
+-- and plugin files that drown out the actual notes.
+--
 -- Override with, for example:
---   vim.g.pure_fuzzy_ignore = { ".git", "node_modules", "target" }
+--   vim.g.pure_fuzzy_ignore = { ".git", ".obsidian", "node_modules", "target" }
 local function ignoredDirs()
-  return vim.g.pure_fuzzy_ignore or { ".git" }
+  return vim.g.pure_fuzzy_ignore or { ".git", ".obsidian" }
+end
+
+--- Guarantee a single trailing slash.
+---
+--- The pickers build the final file name with `path .. selection`, so a caller
+--- passing ".../Atlas" instead of ".../Atlas/" silently produced
+--- ".../Atlasnote.md". Normalising here keeps every call site in keymaps.lua
+--- from having to remember the slash.
+--- @param path string|nil
+--- @return string|nil
+local function asDir(path)
+  if path == nil or path == "" then
+    return path
+  end
+  return (path:gsub("[/\\]+$", "")) .. "/"
 end
 
 --- @return string flags for fd, e.g. --exclude '.git'
@@ -47,17 +65,30 @@ end
 -- Point fzf at the same bash Neovim already validated in init.lua. Set through
 -- FZF_DEFAULT_OPTS so every picker in this file inherits it. Needs fzf >= 0.52
 -- for --with-shell; older builds ignore the unknown option in the env var.
+local function appendFzfOpts(extra)
+  local existing = vim.env.FZF_DEFAULT_OPTS
+  vim.env.FZF_DEFAULT_OPTS = existing and (existing .. " " .. extra) or extra
+end
+
 if vim.fn.has("win32") == 1 then
   local sh = vim.o.shell
   if not sh:lower():find("bash", 1, true) then
     sh = vim.fn.exepath("bash")
   end
   if sh ~= "" then
-    local with_shell = '--with-shell "' .. vim.fs.normalize(sh) .. ' -c"'
-    local existing = vim.env.FZF_DEFAULT_OPTS
-    vim.env.FZF_DEFAULT_OPTS = existing and (existing .. " " .. with_shell) or with_shell
+    appendFzfOpts('--with-shell "' .. vim.fs.normalize(sh) .. ' -c"')
   end
 end
+
+-- These pickers already run inside a dedicated floating window, so fzf must not
+-- size or frame itself again.
+--
+-- A shell profile that exports FZF_DEFAULT_OPTS for interactive use (this one
+-- sets "--height=60% --border") leaked into Neovim: fzf then took 60% of the
+-- float and drew its own frame inside Neovim's rounded border, leaving roughly
+-- four in every ten lines blank with a doubled outline. Appending wins because
+-- fzf honours the last occurrence of a flag.
+appendFzfOpts("--height=100% --border=none")
 
 ---@param opts table The options for fuzzy logic.
 function M.fuzzyLogic(opts)
@@ -107,6 +138,7 @@ end
 
 function M.fuzzySearch(path)
   if path == nil then path = vim.uv.os_homedir():gsub("\\", "/") .. "/" end
+  path = asDir(path)
   local fd = "fd --hidden " .. fdExcludes() .. " --type file . --strip-cwd-prefix --base-directory  "
   local fzf = "fzf --keep-right --tiebreak=end"
 
@@ -124,22 +156,26 @@ end
 
 
 function M.fuzzyGrep(path)
-  local rg = "rg --column --line-number --no-heading --color=always --smart-case -- . "
+  path = asDir(path)
+  local rg = "rg --column --line-number --no-heading --color=always --smart-case -- ."
   local fzf = "fzf --ansi --delimiter : --preview 'bat --style=numbers --color=always --highlight-line {2} {1}' --preview-window 'up,60\\%,border-bottom,+{2}+3/3'"
 
   M.fuzzyLogic({
     title = "Fuzzy Grep",
     ratio = 0.8,
-    cmd = string.format("%s %s | %s", rg, vim.fn.shellescape(path), fzf),
+    -- Run from inside `path` so ripgrep prints relative names. Given an
+    -- absolute path its output starts with the drive letter, and fzf splitting
+    -- on ":" then made {1} the bare "C" and {2} the path, so bat was handed a
+    -- path where it wanted a line number. Counting fields from the end is not
+    -- an option here, unlike fuzzyJump: the matched text can contain colons.
+    cmd = string.format("cd %s && %s . | %s", vim.fn.shellescape(path), rg, fzf),
     callback = function(selection)
-      -- Windows paths start with a drive letter, so the old '^([^:]+):'
-      -- pattern stopped at the 'C:' colon and returned nil. A lazy '.-'
-      -- matches up to the first ':line:col' pair instead.
-      local full_path, line, col = selection:match("^(.-):(%d+):(%d+)")
-      if full_path and line and col then
-        vim.cmd("edit! " .. vim.fn.fnameescape(full_path))
-        vim.api.nvim_win_set_cursor(0, {tonumber(line),tonumber(col)})
-      end
+      local rel, line, col = selection:match("^(.-):(%d+):(%d+)")
+      if not (rel and line and col) then return end
+      -- Those names are relative to the cd above, so rebuild the full one.
+      local full_path = path .. (rel:gsub("^%.[/\\]", ""))
+      vim.cmd("edit! " .. vim.fn.fnameescape(full_path))
+      vim.api.nvim_win_set_cursor(0, {tonumber(line),tonumber(col)})
       vim.cmd("filetype detect")
     end
   })
@@ -179,16 +215,20 @@ end
 function M.fuzzyGitGrep()
   local git_grep = "git grep --line-number --column"
   local fzf = "fzf --ansi --delimiter : --preview 'bat --style=numbers --color=always --highlight-line {2} {1}' --preview-window 'up,60\\%,border-bottom,+{2}+3/3'"
-  local path = vim.fn.expand("%:p:h")
+  -- Already cd's below, so git grep prints relative names and {1}/{2} line up.
+  local path = asDir(vim.fn.expand("%:p:h"))
 
   M.fuzzyLogic({
     title = "Fuzzy Git Grep",
     ratio = 0.8,
     cmd = string.format("cd %s && %s . | %s", vim.fn.shellescape(path), git_grep, fzf),
     callback = function(selection)
-      local full_path, line, col_str = selection:match("^(.-):(%d+):(%d+)")
-      if not full_path then return end
+      local rel, line, col_str = selection:match("^(.-):(%d+):(%d+)")
+      if not rel then return end
       local col = tonumber(col_str)
+      -- Relative to the cd above, so opening it as-is only worked when Neovim's
+      -- own cwd happened to match. Rebuild the full name instead.
+      local full_path = path .. (rel:gsub("^%.[/\\]", ""))
 
       vim.cmd("edit! " .. vim.fn.fnameescape(full_path))
       if line and col then
@@ -218,7 +258,12 @@ function M.fuzzyJump()
     f:close()
   end
 
-  local fzf = "fzf --ansi --delimiter : --preview 'bat --style=numbers --color=always --highlight-line {2} {1}' --preview-window 'up,60\\%,border-bottom,+{2}+3/3'"
+  -- Fields are counted from the END. These lines are "path:line:col", and on
+  -- Windows the path starts with a drive letter, so splitting on ":" made {1}
+  -- the bare letter "C" and {2} the path -- which bat received where it wanted
+  -- a line number, hence "[bat error]: invalid digit found in string".
+  -- {-2} is the line and {1..-3} rejoins the whole path, drive letter included.
+  local fzf = "fzf --ansi --delimiter : --preview 'bat --style=numbers --color=always --highlight-line {-2} {1..-3}' --preview-window 'up,60\\%,border-bottom,+{-2}+3/3'"
   M.fuzzyLogic({
     title = "fuzzy jumps",
     ratio = 0.8,
@@ -439,6 +484,7 @@ function M.setup()
 end
 
 function M.NewFile(path)
+  path = asDir(path)
   local fd = "fd --hidden " .. fdExcludes() .. " --type directory . --strip-cwd-prefix --base-directory  "
   local fzf = "fzf --keep-right --tiebreak=end"
   M.fuzzyLogic({
