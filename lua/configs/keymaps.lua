@@ -202,9 +202,11 @@ map("n", "cs", sur.changeSurround, { desc = "Change surround" })
 -- =============================================================================
 --  Editing
 -- =============================================================================
-map('n', "<leader>p", '"*p', func.getOpts(opts, "Paste from clipboard"))
+-- "+ is the system clipboard everywhere; "* is only the same on Windows (on
+-- Linux it is the primary selection, not Ctrl+C / Ctrl+V).
+map('n', "<leader>p", '"+p', func.getOpts(opts, "Paste from clipboard"))
 map("x", "<leader>p", [["_dP]], func.getOpts(opts, "Paste over without yanking"))
-map({ 'n', 'v' }, "<leader>y", '"*y', func.getOpts(opts, "Yank to clipboard"))
+map({ 'n', 'v' }, "<leader>y", '"+y', func.getOpts(opts, "Yank to clipboard"))
 map({ 'n', 'v' }, "<leader>D", '"_d', func.getOpts(opts, "Delete without yanking"))
 map('n', "<leader>r", [[:%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><Left>]],
   { desc = "Rename word under cursor" })

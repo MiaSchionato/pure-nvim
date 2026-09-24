@@ -37,6 +37,10 @@ o.showmatch = true                           -- Highlight matching brackets
 o.cmdheight = 0                              -- Command line height (essentially none)
 
 o.completeopt = {"menu","menuone","noinsert","noselect"}  -- Completion options
+-- Built-in completion as you type (Neovim 0.12). 'o' asks the omnifunc, which
+-- LSP sets on attach, then words from this and other buffers.
+o.autocomplete = true
+o.complete = "o,.,w,b,u"
 o.showmode = false                           -- Don't show mode in command line
 o.pumheight = 10                             -- Popup menu height
 o.pumborder = "rounded"                      -- Popup menu border style
@@ -49,7 +53,9 @@ o.signcolumn = "auto"                        -- Show signcolumn automatically
 
 -- File handling
 o.undofile = true                            -- Persistent undo
-o.undodir = vim.fn.expand("~/.config/nvim/undodir")  -- Undo directory
+-- Undo history lives in the state folder, outside the config's git repository.
+o.undodir = vim.fn.stdpath("state") .. "/undo"
+vim.fn.mkdir(vim.o.undodir, "p")
 o.swapfile = false
 o.updatetime = 50                           -- ms idle before CursorHold (not completion speed)
 o.timeoutlen = 500                           -- Key timeout duration
@@ -64,7 +70,6 @@ o.backspace = "indent,eol,start"             -- Better backspace behavior
 o.iskeyword:append("-")                      -- Treat dash as part of word
 o.path:append("**")                          -- include subdirectories in search
 o.wildignore:append("*/node_modules/*", "*/.git/*", "*/tmp/*", "*/dist/*", "*/build/*") -- ignore folders
-o.selection = "exclusive"                    -- Selection behavior
 o.mouse = ""                                -- Mouse disabled
 
 
