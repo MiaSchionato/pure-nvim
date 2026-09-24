@@ -244,6 +244,8 @@ map('n', '<leader>f.', inDir(fzf.fuzzySearch, dirs['.']), func.getOpts(opts, "Fi
 map('n', '<leader>fn', inDir(fzf.fuzzySearch, dirs.n), func.getOpts(opts, "Find in nvim config"))
 map('n', '<leader>fa', inDir(fzf.fuzzySearch, dirs.m), func.getOpts(opts, "Find in Atlas, the Obsidian vault"))
 
+map('n', "<leader>fe", function() inDir(fzf.fuzzyExplorer, here())() end,
+  func.getOpts(opts, "fzf explorer, current directory"))
 map('n', "<leader>fg", function() fzf.fuzzyGrep(vim.fn.expand('%:p:h:h')) end, func.getOpts(opts, "Grep"))
 map('n', "<leader>f/", fzf.fuzzyOldfiles, func.getOpts(opts, "Recent files"))
 map('n', "<leader>fh", fzf.fuzzyHelp, func.getOpts(opts, "Help tags"))
