@@ -105,10 +105,31 @@ function M.fuzzyLogic(opts)
         if vim.api.nvim_win_is_valid(win) then vim.api.nvim_win_close(win, true) end
         if vim.api.nvim_buf_is_valid(buf) then vim.api.nvim_buf_delete(buf, { force = true }) end
 
-        if data ~= "" then
-          opts.callback(data)
+        local function finish()
+          if data ~= "" then
+            opts.callback(data)
+          elseif opts.on_cancel then
+            -- Esc / Ctrl-C in fzf, or nothing matched.
+            opts.on_cancel()
+          end
+        end
+
+        -- Leave terminal mode before handing over. Closing the window does not,
+        -- and neither does :stopinsert: Neovim stays in terminal mode until the
+        -- next key arrives, so the callback ran with mode() still 't' and the
+        -- first key typed afterwards was spent leaving that mode (an input()
+        -- prompt opened from the callback could lose it, or be cancelled).
+        -- Feed the key that leaves terminal mode, and run the callback once
+        -- Neovim reports the mode change.
+        if vim.api.nvim_get_mode().mode == "t" then
+          vim.api.nvim_create_autocmd("ModeChanged", {
+            pattern = "t:*",
+            once = true,
+            callback = function() vim.schedule(finish) end,
+          })
+          vim.api.nvim_feedkeys(vim.keycode("<C-\\><C-n>"), "n", false)
         else
-            vim.cmd("stopinsert")
+          finish()
         end
       end)
     end
@@ -395,6 +416,12 @@ function M.setup()
       title = opts.prompt or "Select",
       ratio = 0.7,
       cmd = string.format("cat %s | fzf", vim.fn.shellescape(temp)),
+      -- vim.ui.select promises on_choice(nil, nil) on cancel; without this a
+      -- cancelled picker never called back at all.
+      on_cancel = function()
+        os.remove(temp)
+        selected(nil, nil)
+      end,
       callback = function(selection)
         os.remove(temp)
         if selection and selection ~= "" then
