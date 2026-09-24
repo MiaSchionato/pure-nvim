@@ -30,6 +30,26 @@ local opts = { noremap = true, silent = true }
 
 vim.g.mapleader = ' '
 
+-- Group names shown by the key hint window (pure/keyhint.lua) after <leader>.
+vim.g.pure_keyhint_groups = {
+  ['<leader>b'] = 'Buffers',
+  ['<leader>c'] = 'Code',
+  ['<leader>d'] = 'Diagnostics',
+  ['<leader>e'] = 'Explore',
+  ['<leader>f'] = 'Find',
+  ['<leader>g'] = 'Git',
+  ['<leader>j'] = 'Jumps',
+  ['<leader>l'] = 'LSP',
+  ['<leader>n'] = 'New file',
+  ['<leader>o'] = 'Toggles',
+  ['<leader>s'] = 'Split',
+  ['<leader>t'] = 'Terminal, Todoist',
+  ['<leader>v'] = 'Window focus',
+  ['<leader>w'] = 'Tabs',
+  ['<leader>x'] = 'Checkbox state',
+  ['<leader>z'] = 'Folds',
+}
+
 local home = vim.uv.os_homedir():gsub("\\", "/") .. "/"
 
 -- -----------------------------------------------------------------------------
