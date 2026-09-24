@@ -39,10 +39,10 @@ local checkbox = { unchecked = '󰄱', checked = '󰄲' }
 -- Box-shaped icons, like the two checkboxes, written as code points: pasted
 -- private-use glyphs have been lost in copying before, leaving empty icons.
 local extra_states = {
-  ['~'] = { '\u{F0856}', 'PureMdUnchecked' },   -- md-checkbox_intermediate: in progress
-  ['!'] = { '\u{F0CE4}', 'DiagnosticWarn' },    -- md-alert_box_outline: important
-  ['>'] = { '\u{F0736}', 'PureMdUnchecked' },   -- md-arrow_right_bold_box_outline: deferred
-  ['-'] = { '\u{F06F2}', 'PureMdCheckedText' }, -- md-minus_box_outline: cancelled
+  ['~'] = { '\u{F0856}', 'PureMdTaskProgress' },  -- md-checkbox_intermediate: in progress
+  ['!'] = { '\u{F0CE4}', 'PureMdTaskImportant' }, -- md-alert_box_outline: important
+  ['>'] = { '\u{F0736}', 'PureMdTaskDeferred' },  -- md-arrow_right_bold_box_outline: deferred
+  ['-'] = { '\u{F06F2}', 'PureMdTaskCancelled' }, -- md-minus_box_outline: cancelled
 }
 
 -- -----------------------------------------------------------------------------
@@ -91,9 +91,21 @@ local function setHighlights()
   set('PureMdRule', { link = 'Comment' })
   set('PureMdTable', { link = 'Comment' })
   set('PureMdCheckedText', { link = 'Comment' })
-  -- The checkbox icons. render-md.lua sets these too; `default` lets it win.
-  set('PureMdChecked', { link = 'String' })
-  set('PureMdUnchecked', { link = 'Comment' })
+
+  -- Checkbox icons: fixed colours, the same in every colorscheme, so a state
+  -- always reads the same at a glance. Not `default` and re-applied on
+  -- ColorScheme: a theme switch must not restyle them.
+  local task_colours = {
+    PureMdTaskTodo      = '#8b949e', -- [ ] grey
+    PureMdTaskDone      = '#3fb950', -- [x] green
+    PureMdTaskProgress  = '#58a6ff', -- [~] blue
+    PureMdTaskImportant = '#f85149', -- [!] red
+    PureMdTaskDeferred  = '#a371f7', -- [>] purple
+    PureMdTaskCancelled = '#6e7681', -- [-] dark grey
+  }
+  for name, fg in pairs(task_colours) do
+    vim.api.nvim_set_hl(0, name, { fg = fg })
+  end
 end
 
 -- -----------------------------------------------------------------------------
@@ -222,7 +234,7 @@ end
 local function task(buf, node, mark, state)
   local row, sc, _, ec = node:range()
   mark(row, sc, {
-    virt_text = { { checkbox[state], state == 'checked' and 'PureMdChecked' or 'PureMdUnchecked' } },
+    virt_text = { { checkbox[state], state == 'checked' and 'PureMdTaskDone' or 'PureMdTaskTodo' } },
     virt_text_pos = 'overlay',
   })
   mark(row, sc + 1, { end_col = ec, conceal = '' })
@@ -306,7 +318,7 @@ function render.table(buf, node, mark)
         local icon = checkbox[state]
         mark(row, pos - 1, {
           virt_text = { { icon .. string.rep(' ', 3 - vim.fn.strdisplaywidth(icon)),
-            state == 'checked' and 'PureMdChecked' or 'PureMdUnchecked' } },
+            state == 'checked' and 'PureMdTaskDone' or 'PureMdTaskTodo' } },
           virt_text_pos = 'overlay',
         })
       end

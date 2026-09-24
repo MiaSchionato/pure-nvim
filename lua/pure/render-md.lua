@@ -29,13 +29,11 @@ vim.api.nvim_create_autocmd("FileType", {
     vim.opt_local.concealcursor = "nc" -- Hide in normal and command modes
 
     -- Style links
-    vim.api.nvim_set_hl(0, "PureMdUnchecked", { link = "Comment", default = false })
-    vim.api.nvim_set_hl(0, "PureMdChecked", { link = "String", default = false })
     vim.api.nvim_set_hl(0, "@markup.heading.1.markdown", { link = "Title" })
     vim.api.nvim_set_hl(0, "@markup.heading.2.markdown", { link = "Directory" })
     vim.api.nvim_set_hl(0, "@markup.heading.3.markdown", { link = "Type" })
     vim.api.nvim_set_hl(0, "@markup.heading.4.markdown", { link = "Special" })
-    vim.api.nvim_set_hl(0, "PureMdChecked", { link = "String", default = true }) vim.api.nvim_set_hl(0, "PureMdUnchecked", { link = "Comment", default = true })
+    -- Checkbox colours are fixed in pure/mdview.lua (PureMdTask*), not here.
 
     -- Headings, bullets, checkboxes and the rest are drawn by pure/mdview.lua.
     -- The regex conceals that used to be here matched inside code blocks too,

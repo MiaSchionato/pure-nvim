@@ -899,7 +899,7 @@ local function blockLines(block, entry, width)
     text = text .. string.rep(' ', name_width - vim.fn.strdisplaywidth(text))
     local chunks = {
       { '│ ', 'Comment' },
-      { t.checked and '󰄲 ' or '󰄱 ', t.checked and 'PureMdChecked' or 'PureMdUnchecked' },
+      { t.checked and '󰄲 ' or '󰄱 ', t.checked and 'PureMdTaskDone' or 'PureMdTaskTodo' },
       { text, t.checked and 'Comment' or 'Normal' },
     }
     local project = project_cache.names[t.project_id]
