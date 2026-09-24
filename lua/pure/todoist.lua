@@ -167,6 +167,7 @@ local state = {
   snapshot = {}, -- id -> { content, due, priority, project_id, parent_id, checked }
   projects = { by_name = {}, by_id = {}, inbox = nil },
   saving = false,
+  loaded = nil, -- filter key ('' = all) the buffer currently shows
 }
 
 local id_ns = vim.api.nvim_create_namespace('pure_todoist_ids')
@@ -324,20 +325,38 @@ local function render(tasks, projects)
   })
 end
 
+--- Tasks for `filter` plus the project list, as cb(err, tasks, projects).
+local function fetch(filter, cb)
+  local path = filter and ('/tasks/filter?query=' .. urlencode(filter)) or '/tasks'
+  getAll(path, function(err, tasks)
+    if err then return cb(err) end
+    getAll('/projects', function(perr, projects)
+      if perr then vim.notify(perr, vim.log.levels.WARN) end
+      cb(nil, tasks, projects or {})
+    end)
+  end)
+end
+
+-- Tasks fetched in the background at startup, by filter key ('' = all), so
+-- the first :Todoist draws at once instead of waiting on the network.
+local prefetched = {}
+
+--- Fetch from Todoist and redraw the buffer. Only runs on the first open of a
+--- filter, after :w, and on r -- reopening the list reuses what is there.
 function M.reload()
   if not (state.buf and vim.api.nvim_buf_is_valid(state.buf)) then return end
   setLines({ '# Todoist', '', 'Loading…' })
+  local key = state.filter or ''
 
-  local path = state.filter and ('/tasks/filter?query=' .. urlencode(state.filter)) or '/tasks'
-  getAll(path, function(err, tasks)
+  fetch(state.filter, function(err, tasks, projects)
+    if not vim.api.nvim_buf_is_valid(state.buf) then return end
     if err then
+      state.loaded = nil
       setLines({ '# Todoist', '', 'Error: ' .. err })
       return vim.notify(err, vim.log.levels.ERROR)
     end
-    getAll('/projects', function(perr, projects)
-      if perr then vim.notify(perr, vim.log.levels.WARN) end
-      if vim.api.nvim_buf_is_valid(state.buf) then render(tasks, projects or {}) end
-    end)
+    render(tasks, projects)
+    state.loaded = key
   end)
 end
 
@@ -549,14 +568,6 @@ function M.save()
   end)
 end
 
---- Flip the checkbox on the cursor line (the change is sent on :w).
-local function toggleLine()
-  local line = vim.api.nvim_get_current_line()
-  local new, n = line:gsub('^(%s*[-*+]%s+)%[ %]', '%1[x]', 1)
-  if n == 0 then new, n = line:gsub('^(%s*[-*+]%s+)%[[xX]%]', '%1[ ]', 1) end
-  if n > 0 then vim.api.nvim_set_current_line(new) end
-end
-
 --- Run `fn` now, or after confirming that unsaved edits may be dropped.
 local function unlessModified(what, fn)
   return function()
@@ -569,7 +580,17 @@ local function unlessModified(what, fn)
 end
 
 function M.open(filter)
-  state.filter = (filter and filter ~= '') and filter or nil
+  filter = (filter and filter ~= '') and filter or nil
+  local key = filter or ''
+
+  -- Switching filter redraws the buffer; unsaved edits would be lost.
+  if state.buf and vim.api.nvim_buf_is_valid(state.buf) and state.loaded ~= key
+      and vim.bo[state.buf].modified
+      and vim.fn.confirm('Discard unsaved Todoist changes and open "' .. (filter or 'all') .. '"?',
+        '&Discard\n&Cancel', 2) ~= 1 then
+    return
+  end
+  state.filter = filter
 
   if not (state.buf and vim.api.nvim_buf_is_valid(state.buf)) then
     local buf = vim.api.nvim_create_buf(false, false)
@@ -594,10 +615,14 @@ function M.open(filter)
 
     local map = function(lhs, fn, desc) vim.keymap.set('n', lhs, fn, { buffer = buf, desc = desc }) end
     local close = unlessModified('close', function()
+      -- Discarded edits are still in the (hidden) buffer: draw it afresh
+      -- next time rather than showing them again.
+      if vim.bo[buf].modified then state.loaded = nil end
       vim.bo[buf].modified = false
       if #vim.api.nvim_list_wins() > 1 then vim.cmd('close') else vim.cmd('bprevious') end
     end)
-    map('<CR>', toggleLine, 'Toggle task checkbox')
+    -- The same toggle as <leader>tx in notes; the change is sent on :w.
+    map('<CR>', require('configs.functions').toggleCheckbox, 'Toggle task checkbox')
     map('r', unlessModified('reload', M.reload), 'Reload tasks')
     map('q', close, 'Close Todoist')
     map('<Esc>', close, 'Close Todoist')
@@ -616,7 +641,17 @@ function M.open(filter)
   vim.wo.wrap = false
   vim.wo.conceallevel = 2
   vim.wo.concealcursor = 'nc'
-  M.reload()
+
+  -- Same filter as what the buffer holds: just show it, no network.
+  if state.loaded == key then return end
+  local ready = prefetched[key]
+  prefetched[key] = nil
+  if ready then
+    render(ready.tasks, ready.projects)
+    state.loaded = key
+  else
+    M.reload()
+  end
 end
 
 -- -----------------------------------------------------------------------------
@@ -886,7 +921,17 @@ vim.api.nvim_create_autocmd('VimEnter', {
   once = true,
   -- Scheduled so the dashboard and the first screen are drawn before the
   -- question takes the command line.
-  callback = function() vim.schedule(askOnStartup) end,
+  callback = function()
+    vim.schedule(askOnStartup)
+    -- Warm the default list in the background, a moment after startup so it
+    -- never competes with drawing the first screen.
+    vim.defer_fn(function()
+      if not token() or #vim.api.nvim_list_uis() == 0 or state.loaded then return end
+      fetch(nil, function(err, tasks, projects)
+        if not err and not state.loaded then prefetched[''] = { tasks = tasks, projects = projects } end
+      end)
+    end, 1000)
+  end,
 })
 
 vim.api.nvim_create_user_command('TodoistToken', M.setToken, {
