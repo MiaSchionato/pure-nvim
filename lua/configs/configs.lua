@@ -1,6 +1,6 @@
 local o = vim.opt
 -- Tab display settings
-o.showtabline = 1  -- Always show tabline (0=never, 1=when multiple tabs, 2=always)
+o.showtabline = 1  -- Tabline only with 2+ tabs (0=never, 1=when multiple tabs, 2=always)
 o.tabline = "%!v:lua.require('configs.functions').MyTabline()"
 o.statusline = "%!v:lua.require('pure.statusline').MyStatusLine()"
 vim.opt.showcmd = true
@@ -51,7 +51,7 @@ o.signcolumn = "auto"                        -- Show signcolumn automatically
 o.undofile = true                            -- Persistent undo
 o.undodir = vim.fn.expand("~/.config/nvim/undodir")  -- Undo directory
 o.swapfile = false
-o.updatetime = 50                           -- Faster completion
+o.updatetime = 50                           -- ms idle before CursorHold (not completion speed)
 o.timeoutlen = 500                           -- Key timeout duration
 o.ttimeoutlen = 0                            -- Key code timeout
 o.autoread = true                            -- Auto reload files changed outside vim
@@ -61,13 +61,11 @@ o.autowrite = false                          -- Don't auto save
 o.hidden = true                              -- Allow hidden buffers
 o.errorbells = false                         -- No error bells
 o.backspace = "indent,eol,start"             -- Better backspace behavior
-o.autochdir = false                          -- Don't auto change directory
 o.iskeyword:append("-")                      -- Treat dash as part of word
 o.path:append("**")                          -- include subdirectories in search
 o.wildignore:append("*/node_modules/*", "*/.git/*", "*/tmp/*", "*/dist/*", "*/build/*") -- ignore folders
 o.selection = "exclusive"                    -- Selection behavior
-o.mouse = ""                                -- Enable mouse support
-o.modifiable = true                          -- Allow buffer modifications
+o.mouse = ""                                -- Mouse disabled
 
 
 -- Split behavior
@@ -91,6 +89,8 @@ o.foldmethod = "indent"
 vim.g.netrw_winsize = 25
 vim.g.netrw_banner = 0
 vim.g.netrw_keepdir = 0
+-- cwd follows the current file. (It was also set to false further up, which
+-- this line silently overrode.)
 o.autochdir = true
 
 -- Todoist (pure/todoist.lua)

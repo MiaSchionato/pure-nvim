@@ -117,26 +117,4 @@ vim.api.nvim_create_autocmd("InsertCharPre", {
   end,
 })
 
-vim.api.nvim_create_autocmd("CompleteDone", {
-  callback = function()
-    local completed_item = vim.v.completed_item
-    if completed_item and completed_item.user_data and completed_item.user_data.nvim and completed_item.user_data.nvim.lsp then
-    end
-  end
-})
-
-vim.api.nvim_create_autocmd("User", {
-  pattern = "ObsidianNoteEnter",
-  callback = function(ev)
-    -- remove the default mappings
-    -- vim.keymap.del("n", "<CR>", { buffer = true })
-    -- vim.keymap.del("n", "]o", { buffer = true })
-    -- vim.keymap.del("n", "[o", { buffer = true })
-
-    -- add your own
-    -- vim.keymap.set("n", "<S-k>", require("obsidian.api").smart_action, { buffer = true })
-    -- vim.keymap.del("n", "]l", { buffer = true })
-    -- vim.keymap.del("n", "[l", { buffer = true })
-  end,
-})
 

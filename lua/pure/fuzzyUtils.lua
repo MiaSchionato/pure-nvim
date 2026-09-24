@@ -98,7 +98,6 @@ function M.fuzzyLogic(opts)
           os.remove(temp)
           data = last_line:gsub("%s+$", "")
         end
-          os.remove(temp)
       end
 
       vim.schedule(function()
@@ -188,7 +187,9 @@ function M.fuzzyGrep(path)
       -- Those names are relative to the cd above, so rebuild the full one.
       local full_path = path .. (rel:gsub("^%.[/\\]", ""))
       vim.cmd("edit! " .. vim.fn.fnameescape(full_path))
-      vim.api.nvim_win_set_cursor(0, {tonumber(line),tonumber(col)})
+      -- ripgrep's column is 1-based, the cursor's 0-based: without the -1
+      -- the cursor landed one character right of the match.
+      vim.api.nvim_win_set_cursor(0, {tonumber(line), tonumber(col) - 1})
       vim.cmd("filetype detect")
     end
   })
@@ -218,8 +219,21 @@ function M.fuzzyGit()
     title = "Fuzzy Git log",
     ratio = 0.8,
     cmd = string.format("cd %s && %s | %s", vim.fn.shellescape(path), git, fzf),
+    -- The selection is "abc1234 commit message"; it used to be passed to
+    -- :edit, which opened an empty file named after the commit. Show the
+    -- commit instead, in a scratch split (q closes it).
     callback = function (selection)
-      vim.cmd(string.format("edit %s", vim.fn.fnameescape(selection)))
+      local sha = selection:match("^(%x+)")
+      if not sha then return end
+      local out = vim.fn.systemlist({ "git", "-C", path, "show", "--stat", "--patch", sha })
+      vim.cmd("botright new")
+      local buf = vim.api.nvim_get_current_buf()
+      vim.bo[buf].buftype = "nofile"
+      vim.bo[buf].bufhidden = "wipe"
+      vim.api.nvim_buf_set_lines(buf, 0, -1, false, out)
+      vim.bo[buf].filetype = "git"
+      vim.bo[buf].modifiable = false
+      vim.keymap.set("n", "q", "<cmd>close<cr>", { buffer = buf })
     end
   })
 end
@@ -245,7 +259,7 @@ function M.fuzzyGitGrep()
 
       vim.cmd("edit! " .. vim.fn.fnameescape(full_path))
       if line and col then
-        vim.api.nvim_win_set_cursor(0, {tonumber(line), col})
+        vim.api.nvim_win_set_cursor(0, {tonumber(line), col - 1}) -- git grep's column is 1-based
       end
       vim.cmd("filetype detect")
     end
@@ -467,7 +481,9 @@ function M.setup()
     end
 
     local function cancel()
-      confirmed = false
+      -- Marked as handled before the buffer goes: deleting it fires the
+      -- BufWipeout below, which called back with nil a second time.
+      confirmed = true
       vim.api.nvim_win_close(win, true)
       vim.api.nvim_buf_delete(buf, { force = true })
       callback(nil)

@@ -9,12 +9,6 @@ local M = {}
 -- entrypoint. Setting it here (at require time) made Neovim believe the theme
 -- was already active, so its highlights were never actually applied.
 
--- Background and foreground
-if vim.g.neovide then
-  local bg = "NONE"
-else
-end
-
 local none = "NONE"
 local black = "#011627"
 local white = "#c3ccdc"

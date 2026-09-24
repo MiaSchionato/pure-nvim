@@ -187,11 +187,12 @@ end
 
 -- TODO:Add signcolumn always shown ()
 local namespace_id =vim.api.nvim_create_namespace("git-diff")
-local diff_active = false
+-- Per buffer (b:pure_git_diff): one global flag meant toggling in a second
+-- buffer "deactivated" it there, while the first kept its marks.
 function M.gitDiffToggle()
-  if diff_active then
+  if vim.b.pure_git_diff then
     vim.api.nvim_buf_clear_namespace(0,namespace_id,0,-1)
-    diff_active = false
+    vim.b.pure_git_diff = false
     vim.notify("diff deactivated")
     return
   end
@@ -213,7 +214,7 @@ function M.gitDiffToggle()
     return
   end
 
-  diff_active = true
+  vim.b.pure_git_diff = true
   vim.notify("Git diff activated")
   local current_line = 0
 
@@ -324,14 +325,13 @@ function M.smartQuote()
   end
 end
 
+--- copilot.vim treats an unset g:copilot_enabled as enabled, so checking for
+--- `== true` made the first press "enable" what was already on: nothing
+--- changed, and it took a second press to turn Copilot off.
 function M.toggleCopilot()
-  if vim.g.copilot_enabled == true then
-    vim.g.copilot_enabled = false
-    vim.notify("Copilot Disabled")
-  else
-    vim.g.copilot_enabled = true
-    vim.notify("Copilot Enabled")
-  end
+  local enabled = vim.g.copilot_enabled ~= false and vim.g.copilot_enabled ~= 0
+  vim.g.copilot_enabled = not enabled
+  vim.notify(enabled and "Copilot Disabled" or "Copilot Enabled")
 end
 
 ---@return boolean verify if it's a blank line or space before the cursor

@@ -1,25 +1,33 @@
 local M = {}
 
-local fullAliases = {
+--- What each key surrounds with: the letter aliases, and the brackets
+--- themselves (either half), so s( / ds) / cs[{ work as well as sp / dsb.
+---
+--- There used to be a second table, `aliases`, with an empty closing half,
+--- which relied on pure/pairs.lua closing the pair while the keys were typed.
+--- It broke three ways: cs"q replaced the closing quote with nothing ("hello
+--- became "hello), ds( found nothing (a bare "(" was treated like a quote),
+--- and s( produced (word()) as the auto-pair and the key both closed it.
+local pairsFor = {
   ['q'] = { '"', '"' },
-  ['\''] = { "'", "'" },
-  ['p'] = { '(', ')' },
-  ['b'] = { '[', ']' },
-  ['c'] = { '{', '}' },
+  ["'"] = { "'", "'" },
+  ['"'] = { '"', '"' },
   ['t'] = { '`', '`' },
+  ['`'] = { '`', '`' },
+  ['p'] = { '(', ')' }, ['('] = { '(', ')' }, [')'] = { '(', ')' },
+  ['b'] = { '[', ']' }, ['['] = { '[', ']' }, [']'] = { '[', ']' },
+  ['c'] = { '{', '}' }, ['{'] = { '{', '}' }, ['}'] = { '{', '}' },
+  ['<'] = { '<', '>' }, ['>'] = { '<', '>' },
 }
 
-local aliases = {
-  ['q'] = { '"', '' },
-  ['\''] = { "'", "" },
-  ['p'] = { '(', '' },
-  ['b'] = { '[', '' },
-  ['c'] = { '{', '' },
-  ['t'] = { '`', '' },
-}
+--- Opening and closing text for `char`; any other character surrounds with
+--- itself on both sides (s* -> *word*).
+local function pairOf(char)
+  return pairsFor[char] or { char, char }
+end
 
 local function findSurroundPositions(char)
-  local pair = fullAliases[char] or { char, char }
+  local pair = pairOf(char)
   local openChar, closeChar = pair[1], pair[2]
   local isQuote = (openChar == closeChar) -- Aspas são tratadas diferente (sem nesting)
 
@@ -97,32 +105,24 @@ local function getChar()
   return vim.fn.nr2char(tonumber(char) or char)
 end
 
+--- The keys are fed with 'n' (no remap), so the insert-mode auto-pairs in
+--- pure/pairs.lua cannot add a second closing character; <C-r>" inserts the
+--- word literally, without mappings either way.
+local function feed(keys)
+  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(keys, true, false, true), "n", false)
+end
+
 function M.applySurround(isVisual)
   local char = getChar()
-  local pair = aliases[char] or { char, char }
+  local pair = pairOf(char)
   local open, close = pair[1], pair[2]
-
-  local keys
-  if isVisual then
-    keys = "c" .. open .. [[<C-r>"]] .. close .. "<Esc>"
-  else
-    keys = "viwc" .. open .. [[<C-r>"]] .. close .. "<Esc>"
-  end
-
-  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(keys, true, false, true), "m", false)
+  feed((isVisual and "c" or "viwc") .. open .. [[<C-r>"]] .. close .. "<Esc>")
 end
 
 function M.surroundFunction(isVisual)
   local func_name = vim.fn.input("Function name: ")
   if func_name == "" then return end
-
-  local open = func_name .. "("
-  local close = ""
-
-  local keys = isVisual and
-    "c" .. open .. [[<C-r>"]] .. close .. "<Esc>" or
-    "viwc" .. open .. [[<C-r>"]] .. close .. "<Esc>"
-  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(keys, true, false, true), "m", false)
+  feed((isVisual and "c" or "viwc") .. func_name .. "(" .. [[<C-r>"]] .. ")" .. "<Esc>")
 end
 
 function M.deleteSurround()
@@ -151,7 +151,7 @@ function M.changeSurround()
 
   --  Input: (New)
   local newChar = getChar()
-  local newPair = aliases[newChar] or { newChar, newChar }
+  local newPair = pairOf(newChar)
   local newOpen, newClose = newPair[1], newPair[2]
 
   --  Replace: Start from the right (Closing)
