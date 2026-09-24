@@ -30,6 +30,8 @@
 --    'never'   never
 --  Also:
 --    <CR> / x   toggle the checkbox on the cursor line (x does not delete here)
+--    <leader>x  cycle [ ] [~] [!] [>] [-] [x]; only [x] (done) reaches Todoist,
+--               the other states are kept locally and drawn back on reload
 --    r          reload (asks first if there are unsaved edits)
 --    q / <Esc>  close (same)
 --
@@ -207,9 +209,41 @@ local function splitMeta(s)
   return vim.trim(content), due, priority, ranges
 end
 
---- `- [ ] text due:today p1 ‹id›` at the given depth.
-local function taskLine(t, depth)
-  local parts = { ('%s- [%s] %s'):format(string.rep('  ', depth), t.checked and 'x' or ' ', oneLine(t.content)) }
+-- Obsidian's extra checkbox states ([~] in progress, [!] important, [>]
+-- deferred, [-] cancelled) have no field in Todoist, which only knows done or
+-- not. They are kept on this machine, per task id, and drawn back into the
+-- list; to Todoist those tasks are simply not done.
+local states_file = vim.fn.stdpath('data') .. '/todoist_states.json'
+
+local function readStates()
+  local f = io.open(states_file, 'r')
+  if not f then return {} end
+  local ok, data = pcall(vim.json.decode, f:read('*a'))
+  f:close()
+  return ok and type(data) == 'table' and data or {}
+end
+
+--- Record the state of every parsed item (and forget completed and deleted
+--- tasks). Returns true when the file changed.
+local function saveStates(items, deleted_ids)
+  local store = readStates()
+  local before = vim.json.encode(store)
+  for _, item in ipairs(items) do
+    if item.id then store[item.id] = (not item.checked) and item.mark or nil end
+  end
+  for _, id in ipairs(deleted_ids or {}) do store[id] = nil end
+  local after = vim.json.encode(store)
+  if after == before then return false end
+  vim.fn.mkdir(vim.fn.stdpath('data'), 'p')
+  local f = io.open(states_file, 'w')
+  if f then f:write(after) f:close() end
+  return true
+end
+
+--- `- [ ] text due:today p1 ‹id›` at the given depth; `mark` is a local state.
+local function taskLine(t, depth, mark)
+  local box = t.checked and 'x' or (mark or ' ')
+  local parts = { ('%s- [%s] %s'):format(string.rep('  ', depth), box, oneLine(t.content)) }
   local due = dueText(t)
   if due ~= '' then table.insert(parts, 'due:' .. due) end
   local p = priorityLabel(t.priority):lower()
@@ -232,10 +266,12 @@ local function parseLine(line)
   local body, id = rest:match('^(.-)%s*‹([%w_%-]+)›%s*$')
   body = body or rest
 
-  local checked = false
-  local box, after = body:match('^%[([ xX])%]%s*(.*)$')
+  -- Any one-character box: [x] is done; [~] [!] [>] [-] are local states.
+  local checked, mark = false, nil
+  local box, after = body:match('^%[(.)%]%s*(.*)$')
   if box then
-    checked = box ~= ' '
+    checked = box == 'x' or box == 'X'
+    if not checked and box ~= ' ' then mark = box end
     body = after
   end
 
@@ -243,7 +279,7 @@ local function parseLine(line)
   if content == '' then return nil end
 
   local width = indent:gsub('\t', '  ')
-  return { indent = #width, checked = checked, content = content, due = due, priority = priority, id = id }
+  return { indent = #width, checked = checked, mark = mark, content = content, due = due, priority = priority, id = id }
 end
 
 --- Hide the ids and colour the metadata. Re-run on every change, since
@@ -318,8 +354,9 @@ local function render(tasks, projects)
   local lines = { '# Todoist' .. (state.filter and (' — ' .. state.filter) or '') }
   state.snapshot = {}
 
+  local marks = readStates()
   local function emit(t, depth, shown_parent)
-    table.insert(lines, taskLine(t, depth))
+    table.insert(lines, taskLine(t, depth, marks[t.id]))
     state.snapshot[t.id] = {
       content = oneLine(t.content), due = dueText(t), priority = tonumber(t.priority) or 1,
       project_id = t.project_id, parent_id = shown_parent, checked = t.checked and true or false,
@@ -567,8 +604,9 @@ function M.save()
   local ops = plan(items, seen)
   local parts = summary(ops)
   if #parts == 0 then
+    -- Nothing for Todoist, but a [~] / [!] / [>] / [-] may have changed.
     vim.bo[buf].modified = false
-    return vim.notify('Todoist: no changes')
+    return vim.notify(saveStates(items) and 'Todoist: checkbox states saved (kept locally)' or 'Todoist: no changes')
   end
 
   -- vim.g.pure_todoist_confirm: 'all' (default) asks before every save,
@@ -595,6 +633,10 @@ function M.save()
   vim.notify('Todoist: saving…')
   apply(ops, function(errors)
     state.saving = false
+    -- After apply, so new tasks have their ids; before the reload draws them.
+    local deleted_ids = {}
+    for _, d in ipairs(ops.delete) do table.insert(deleted_ids, d.id) end
+    saveStates(items, deleted_ids)
     if #errors > 0 then
       vim.notify('Todoist: some changes failed:\n' .. table.concat(errors, '\n'), vim.log.levels.ERROR)
     else
@@ -679,6 +721,9 @@ function M.open(filter)
     map('<CR>', require('configs.functions').toggleCheckbox, 'Toggle task checkbox')
     -- In this buffer only, x ticks the box instead of deleting a character.
     map('x', require('configs.functions').toggleCheckbox, 'Toggle task checkbox')
+    -- Obsidian's states, as in notes; only [x] reaches Todoist, the others
+    -- are kept locally (see states_file).
+    map('<leader>x', require('configs.functions').cycleCheckbox, 'Cycle checkbox state')
     map('r', unlessModified('reload', M.reload), 'Reload tasks')
     map('q', close, 'Close Todoist')
     map('<Esc>', close, 'Close Todoist')
