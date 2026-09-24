@@ -189,12 +189,27 @@ function M.toggleHighlightSearch()
   vim.opt.hlsearch = not is_active
 end
 
+--- Highlight every occurrence of the word under the cursor, or turn the
+--- highlight off when it is already showing that same word. On another word
+--- it switches to that word instead of just turning off.
+---
+--- This used to yank with 'viw"vy ', which clobbered register v and, through
+--- the trailing space, moved the cursor one column right on every use.
 function M.toggleWordHighlight()
-  local is_active = vim.opt.hlsearch:get()
-  vim.opt.hlsearch = not is_active
-  vim.cmd('noautocmd normal! viw"vy ')
-  local text = vim.fn.getreg('v')
-  vim.fn.setreg('/', text)
+  local word = vim.fn.expand('<cword>')
+  -- \V: no regex magic ('.' or '*' in the word match literally);
+  -- \< \>: whole word only, so 'foo' no longer lights up 'foobar'.
+  local pattern = '\\V\\<' .. vim.fn.escape(word, '\\') .. '\\>'
+
+  if vim.o.hlsearch and (word == '' or vim.fn.getreg('/') == pattern) then
+    vim.o.hlsearch = false
+    return
+  end
+  if word == '' then return end
+
+  vim.fn.setreg('/', pattern)
+  vim.fn.histadd('/', pattern) -- so / then <Up> recalls it
+  vim.o.hlsearch = true
 end
 
 -- TODO: Move this func to its own file to extend functionality
