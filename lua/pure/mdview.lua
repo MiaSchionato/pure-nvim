@@ -34,6 +34,14 @@ local enabled = true
 local heading_icons = { '󰲡 ', '󰲣 ', '󰲥 ', '󰲧 ', '󰲩 ', '󰲫 ' }
 local bullets = { '●', '○', '◆', '◇' }
 local checkbox = { unchecked = '󰄱', checked = '󰄲' }
+-- Obsidian's extra states. Markdown does not know them ('- [~] x' is a plain
+-- item whose text starts with '[~]'), so render.bullet finds them by text.
+local extra_states = {
+  ['~'] = { '󰰱', 'PureMdUnchecked' }, -- in progress
+  ['!'] = { '', 'DiagnosticWarn' },  -- important
+  ['>'] = { '', 'PureMdUnchecked' }, -- deferred
+  ['-'] = { '󰅖', 'PureMdCheckedText' }, -- cancelled
+}
 
 -- -----------------------------------------------------------------------------
 --  Colours
@@ -177,6 +185,20 @@ function render.bullet(buf, node, mark)
       mark(row, sc, { end_col = ec, conceal = '' })
       return
     end
+  end
+
+  -- '- [~] text' and the like: hide the bullet, draw the state's icon over
+  -- the '[' and conceal the rest of the box, as for real task items.
+  local row, sc, _, ec = node:range()
+  local box_col, state = lineText(buf, row):match('()%[([^%]])%]', ec + 1)
+  if box_col == ec + 1 and extra_states[state] then
+    -- The whole '[~]' is concealed *into* the icon. Treesitter reads '[~]' as
+    -- a shortcut link and conceals its brackets itself; an overlay plus a
+    -- partial conceal fought with that and swallowed the space after it.
+    local icon, hl = unpack(extra_states[state])
+    mark(row, sc, { end_col = ec, conceal = '' })
+    mark(row, ec, { end_col = ec + 3, conceal = icon, hl_group = hl, priority = 300 })
+    return
   end
 
   local depth = 0

@@ -22,6 +22,10 @@ require("obsidian").setup {
   -- pure/mdview.lua renders markdown; obsidian's own UI would draw a second
   -- set of checkboxes and bullets over it.
   ui = { enable = false },
+  -- <CR> on a checkbox cycled through five states ([ ] [~] [!] [>] [x]).
+  -- Only [ ] and [x] are task items to markdown, so the other three showed as
+  -- raw brackets; now it toggles like <leader>tx and the Todoist list do.
+  checkbox = { order = { " ", "x" } },
   workspaces = {
     {
       name = "Atlas",

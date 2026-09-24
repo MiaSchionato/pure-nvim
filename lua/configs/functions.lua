@@ -246,17 +246,24 @@ function M.gitDiffToggle()
   end
 end
 
+--- Toggle the checkbox of the list item on the cursor line: [ ] -> [x] -> [ ].
+--- Obsidian's other states ([~] [!] [>] [-]) count as not done, so they go to
+--- [x]. A plain '- item' gets an empty box.
+---
+--- Only the box right after the bullet is touched; this used to change the
+--- first "[ ]" anywhere in the line, so brackets in the task text could flip.
+--- Shared by <leader>tx in notes and <CR> in the Todoist list, so every way of
+--- ticking a box behaves the same.
 function M.toggleCheckbox()
   local line = vim.api.nvim_get_current_line()
-  local new_line = ""
-  if line:find("%[%s?%]") then
-    new_line = line:gsub("%[%s?%]", "[x]", 1)
-  elseif line:find("%[[xX]%]") then
-    new_line = line:gsub("%[[xX]%]", "[ ]", 1)
-  elseif line:find("^%s*-%s") then
-    new_line = line:gsub("(-%s)", "- [ ] ", 1)
+  local prefix, state, rest = line:match('^(%s*[-*+]%s+)%[(.?)%](.*)$')
+  local new_line
+  if prefix then
+    new_line = prefix .. (state:match('[xX]') and '[ ]' or '[x]') .. rest
   else
-    return
+    local bullet, text = line:match('^(%s*[-*+]%s+)(.*)$')
+    if not bullet then return end
+    new_line = bullet .. '[ ] ' .. text
   end
   vim.api.nvim_set_current_line(new_line)
 end
