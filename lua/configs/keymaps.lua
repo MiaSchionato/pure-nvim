@@ -42,7 +42,13 @@ local dirs = {
   ['~'] = home,
   ['.'] = home .. '.config/',
   n     = home .. '.config/nvim/',
-  m     = home .. 'iCloudDrive/Documents/Obsidian/Atlas/',
+  -- The Obsidian vault, as set up in pure/zettelkasten.lua (asked for on a
+  -- fresh install, or vim.g.pure_vault). A function: it may be chosen only
+  -- after this file has run.
+  m     = function()
+    local vault = zet.vaultPath()
+    return vault and (vault .. '/') or nil
+  end,
 }
 
 --- Directories relative to the current file. Functions, not strings: a string
@@ -59,10 +65,17 @@ local file = {
 --- floating window blinks shut with nothing explaining why.
 local function inDir(picker, dir)
   return function()
-    if vim.fn.isdirectory(dir) == 0 then
-      return vim.notify('Directory does not exist: ' .. dir, vim.log.levels.WARN)
+    -- Not `type(dir) == 'function' and dir() or dir`: when dir() returns nil
+    -- (no vault yet) that idiom falls through to `or dir`, the function itself.
+    local path = dir
+    if type(dir) == 'function' then path = dir() end
+    if not path then
+      return vim.notify('No Obsidian vault set: run :ZettelVault', vim.log.levels.WARN)
     end
-    picker(dir)
+    if vim.fn.isdirectory(path) == 0 then
+      return vim.notify('Directory does not exist: ' .. path, vim.log.levels.WARN)
+    end
+    picker(path)
   end
 end
 
@@ -81,7 +94,13 @@ local function explore(dir)
     if vim.w.is_oil_win then
       return oil.close()
     end
-    local path = type(dir) == 'function' and dir() or dir
+    -- Not `type(dir) == 'function' and dir() or dir`: when dir() returns nil
+    -- (no vault yet) that idiom falls through to `or dir`, the function itself.
+    local path = dir
+    if type(dir) == 'function' then path = dir() end
+    if not path then
+      return vim.notify('No Obsidian vault set: run :ZettelVault', vim.log.levels.WARN)
+    end
     if vim.fn.isdirectory(path) == 0 then
       return vim.notify('Directory does not exist: ' .. path, vim.log.levels.WARN)
     end

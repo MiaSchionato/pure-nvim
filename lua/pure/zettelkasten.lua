@@ -6,8 +6,12 @@
 ---   {{title}}            the note's title (its file name without extension)
 ---   {{date}}             current date, default YYYY-MM-DD
 ---   {{time}}             current time, default HH:mm
----   {{date:FORMAT}}      any Moment.js format, e.g. {{date:YYYYMMDDHHmm}}
----   {{time:FORMAT}}
+---   {{date:FORMAT}}      a Moment.js format, e.g. {{date:YYYYMMDDHHmm}},
+---   {{time:FORMAT}}      {{date:dddd, D [de] MMMM}}; [text] is copied as is
+---
+--- Day and month names follow vim.g.pure_templates_locale: 'en' (default, as
+--- Obsidian ships) or 'pt'. Set it to the language Obsidian itself uses, so a
+--- template expands to the same text in both editors.
 ---
 --- Templater's `tp.file.move(...)` has no equivalent in the core plugin, so the
 --- destination folder is not written into the template at all: it lives in the
@@ -41,38 +45,94 @@ local destinations = {
   VideoIdeas = '2-Areas/Audiovisual/Ideas',
 }
 
---- Moment.js tokens, longest first so "MMMM" is not eaten by "MM".
-local TOKENS = {
-  { 'YYYY', '%Y' }, { 'YY', '%y' },
-  { 'MMMM', '%B' }, { 'MMM', '%b' }, { 'MM', '%m' },
-  { 'dddd', '%A' }, { 'ddd', '%a' },
-  { 'DDDD', '%j' }, { 'DD', '%d' },
-  { 'HH', '%H' }, { 'hh', '%I' },
-  { 'mm', '%M' }, { 'ss', '%S' },
-  { 'A', '%p' },
+--- Day and month names per locale. os.date's %A / %B always gave English
+--- (the C locale), whatever language Obsidian renders the same template in.
+local locales = {
+  en = {
+    months = { 'January', 'February', 'March', 'April', 'May', 'June', 'July',
+      'August', 'September', 'October', 'November', 'December' },
+    months_short = { 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec' },
+    days = { 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday' },
+    days_short = { 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat' },
+    days_min = { 'Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa' },
+    ordinal = function(n)
+      local last2, last = n % 100, n % 10
+      local suffix = (last2 >= 11 and last2 <= 13) and 'th'
+        or ({ 'st', 'nd', 'rd' })[last] or 'th'
+      return n .. suffix
+    end,
+  },
+  -- As Moment's pt / pt-br locales write them: lower case.
+  pt = {
+    months = { 'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho',
+      'agosto', 'setembro', 'outubro', 'novembro', 'dezembro' },
+    months_short = { 'jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez' },
+    days = { 'domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado' },
+    days_short = { 'dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb' },
+    days_min = { 'do', '2ª', '3ª', '4ª', '5ª', '6ª', 'sá' },
+    ordinal = function(n) return n .. 'º' end,
+  },
 }
 
---- Translate a Moment.js format into one os.date understands.
---- Scanned left to right rather than with successive gsubs, so a replacement
---- can never be re-matched by a later token.
+--- Moment.js tokens, longest first within each letter so "MMMM" is not eaten
+--- by "MM", "Do" is tried before "D", and so on.
+local TOKENS = {
+  'YYYY', 'YY',
+  'MMMM', 'MMM', 'MM', 'M',
+  'Do', 'DDDD', 'DDD', 'DD', 'D',
+  'dddd', 'ddd', 'dd', 'd',
+  'HH', 'H', 'hh', 'h',
+  'mm', 'm', 'ss', 's',
+  'A', 'a',
+}
+
+--- Format `time` with a Moment.js format string, as Obsidian does.
+---
+--- Formatted directly rather than translated to an os.date format: strftime
+--- has no unpadded day, month or hour (Moment's D, M, H, h) and no ordinals,
+--- which the translation used to leave as literal letters. Text in [brackets]
+--- is copied without formatting, as in Moment. Scanned left to right, so a
+--- value can never be re-matched by a later token.
 --- @param fmt string
+--- @param time integer
 --- @return string
-local function momentToStrftime(fmt)
+local function formatMoment(fmt, time)
+  local t = os.date('*t', time)
+  local L = locales[vim.g.pure_templates_locale or 'en'] or locales.en
+  local h12 = t.hour % 12 == 0 and 12 or t.hour % 12
+  local value = {
+    YYYY = ('%04d'):format(t.year), YY = ('%02d'):format(t.year % 100),
+    MMMM = L.months[t.month], MMM = L.months_short[t.month],
+    MM = ('%02d'):format(t.month), M = tostring(t.month),
+    Do = L.ordinal(t.day), DDDD = ('%03d'):format(t.yday), DDD = tostring(t.yday),
+    DD = ('%02d'):format(t.day), D = tostring(t.day),
+    dddd = L.days[t.wday], ddd = L.days_short[t.wday], dd = L.days_min[t.wday], d = tostring(t.wday - 1),
+    HH = ('%02d'):format(t.hour), H = tostring(t.hour), hh = ('%02d'):format(h12), h = tostring(h12),
+    mm = ('%02d'):format(t.min), m = tostring(t.min), ss = ('%02d'):format(t.sec), s = tostring(t.sec),
+    A = t.hour < 12 and 'AM' or 'PM', a = t.hour < 12 and 'am' or 'pm',
+  }
+
   local out, i = {}, 1
   while i <= #fmt do
-    local matched = false
-    for _, token in ipairs(TOKENS) do
-      local from, to = token[1], token[2]
-      if fmt:sub(i, i + #from - 1) == from then
-        out[#out + 1] = to
-        i = i + #from
-        matched = true
-        break
+    local literal = fmt:match('^%[([^%]]*)%]', i)
+    if literal then
+      out[#out + 1] = literal
+      i = i + #literal + 2
+    else
+      local matched
+      for _, token in ipairs(TOKENS) do
+        if fmt:sub(i, i + #token - 1) == token then
+          matched = token
+          break
+        end
       end
-    end
-    if not matched then
-      out[#out + 1] = fmt:sub(i, i)
-      i = i + 1
+      if matched then
+        out[#out + 1] = value[matched]
+        i = i + #matched
+      else
+        out[#out + 1] = fmt:sub(i, i)
+        i = i + 1
+      end
     end
   end
   return table.concat(out)
@@ -137,6 +197,8 @@ function M.setVault()
   if vim.g.pure_vault and vim.g.pure_vault ~= '' then
     vim.notify('Saved, but vim.g.pure_vault is set and takes precedence', vim.log.levels.WARN)
   end
+  -- plugins/obsidian.lua and the <leader>em / fa / nm keys follow the vault.
+  vim.api.nvim_exec_autocmds('User', { pattern = 'PureVaultChanged', data = { vault = vaultPath() } })
 
   local templates = path .. '/' .. (vim.g.pure_templates or 'Templates')
   if vim.fn.isdirectory(templates) == 0 then
@@ -158,7 +220,7 @@ function M.maybeAskVault()
   vim.schedule(function()
     local choice = vim.fn.confirm(
       'No Obsidian vault configured. Set it now?\n(templates come from <vault>/Templates)',
-      '&Yes\n&Not now\n&Never ask', 1)
+      '&Yes\n&Later\nNe&ver ask', 1)
     if choice == 1 then
       M.setVault()
     elseif choice == 3 then
@@ -198,9 +260,9 @@ local function render(content, title)
     if key == 'title' then
       return title
     elseif key == 'date' then
-      return os.date(colon == ':' and momentToStrftime(fmt) or '%Y-%m-%d', now)
+      return formatMoment(colon == ':' and fmt or 'YYYY-MM-DD', now)
     elseif key == 'time' then
-      return os.date(colon == ':' and momentToStrftime(fmt) or '%H:%M', now)
+      return formatMoment(colon == ':' and fmt or 'HH:mm', now)
     end
     return nil -- unknown placeholder: leave it untouched
   end))
@@ -222,10 +284,16 @@ local function moveCurrentFile(folder)
   if not root then return end -- insertTemplate checks first; this is a guard
 
   local title = currentTitle()
-  local target_dir = root .. '/' .. folder:gsub('{{title}}', title)
+  -- Replaced through a function: as a plain replacement string, a '%' in the
+  -- title is gsub syntax, and "100% focus" became the folder "100 focus".
+  local folder_name = folder:gsub('{{title}}', function() return title end)
+  local target_dir = root .. '/' .. folder_name
   local target = target_dir .. '/' .. vim.fn.fnamemodify(path, ':t')
 
-  if vim.fs.normalize(target) == vim.fs.normalize(path) then
+  -- Case-blind on Windows, where the same file can be spelled C:/ or c:/.
+  local a, b = vim.fs.normalize(target), vim.fs.normalize(path)
+  if vim.fn.has('win32') == 1 then a, b = a:lower(), b:lower() end
+  if a == b then
     return -- already there
   end
   if vim.uv.fs_stat(target) then
@@ -246,7 +314,7 @@ local function moveCurrentFile(folder)
   if vim.api.nvim_buf_is_valid(old) and vim.api.nvim_get_current_buf() ~= old then
     vim.api.nvim_buf_delete(old, { force = true })
   end
-  vim.notify('Moved to ' .. folder:gsub('{{title}}', title))
+  vim.notify('Moved to ' .. folder_name)
 end
 
 --- Pick a template, expand it at the cursor, and move the note if the template
@@ -292,9 +360,21 @@ function M.insertTemplate()
   end)
 end
 
+-- Also used by plugins/obsidian.lua and configs/keymaps.lua, so the vault is
+-- configured in one place.
+M.vaultPath = vaultPath
+
+-- Offer to set the vault on the first start with a UI (maybeAskVault itself
+-- returns at once when one is set, declined, or there is no UI).
+vim.api.nvim_create_autocmd('VimEnter', {
+  group = vim.api.nvim_create_augroup('PureZettelVault', { clear = true }),
+  once = true,
+  callback = M.maybeAskVault,
+})
+
 -- Exposed for tests.
 M._render = render
-M._momentToStrftime = momentToStrftime
+M._formatMoment = formatMoment
 M._destinations = destinations
 
 return M
