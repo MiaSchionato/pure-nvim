@@ -36,11 +36,13 @@ local bullets = { '●', '○', '◆', '◇' }
 local checkbox = { unchecked = '󰄱', checked = '󰄲' }
 -- Obsidian's extra states. Markdown does not know them ('- [~] x' is a plain
 -- item whose text starts with '[~]'), so render.bullet finds them by text.
+-- Box-shaped icons, like the two checkboxes, written as code points: pasted
+-- private-use glyphs have been lost in copying before, leaving empty icons.
 local extra_states = {
-  ['~'] = { '󰰱', 'PureMdUnchecked' }, -- in progress
-  ['!'] = { '', 'DiagnosticWarn' },  -- important
-  ['>'] = { '', 'PureMdUnchecked' }, -- deferred
-  ['-'] = { '󰅖', 'PureMdCheckedText' }, -- cancelled
+  ['~'] = { '\u{F0856}', 'PureMdUnchecked' },   -- md-checkbox_intermediate: in progress
+  ['!'] = { '\u{F0CE4}', 'DiagnosticWarn' },    -- md-alert_box_outline: important
+  ['>'] = { '\u{F0736}', 'PureMdUnchecked' },   -- md-arrow_right_bold_box_outline: deferred
+  ['-'] = { '\u{F06F2}', 'PureMdCheckedText' }, -- md-minus_box_outline: cancelled
 }
 
 -- -----------------------------------------------------------------------------

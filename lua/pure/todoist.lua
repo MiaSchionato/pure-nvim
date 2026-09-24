@@ -173,6 +173,19 @@ local state = {
 }
 
 local id_ns = vim.api.nvim_create_namespace('pure_todoist_ids')
+
+-- Priorities in Todoist's own colours, which are clearly apart; the theme's
+-- Diagnostic groups were pale pastels where p1 and p2 looked alike. The due
+-- date is secondary information, so it is dimmed rather than coloured.
+-- `default`: a theme may define these groups itself.
+local function setTodoistHighlights()
+  vim.api.nvim_set_hl(0, 'PureTodoistP1', { fg = '#d1453b', default = true })
+  vim.api.nvim_set_hl(0, 'PureTodoistP2', { fg = '#eb8909', default = true })
+  vim.api.nvim_set_hl(0, 'PureTodoistP3', { fg = '#246fe0', default = true })
+  vim.api.nvim_set_hl(0, 'PureTodoistDue', { link = 'Comment', default = true })
+end
+setTodoistHighlights()
+vim.api.nvim_create_autocmd('ColorScheme', { callback = setTodoistHighlights })
 local hint_ns = vim.api.nvim_create_namespace('pure_todoist_hint')
 
 local function oneLine(s)
@@ -286,7 +299,7 @@ end
 --- editing moves the text the marks were placed on.
 local function decorate(buf)
   vim.api.nvim_buf_clear_namespace(buf, id_ns, 0, -1)
-  local priority_hl = { 'DiagnosticError', 'DiagnosticWarn', 'DiagnosticInfo' }
+  local priority_hl = { 'PureTodoistP1', 'PureTodoistP2', 'PureTodoistP3' }
   for row, line in ipairs(vim.api.nvim_buf_get_lines(buf, 0, -1, false)) do
     if parseLine(line) then
       local id_start, id_end = line:find('%s*‹[%w_%-]+›%s*$')
@@ -298,7 +311,7 @@ local function decorate(buf)
       local _, _, _, ranges = splitMeta(line:sub(1, (id_start or #line + 1) - 1))
       for _, r in ipairs(ranges) do
         if r[3] == 'due' then
-          vim.api.nvim_buf_set_extmark(buf, id_ns, row - 1, r[1] - 1, { end_col = r[2], hl_group = 'Special' })
+          vim.api.nvim_buf_set_extmark(buf, id_ns, row - 1, r[1] - 1, { end_col = r[2], hl_group = 'PureTodoistDue' })
         else
           -- 'pN' is concealed into a coloured flag (p4, normal priority, into
           -- nothing). Like the ids it shows as text again while the line is
@@ -306,7 +319,7 @@ local function decorate(buf)
           local n = tonumber(r[3]:sub(2))
           vim.api.nvim_buf_set_extmark(buf, id_ns, row - 1, r[1] - 1, {
             end_col = r[2],
-            conceal = priority_hl[n] and '󰈻' or '',
+            conceal = priority_hl[n] and '\u{F023B}' or '', -- md-flag
             hl_group = priority_hl[n],
           })
         end
@@ -847,7 +860,7 @@ local function load(filter, on_done)
   end)
 end
 
-local priority_hl = { [4] = 'DiagnosticError', [3] = 'DiagnosticWarn', [2] = 'DiagnosticInfo' }
+local priority_hl = { [4] = 'PureTodoistP1', [3] = 'PureTodoistP2', [2] = 'PureTodoistP3' }
 
 --- The virtual lines for one block: a header, one line per task, a footer.
 local function blockLines(block, entry, width)
@@ -891,7 +904,7 @@ local function blockLines(block, entry, width)
     }
     local project = project_cache.names[t.project_id]
     if project then table.insert(chunks, { '  ' .. project, 'Comment' }) end
-    if t.due then table.insert(chunks, { '  ' .. (t.due.string or t.due.date), 'Special' }) end
+    if t.due then table.insert(chunks, { '  ' .. (t.due.string or t.due.date), 'PureTodoistDue' }) end
     local p = tonumber(t.priority) or 1
     if p > 1 then table.insert(chunks, { '  ' .. priorityLabel(p), priority_hl[p] }) end
     add(chunks)
