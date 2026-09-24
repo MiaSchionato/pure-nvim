@@ -275,6 +275,17 @@ function render.table(buf, node, mark)
         end
         col = p
       end
+      -- Checkboxes in cells. Markdown has no task items inside tables, so
+      -- treesitter sees plain text; match the [ ] / [x] literally instead.
+      for pos, mark_char in text:gmatch('()%[([ xX])%]') do
+        local state = mark_char == ' ' and 'unchecked' or 'checked'
+        local icon = checkbox[state]
+        mark(row, pos - 1, {
+          virt_text = { { icon .. string.rep(' ', 3 - vim.fn.strdisplaywidth(icon)),
+            state == 'checked' and 'PureMdChecked' or 'PureMdUnchecked' } },
+          virt_text_pos = 'overlay',
+        })
+      end
     end
   end
 end
@@ -290,8 +301,11 @@ end
 -- -----------------------------------------------------------------------------
 
 --- True when `buf` should show rendered markdown.
+--- Scratch buffers (buftype set) are skipped unless they opt in with
+--- vim.b.pure_mdview = true, as the Todoist task list does.
 local function active(buf)
-  return enabled and vim.bo[buf].filetype == 'markdown' and vim.bo[buf].buftype == ''
+  return enabled and vim.bo[buf].filetype == 'markdown'
+    and (vim.bo[buf].buftype == '' or vim.b[buf].pure_mdview == true)
 end
 
 --- Redraw the visible part of the current window's buffer.

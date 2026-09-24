@@ -28,6 +28,7 @@ Plugins are installed by the built-in `vim.pack`, so **Neovim 0.12 or newer** is
 | `bat` | previews in the grep and explorer pickers |
 | `tree-sitter` CLI + a C compiler | compiling Treesitter parsers (`npm install -g tree-sitter-cli`) |
 | `node` | GitHub Copilot (`copilot.vim`) |
+| `curl` | Todoist task list (`:Todoist`) |
 
 On Debian/Ubuntu the `fd` and `bat` packages install the binaries as `fdfind` and `batcat`; link them to `fd` and `bat` so the pickers can find them.
 
@@ -56,3 +57,7 @@ The `windows` branch adds the Windows-only setup on top of `main`. The pickers b
 ### Obsidian
 
 `lua/plugins/obsidian.lua` expects the vault at `~/iCloudDrive/Documents/Obsidian/Atlas` and skips its setup when that folder does not exist. Change the path to match your own vault.
+
+### Todoist
+
+`:Todoist` lists your active tasks as a checkbox table (`:Todoist today`, `:Todoist overdue` or any other Todoist filter narrows it); `<CR>` or `x` completes the task under the cursor, `r` reloads and `q` closes. It needs an API token from Todoist (Settings → Integrations → Developer), read from the `TODOIST_API_TOKEN` environment variable or from a file containing only the token at `stdpath('data')/todoist_token`. Keep the token out of this repository.
