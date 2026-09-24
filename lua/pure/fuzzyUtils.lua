@@ -105,7 +105,7 @@ function M.fuzzyLogic(opts)
         if vim.api.nvim_win_is_valid(win) then vim.api.nvim_win_close(win, true) end
         if vim.api.nvim_buf_is_valid(buf) then vim.api.nvim_buf_delete(buf, { force = true }) end
 
-        if data ~= "" or opts.isChooser then
+        if data ~= "" then
           opts.callback(data)
         else
             vim.cmd("stopinsert")
@@ -550,40 +550,6 @@ function M.fuzzyExplorer(path)
               end
             end
           end  })
-end
-
-function M.yaziExplorer(path)
-  if path == nil then path = vim.fn.getcwd() end
-  local temp = vim.fn.stdpath("cache") .. "/yazi_explorer"
-  -- `path` was accepted and then dropped, so yazi always opened in the cwd and
-  -- <leader>E / <leader>ee never landed where the mapping asked for.
-  local yazi = "yazi " .. vim.fn.shellescape(path)
-    .. " --chooser-file " .. vim.fn.shellescape(temp)
-
-  M.fuzzyLogic({
-    title = "Yazi: " .. path,
-    ratio = 0.8,
-    cmd = string.format("%s", yazi),
-    isChooser = true,
-    callback = function()
-        local f = io.open(temp, "r")
-        if f then
-          local content = f:read("*a")
-          f:close()
-          -- yazi writes a trailing newline; without trimming it became part of
-          -- the filename passed to :edit.
-          content = content:gsub("%s+$", "")
-          os.remove(temp)
-          if content == "" then
-            vim.notify("No file selected", vim.log.levels.WARN)
-            return
-          end
-          vim.cmd("edit! " .. vim.fn.fnameescape(content))
-        else
-          vim.notify("No file selected", vim.log.levels.WARN)
-        end
-      end
-    })
 end
 
 return M

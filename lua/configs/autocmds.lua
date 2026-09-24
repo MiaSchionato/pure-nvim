@@ -92,7 +92,7 @@ vim.api.nvim_create_autocmd("VimLeave", {
     local cache = vim.fn.stdpath('cache')
     local scratch = {
       'opts_run', 'Jump_list', 'buffer_list', 'oldfiles_list',
-      'colorscheme_list', 'ui_select', 'yazi_explorer',
+      'colorscheme_list', 'ui_select',
     }
     for _, name in ipairs(scratch) do
       os.remove(cache .. '/' .. name)

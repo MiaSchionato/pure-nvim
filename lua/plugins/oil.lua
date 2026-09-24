@@ -17,7 +17,9 @@ require('oil').setup({
     ["<CR>"] = "actions.select",
     ["H"] = "actions.parent",
     ["L"] = "actions.select",
-    ["<leader>eo"] = "actions.close",
+    -- The key that opened the float (<leader>ee, <leader>eo, ...) closes it
+    -- too; that is handled by the global mappings, which toggle.
+    ["<Esc>"] = "actions.close",
     ["q"] = "actions.close",
     ["P"] = "actions.preview",
     ["R"] = "actions.refresh",

@@ -26,7 +26,6 @@ Plugins are installed by the built-in `vim.pack`, so **Neovim 0.12 or newer** is
 | `fd` | file and directory pickers |
 | `rg` (ripgrep) | live grep picker |
 | `bat` | previews in the grep and explorer pickers |
-| `yazi` | file explorer; falls back to the built-in fzf explorer when absent |
 | `tree-sitter` CLI + a C compiler | compiling Treesitter parsers (`npm install -g tree-sitter-cli`) |
 | `node` | GitHub Copilot (`copilot.vim`) |
 

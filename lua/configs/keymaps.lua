@@ -57,16 +57,25 @@ local function inDir(picker, dir)
   end
 end
 
---- Explorer with a yazi front-end, falling back to the fzf one when yazi is
---- missing or fails to start.
+--- Toggle an oil float on `dir` (a path, or a function returning one).
+---
+--- The same key closes the float again. That check comes first: inside oil the
+--- buffer name is an oil:// URL, so here() would yield a path that isdirectory()
+--- rejects and the key would warn instead of closing.
+---
+--- oil is required lazily: plugins/oil.lua loads after this file, so the module
+--- is not on the runtimepath yet when these mappings are defined.
 local function explore(dir)
   return function()
-    if vim.fn.isdirectory(dir) == 0 then
-      return vim.notify('Directory does not exist: ' .. dir, vim.log.levels.WARN)
+    local oil = require('oil')
+    if vim.w.is_oil_win then
+      return oil.close()
     end
-    if not pcall(fzf.yaziExplorer, dir) then
-      fzf.fuzzyExplorer(dir)
+    local path = type(dir) == 'function' and dir() or dir
+    if vim.fn.isdirectory(path) == 0 then
+      return vim.notify('Directory does not exist: ' .. path, vim.log.levels.WARN)
     end
+    oil.open_float(path)
   end
 end
 
@@ -218,7 +227,7 @@ map('n', "<leader>bo", "<cmd>%bd|e#<cr>", func.getOpts(opts, "Close all but curr
 -- =============================================================================
 --  Explore  (<leader>e)
 -- =============================================================================
-map('n', '<leader>ee', function() explore(here())() end, func.getOpts(opts, "Explore current directory"))
+map('n', '<leader>ee', explore(here), func.getOpts(opts, "Explore current directory"))
 map('n', '<leader>E', explore(dirs['~']), func.getOpts(opts, "Explore home"))
 map('n', '<leader>e.', explore(dirs['.']), func.getOpts(opts, "Explore ~/.config"))
 map('n', '<leader>en', explore(dirs.n), func.getOpts(opts, "Explore nvim config"))
