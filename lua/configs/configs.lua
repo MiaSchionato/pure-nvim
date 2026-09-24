@@ -92,3 +92,8 @@ vim.g.netrw_winsize = 25
 vim.g.netrw_banner = 0
 vim.g.netrw_keepdir = 0
 o.autochdir = true
+
+-- Todoist (pure/todoist.lua)
+-- When :w in the task list asks before sending: 'all', 'delete' (only when
+-- tasks would be deleted) or 'never'.
+vim.g.pure_todoist_confirm = 'delete'

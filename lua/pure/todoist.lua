@@ -11,12 +11,12 @@
 --  The buffer is a markdown task list, one section per project:
 --
 --    ## Work
---    - [ ] Write the README  due:today  p1
---      - [ ] Sub step  due:tomorrow
+--    - [ ] Write the README due:today p1
+--      - [ ] Sub step due:tomorrow
 --    - [ ] Review PR
 --
---    - text first; metadata after two spaces: due:<any Todoist date phrase>
---      and p1..p3 (no pN = normal priority)
+--    - text first, then due:<any Todoist date phrase, in English> and a
+--      priority p1..p3 as the last word (no pN = normal priority)
 --    - indenting a line makes it a subtask of the line above it
 --    - the ## heading is the project: move a line under another to move it
 --    - new line = new task, deleted line = deleted task, [x] = complete
@@ -177,14 +177,44 @@ local function oneLine(s)
   return (tostring(s or ''):gsub('\n', ' '):gsub('%s%s+', ' '))
 end
 
---- `- [ ] text  due:today  p1 ‹id›` at the given depth.
+--- Split a task's text from its metadata, which follows it after a single
+--- space: 'due:<date phrase>' (spaces allowed: 'due:next monday 10:00') and a
+--- priority 'p1'..'p4' as the last word, before or after the due date.
+--- Returns content, due ('' if none), priority (API value, 4 = p1) and the
+--- ranges of the metadata in `s` ({ from, to, kind }) for highlighting.
+local function splitMeta(s)
+  local ranges, priority = {}, 1
+
+  -- A trailing ' pN' word; `offset` maps positions in `part` back to `s`.
+  local function takePriority(part, offset)
+    local head, n = part:match('^(.-)%s+[pP]([1-4])%s*$')
+    if not head then return part end
+    local at = part:find('[pP][1-4]%s*$', #head + 1)
+    priority = 5 - tonumber(n)
+    table.insert(ranges, { offset + at, offset + at + 1, 'p' .. n })
+    return head
+  end
+
+  local due, content = '', s
+  local at = s:find('%sdue:')
+  if at then
+    local tail = takePriority(s:sub(at + 1), at) -- 'due:...' without a trailing pN
+    due = vim.trim(tail:sub(5))
+    table.insert(ranges, { at + 1, at + #tail, 'due' })
+    content = s:sub(1, at - 1)
+  end
+  content = takePriority(content, 0)
+  return vim.trim(content), due, priority, ranges
+end
+
+--- `- [ ] text due:today p1 ‹id›` at the given depth.
 local function taskLine(t, depth)
   local parts = { ('%s- [%s] %s'):format(string.rep('  ', depth), t.checked and 'x' or ' ', oneLine(t.content)) }
   local due = dueText(t)
   if due ~= '' then table.insert(parts, 'due:' .. due) end
   local p = priorityLabel(t.priority):lower()
   if p ~= '' then table.insert(parts, p) end
-  return table.concat(parts, '  ') .. ' ‹' .. t.id .. '›'
+  return table.concat(parts, ' ') .. ' ‹' .. t.id .. '›'
 end
 
 --- Parse one buffer line; nil when it is not a task.
@@ -209,22 +239,7 @@ local function parseLine(line)
     body = after
   end
 
-  -- Two or more spaces separate the text from the metadata; anything there
-  -- that is not due:/pN is kept as part of the text rather than dropped.
-  local segments = vim.split(body, '%s%s+')
-  local content = vim.trim(segments[1] or '')
-  local due, priority = '', 1
-  for i = 2, #segments do
-    local seg = vim.trim(segments[i])
-    local d = seg:match('^due:%s*(.*)$')
-    if d then
-      due = d
-    elseif seg:match('^[pP][1-4]$') then
-      priority = 5 - tonumber(seg:sub(2))
-    elseif seg ~= '' then
-      content = content .. ' ' .. seg
-    end
-  end
+  local content, due, priority = splitMeta(body)
   if content == '' then return nil end
 
   local width = indent:gsub('\t', '  ')
@@ -243,22 +258,14 @@ local function decorate(buf)
         vim.api.nvim_buf_set_extmark(buf, id_ns, row - 1, id_start - 1, { end_col = id_end, conceal = '' })
       end
 
-      -- Split on the same two-space separators parseLine uses, and colour the
-      -- metadata segments. Indentation yields an empty first segment; harmless.
-      local body = line:sub(1, (id_start or #line + 1) - 1)
-      local from = 1
-      local function segment(a, b)
-        local seg = body:sub(a, b)
-        local hl = seg:match('^due:') and 'Special' or (seg:match('^[pP]([1-3])$') and priority_hl[tonumber(seg:sub(2))])
-        if hl and a > 1 then
-          vim.api.nvim_buf_set_extmark(buf, id_ns, row - 1, a - 1, { end_col = b, hl_group = hl })
+      -- The same split parseLine uses, run on the line minus its id.
+      local _, _, _, ranges = splitMeta(line:sub(1, (id_start or #line + 1) - 1))
+      for _, r in ipairs(ranges) do
+        local hl = r[3] == 'due' and 'Special' or priority_hl[tonumber(r[3]:sub(2))]
+        if hl then
+          vim.api.nvim_buf_set_extmark(buf, id_ns, row - 1, r[1] - 1, { end_col = r[2], hl_group = hl })
         end
       end
-      for sep_start, sep_end in body:gmatch('()%s%s+()') do
-        segment(from, sep_start - 1)
-        from = sep_end
-      end
-      segment(from, #body)
     end
   end
 end
