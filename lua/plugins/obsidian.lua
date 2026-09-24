@@ -6,14 +6,23 @@ vim.pack.add {
   },
 }
 
+-- `home` above already ends in "/", so no leading slash here or the path
+-- comes out with a doubled separator.
+local vault = home .. "iCloudDrive/Documents/Obsidian/Atlas"
+
+-- obsidian.nvim throws "At least one workspace is required!" when none of the
+-- configured paths exist, which failed this whole module on any machine
+-- without the vault. Skip the setup there instead.
+if vim.fn.isdirectory(vault) == 0 then
+  return
+end
+
 require("obsidian").setup {
   legacy_commands = false, -- this will be removed in 4.0.0
   workspaces = {
     {
       name = "Atlas",
-      -- `home` above already ends in "/", so no leading slash here or the path
-      -- comes out with a doubled separator.
-      path = home .. "iCloudDrive/Documents/Obsidian/Atlas",
+      path = vault,
     },
   },
   callbacks = {
