@@ -57,7 +57,7 @@ o.undofile = true                            -- Persistent undo
 o.undodir = vim.fn.stdpath("state") .. "/undo"
 vim.fn.mkdir(vim.o.undodir, "p")
 o.swapfile = false
-o.updatetime = 50                           -- ms idle before CursorHold (not completion speed)
+o.updatetime = 250                          -- ms idle before CursorHold (not completion speed)
 o.timeoutlen = 500                           -- Key timeout duration
 o.ttimeoutlen = 0                            -- Key code timeout
 o.autoread = true                            -- Auto reload files changed outside vim
