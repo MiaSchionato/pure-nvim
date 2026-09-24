@@ -1,5 +1,4 @@
 local M = {}
-local mini = require('plugins.mini')
 
 function M.ConfigHighlightByColorscheme(colorscheme, highlightGroups)
   vim.api.nvim_create_autocmd("ColorScheme", {
@@ -120,35 +119,6 @@ function M.toggleDiagnostics()
   vim.diagnostic.config({
     virtual_text = not vim.diagnostic.config().virtual_text
   })
-end
-
--- These probed `mini.session`, but `mini` here is require('plugins.mini'),
--- which returns an empty table -- so every call raised "attempt to index a nil
--- value". mini.snippets is currently commented out in plugins/mini.lua, hence
--- the guard rather than a hard reference.
-local function snippetSessionActive()
-  return _G.MiniSnippets ~= nil and MiniSnippets.session.get() ~= nil
-end
-
-function M.snippetJumpNext()
-  if snippetSessionActive() then
-    return '<Cmd>lua MiniSnippets.session.jump("next")<CR>'
-  end
-  return '<Right>'
-end
-
-function M.snippetJumpPrev()
-  if snippetSessionActive() then
-    return '<Cmd>lua MiniSnippets.session.jump("prev")<CR>'
-  end
-  return '<Left>'   -- was '<Right>'
-end
-
-function M.snippetStop()
-  if snippetSessionActive() then
-    MiniSnippets.session.stop()
-  end
-  vim.cmd.stopinsert()
 end
 
 function M.toggleInlayHints()

@@ -3,8 +3,9 @@ vim.pack.add({
 })
 require('oil').setup({
   
+  -- No 'icon' column: it needs mini.icons or nvim-web-devicons, and neither
+  -- is installed. Directories still stand out by colour and trailing '/'.
   columns = {
-    'icon',
     'permissions',
     'size',
     'mtime',
