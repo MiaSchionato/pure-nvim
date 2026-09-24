@@ -29,7 +29,7 @@
 --    'delete'  only when the save would delete tasks
 --    'never'   never
 --  Also:
---    <CR>       toggle the checkbox on the cursor line
+--    <CR> / x   toggle the checkbox on the cursor line (x does not delete here)
 --    r          reload (asks first if there are unsaved edits)
 --    q / <Esc>  close (same)
 --
@@ -191,7 +191,13 @@ end
 --- Accepts '- text' without a box too, so a quickly typed line still counts.
 local function parseLine(line)
   local indent, rest = line:match('^(%s*)[-*+]%s+(.*)$')
-  if not indent then return nil end
+  if not indent then
+    -- A bare line of text is a task too, as a bare name is a file in oil:
+    -- typing "Buy bread" under a heading is enough. Headings and blank
+    -- lines are not.
+    if line:match('^%s*$') or line:match('^%s*#') then return nil end
+    indent, rest = line:match('^(%s*)(.-)%s*$')
+  end
 
   local body, id = rest:match('^(.-)%s*‹([%w_%-]+)›%s*$')
   body = body or rest
@@ -316,12 +322,19 @@ local function render(tasks, projects)
       for _, t in ipairs(top[pid]) do emit(t, 0, nil) end
     end
   end
-  if #tasks == 0 then vim.list_extend(lines, { '', 'Nothing to do. Add a line under a ## Project heading.' }) end
+  -- Nothing to show: list every project as an empty section, so there is a
+  -- heading to type new tasks under. (Not a line of prose: any text line
+  -- would now be read as a task.)
+  if #tasks == 0 then
+    for _, pid in ipairs(state.projects.order) do
+      vim.list_extend(lines, { '', '## ' .. state.projects.by_id[pid] })
+    end
+  end
 
   setLines(lines)
   vim.api.nvim_buf_clear_namespace(state.buf, hint_ns, 0, -1)
   vim.api.nvim_buf_set_extmark(state.buf, hint_ns, 0, 0, {
-    virt_lines = { { { ':w apply · <CR> toggle · r reload · q close · indent = subtask · due:…  p1-p3', 'Comment' } } },
+    virt_lines = { { { ':w apply · <CR>/x toggle · r reload · q close · indent = subtask · due:…  p1-p3', 'Comment' } } },
   })
 end
 
@@ -343,7 +356,8 @@ local prefetched = {}
 
 --- Fetch from Todoist and redraw the buffer. Only runs on the first open of a
 --- filter, after :w, and on r -- reopening the list reuses what is there.
-function M.reload()
+--- `on_done(tasks)` runs after a successful redraw.
+function M.reload(on_done)
   if not (state.buf and vim.api.nvim_buf_is_valid(state.buf)) then return end
   setLines({ '# Todoist', '', 'Loading…' })
   local key = state.filter or ''
@@ -357,6 +371,7 @@ function M.reload()
     end
     render(tasks, projects)
     state.loaded = key
+    if type(on_done) == 'function' then on_done(tasks) end
   end)
 end
 
@@ -561,9 +576,26 @@ function M.save()
     if #errors > 0 then
       vim.notify('Todoist: some changes failed:\n' .. table.concat(errors, '\n'), vim.log.levels.ERROR)
     else
-      vim.notify('Todoist: ' .. table.concat(parts, ', '))
+      local msg = 'Todoist: ' .. table.concat(parts, ', ')
+      for _, item in ipairs(ops.create) do
+        if item.id then msg = msg .. '\n  + ' .. item.content end
+      end
+      vim.notify(msg)
     end
-    M.reload()
+    M.reload(function(tasks)
+      -- A task created in a filtered view (say, with no date under "today")
+      -- exists in Todoist but drops out on reload; say so, or it looks lost.
+      local listed = {}
+      for _, t in ipairs(tasks) do listed[t.id] = true end
+      local hidden = {}
+      for _, item in ipairs(ops.create) do
+        if item.id and not listed[item.id] then table.insert(hidden, '  ' .. item.content) end
+      end
+      if #hidden > 0 then
+        vim.notify(('Created in Todoist but not listed, as it does not match "%s":\n%s')
+          :format(state.filter or '', table.concat(hidden, '\n')), vim.log.levels.WARN)
+      end
+    end)
     M.refreshBlocks()
   end)
 end
@@ -623,6 +655,8 @@ function M.open(filter)
     end)
     -- The same toggle as <leader>tx in notes; the change is sent on :w.
     map('<CR>', require('configs.functions').toggleCheckbox, 'Toggle task checkbox')
+    -- In this buffer only, x ticks the box instead of deleting a character.
+    map('x', require('configs.functions').toggleCheckbox, 'Toggle task checkbox')
     map('r', unlessModified('reload', M.reload), 'Reload tasks')
     map('q', close, 'Close Todoist')
     map('<Esc>', close, 'Close Todoist')
