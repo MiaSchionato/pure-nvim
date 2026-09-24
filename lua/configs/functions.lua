@@ -268,6 +268,30 @@ function M.toggleCheckbox()
   vim.api.nvim_set_current_line(new_line)
 end
 
+--- Cycle the checkbox of the list item on the cursor line through Obsidian's
+--- states: [ ] -> [~] in progress -> [!] important -> [>] deferred ->
+--- [-] cancelled -> [x] done -> [ ]. A plain '- item' gets an empty box.
+--- For notes only: Todoist knows just [ ] and [x].
+function M.cycleCheckbox()
+  local order = { ' ', '~', '!', '>', '-', 'x' }
+  local line = vim.api.nvim_get_current_line()
+  local prefix, state, rest = line:match('^(%s*[-*+]%s+)%[(.?)%](.*)$')
+  local new_line
+  if prefix then
+    state = state == '' and ' ' or state:lower()
+    local next_state = ' '
+    for i, s in ipairs(order) do
+      if s == state then next_state = order[i % #order + 1] end
+    end
+    new_line = prefix .. '[' .. next_state .. ']' .. rest
+  else
+    local bullet, text = line:match('^(%s*[-*+]%s+)(.*)$')
+    if not bullet then return end
+    new_line = bullet .. '[ ] ' .. text
+  end
+  vim.api.nvim_set_current_line(new_line)
+end
+
 function M.toggleExplore()
   if vim.bo.filetype == "netrw" then
     vim.cmd("Rexplore")

@@ -4,7 +4,7 @@ local mdGroup = vim.api.nvim_create_augroup("PureMarkdown", { clear = true})
 vim.api.nvim_create_autocmd("FileType", {
   group = mdGroup,
   pattern =  "markdown",
-  callback = function ()
+  callback = function(args)
     vim.opt_local.textwidth = 110
     vim.opt_local.formatoptions = "tcnq"
     vim.opt_local.spell = true
@@ -49,6 +49,12 @@ vim.api.nvim_create_autocmd("FileType", {
     vim.keymap.set("n", "<leader>dp", "[s", {buffer = true}) -- Dictionary previous misspelled word
     vim.keymap.set("n", "<leader>dn", "]s", {buffer = true}) -- Dictionary next misspelled word
     vim.keymap.set("n", "<leader>tx", require('configs.functions').toggleCheckbox, { buffer = true, desc = "Alternar Checkbox" })
+    -- Obsidian's extra states, in notes only: the Todoist list is markdown too
+    -- (a buffer with buftype set), but Todoist knows just [ ] and [x].
+    if vim.bo[args.buf].buftype == "" then
+      vim.keymap.set("n", "<leader>x", require('configs.functions').cycleCheckbox,
+        { buffer = args.buf, desc = "Cycle checkbox state" })
+    end
   end
 })
 

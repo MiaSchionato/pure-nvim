@@ -6,7 +6,7 @@
 --    b  buffers        e  explore (pickers)   l  lsp             u  undotree
 --    c  code           f  find (pickers)      n  new file        v  window focus
 --    d  diagnostics    g  git                 o  toggles         w  tabs
---    j  jumps          s  split               t  term, todoist   x  execute
+--    j  jumps          s  split               t  term, todoist   x  checkbox state (notes)
 --    z  folds
 --
 --  No mapping may be a prefix of another one: Neovim then waits 'timeoutlen'
@@ -200,8 +200,10 @@ map('v', "<leader>v", [[:s/\v]], func.getOpts(opts, "Substitute, very magic"))
 map('n', "<leader>cc", fzf.CompilerCommand, func.getOpts(opts, "Run compiler command"))
 map('n', "<leader>ct", 'oTODO:<esc>:normal gcc<cr>A', func.getOpts(opts, "Insert TODO comment"))
 map('n', "<leader>cl", func.toggleHighlightSearch, func.getOpts(opts, "Clear search highlight"))
-map("n", "<leader>xs", "<cmd>so<cr>", func.getOpts(opts, "Source current file"))
-map("n", "<leader>xx", "<cmd>!chmod +x %<CR>", func.getOpts(opts, "Make file executable"))
+-- Under code rather than <leader>x, which cycles checkbox states in notes;
+-- a bare <leader>x next to xs / xx would wait for the second key.
+map("n", "<leader>cs", "<cmd>so<cr>", func.getOpts(opts, "Source current file"))
+map("n", "<leader>cx", "<cmd>!chmod +x %<CR>", func.getOpts(opts, "Make file executable"))
 
 -- =============================================================================
 --  Windows, splits and tabs
