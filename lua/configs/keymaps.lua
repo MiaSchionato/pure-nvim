@@ -3,10 +3,16 @@
 -- =============================================================================
 --  Leader is <Space>. The second key groups the action:
 --
---    b  buffers        e  explore (pickers)   l  lsp / toggles   v  window focus
---    c  code           f  find (pickers)      n  new file        w  tabs
---    d  diagnostics    g  git                 s  split           z  folds
---    j  jumps          t  terminal            u  undotree
+--    b  buffers        e  explore (pickers)   l  lsp             u  undotree
+--    c  code           f  find (pickers)      n  new file        v  window focus
+--    d  diagnostics    g  git                 o  toggles         w  tabs
+--    j  jumps          s  split               t  terminal        x  execute
+--    z  folds
+--
+--  No mapping may be a prefix of another one: Neovim then waits 'timeoutlen'
+--  (500 ms) after the shorter key to see whether the longer one follows. That
+--  is why every group has a full two-key form (<leader>ee, <leader>dd, ...)
+--  instead of a bare <leader>e / <leader>d.
 --
 --  Non-leader keys come first: motions, text objects, surround.
 -- =============================================================================
@@ -32,19 +38,11 @@ local home = vim.uv.os_homedir():gsub("\\", "/") .. "/"
 --  One table feeds explore (<leader>e_), find (<leader>f_) and new file
 --  (<leader>n_), so each directory is written once instead of three times in
 --  three near-identical blocks.
---
---  NOTE: these four do not exist on this machine, so their mappings are dead
---  ends -- repoint or drop them:
---    Projects/, Documents/MyJourney/Languages/, /tmp/
---  ("/tmp/" is a Git-bash-only path; Neovim on Windows cannot resolve it.)
 local dirs = {
   ['~'] = home,
   ['.'] = home .. '.config/',
   n     = home .. '.config/nvim/',
   m     = home .. 'iCloudDrive/Documents/Obsidian/Atlas/',
-  p     = home .. 'Projects/',
-  l     = home .. 'Documents/MyJourney/Languages/',
-  t     = '/tmp/',
 }
 
 --- Run `picker` on `dir`, saying so when the directory simply is not there.
@@ -94,11 +92,10 @@ map('n', "q;", "q:", func.getOpts(opts, "Command-line window"))
 map('n', "J", "mzJ`z", func.getOpts(opts, "Join lines, keep cursor"))
 map('n', "vv", 'viw', func.getOpts(opts, "Select word"))
 
-map('n', "=", "<cmd>foldopen<cr>", func.getOpts(opts, "Open fold"))
-map('n', "+", "<cmd>foldclose<cr>", func.getOpts(opts, "Close fold"))
-
-map('n', '<', 'V<', func.getOpts(opts, "Outdent line"))
-map('n', '>', 'V>', func.getOpts(opts, "Indent line"))
+-- '=', '+', '<' and '>' are deliberately left unmapped: in normal mode they are
+-- operators (=ip, gg=G, >}, <ip), and mapping them to fold / single-line
+-- actions threw those away. Folds live under <leader>z and za; a single line is
+-- indented with the builtin << and >>.
 
 -- Visual
 map('v', "J", '5j', func.getOpts(opts, "Down 5 lines"))
@@ -158,8 +155,10 @@ end, { expr = true, desc = "Smart outer quotes" })
 -- =============================================================================
 map("n", "s", function() sur.applySurround(false) end, { desc = "Surround word" })
 map("v", "s", function() sur.applySurround(true) end, { desc = "Surround selection" })
-map("n", "sf", function() sur.surroundFunction(false) end, { desc = "Surround with function" })
-map("v", "sf", function() sur.surroundFunction(true) end, { desc = "Surround with function" })
+-- Function surround is on S, not sf: sf made every s wait 500 ms. The builtin
+-- S is a synonym for cc, so nothing is lost.
+map("n", "S", function() sur.surroundFunction(false) end, { desc = "Surround with function" })
+map("v", "S", function() sur.surroundFunction(true) end, { desc = "Surround with function" })
 map("n", "ds", sur.deleteSurround, { desc = "Delete surround" })
 map("n", "cs", sur.changeSurround, { desc = "Change surround" })
 
@@ -169,7 +168,7 @@ map("n", "cs", sur.changeSurround, { desc = "Change surround" })
 map('n', "<leader>p", '"*p', func.getOpts(opts, "Paste from clipboard"))
 map("x", "<leader>p", [["_dP]], func.getOpts(opts, "Paste over without yanking"))
 map({ 'n', 'v' }, "<leader>y", '"*y', func.getOpts(opts, "Yank to clipboard"))
-map({ 'n', 'v' }, "<leader>dd", '"_d', func.getOpts(opts, "Delete without yanking"))
+map({ 'n', 'v' }, "<leader>D", '"_d', func.getOpts(opts, "Delete without yanking"))
 map('n', "<leader>r", [[:%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><Left>]],
   { desc = "Rename word under cursor" })
 
@@ -183,8 +182,8 @@ map('v', "<leader>v", [[:s/\v]], func.getOpts(opts, "Substitute, very magic"))
 map('n', "<leader>cc", fzf.CompilerCommand, func.getOpts(opts, "Run compiler command"))
 map('n', "<leader>ct", 'oTODO:<esc>:normal gcc<cr>A', func.getOpts(opts, "Insert TODO comment"))
 map('n', "<leader>cl", func.toggleHighlightSearch, func.getOpts(opts, "Clear search highlight"))
-map("n", "<leader>x", "<cmd>so<cr>", func.getOpts(opts, "Source current file"))
-map("n", "<leader>xf", "<cmd>!chmod +x %<CR>", func.getOpts(opts, "Make file executable"))
+map("n", "<leader>xs", "<cmd>so<cr>", func.getOpts(opts, "Source current file"))
+map("n", "<leader>xx", "<cmd>!chmod +x %<CR>", func.getOpts(opts, "Make file executable"))
 
 -- =============================================================================
 --  Windows, splits and tabs
@@ -219,14 +218,11 @@ map('n', "<leader>bo", "<cmd>%bd|e#<cr>", func.getOpts(opts, "Close all but curr
 -- =============================================================================
 --  Explore  (<leader>e)
 -- =============================================================================
-map('n', '<leader>e', function() explore(here())() end, func.getOpts(opts, "Explore current directory"))
+map('n', '<leader>ee', function() explore(here())() end, func.getOpts(opts, "Explore current directory"))
 map('n', '<leader>E', explore(dirs['~']), func.getOpts(opts, "Explore home"))
 map('n', '<leader>e.', explore(dirs['.']), func.getOpts(opts, "Explore ~/.config"))
 map('n', '<leader>en', explore(dirs.n), func.getOpts(opts, "Explore nvim config"))
 map('n', '<leader>em', explore(dirs.m), func.getOpts(opts, "Explore Obsidian vault"))
-map('n', '<leader>ep', explore(dirs.p), func.getOpts(opts, "Explore Projects"))
-map('n', '<leader>el', explore(dirs.l), func.getOpts(opts, "Explore Languages"))
-map('n', '<leader>et', explore(dirs.t), func.getOpts(opts, "Explore /tmp"))
 
 -- =============================================================================
 --  Find  (<leader>f)
@@ -239,7 +235,6 @@ map('n', '<leader>f~', inDir(fzf.fuzzySearch, dirs['~']), func.getOpts(opts, "Fi
 map('n', '<leader>f.', inDir(fzf.fuzzySearch, dirs['.']), func.getOpts(opts, "Find in ~/.config"))
 map('n', '<leader>fn', inDir(fzf.fuzzySearch, dirs.n), func.getOpts(opts, "Find in nvim config"))
 map('n', '<leader>fa', inDir(fzf.fuzzySearch, dirs.m), func.getOpts(opts, "Find in Atlas, the Obsidian vault"))
-map('n', '<leader>fp', inDir(fzf.fuzzySearch, dirs.p), func.getOpts(opts, "Find in Projects"))
 
 map('n', "<leader>fg", function() fzf.fuzzyGrep(vim.fn.expand('%:p:h:h')) end, func.getOpts(opts, "Grep"))
 map('n', "<leader>f/", fzf.fuzzyOldfiles, func.getOpts(opts, "Recent files"))
@@ -247,7 +242,6 @@ map('n', "<leader>fh", fzf.fuzzyHelp, func.getOpts(opts, "Help tags"))
 map('n', "<leader>fb", fzf.fuzzyBuffers, func.getOpts(opts, "Buffers"))
 map('n', "<leader>fj", fzf.fuzzyJump, func.getOpts(opts, "Jump list"))
 map('n', '<leader>fc', fzf.fuzzyColorscheme, func.getOpts(opts, "Colorschemes"))
-map('n', '<leader>fgx', zet.insertTemplate, func.getOpts(opts, "Insert zettel template"))
 
 -- =============================================================================
 --  New file  (<leader>n)
@@ -258,9 +252,7 @@ map("n", "<leader>nh", inDir(fzf.NewFile, dirs['~']), func.getOpts(opts, "New fi
 map("n", "<leader>n.", inDir(fzf.NewFile, dirs['.']), func.getOpts(opts, "New file in ~/.config"))
 map("n", "<leader>nn", inDir(fzf.NewFile, dirs.n), func.getOpts(opts, "New file in nvim config"))
 map("n", "<leader>nm", inDir(fzf.NewFile, dirs.m), func.getOpts(opts, "New file in Obsidian vault"))
-map("n", "<leader>np", inDir(fzf.NewFile, dirs.p), func.getOpts(opts, "New file in Projects"))
-map("n", "<leader>nl", inDir(fzf.NewFile, dirs.l), func.getOpts(opts, "New file in Languages"))
-map("n", "<leader>nt", inDir(fzf.NewFile, dirs.t), func.getOpts(opts, "New file in /tmp"))
+map('n', '<leader>nz', zet.insertTemplate, func.getOpts(opts, "Insert zettel template"))
 
 -- =============================================================================
 --  Git
@@ -274,33 +266,37 @@ map('n', "<leader>gd", func.gitDiffToggle, func.getOpts(opts, "Toggle git diff")
 -- =============================================================================
 map('n', 'K', lsp.hover, func.getOpts(opts, "LSP hover"))
 map('n', 'gd', lsp.definition, func.getOpts(opts, "LSP definition"))
-map('n', 'gr', lsp.references, func.getOpts(opts, "LSP references"))
+-- No 'gr' here: it made the builtin grr/grn/gra/gri/grt/grx wait 500 ms, and
+-- grr already lists references.
 map('n', '<leader>la', lsp.code_action, func.getOpts(opts, "LSP code action"))
 map('n', '<leader>lr', lsp.rename, func.getOpts(opts, "LSP rename"))
-map('n', '<leader>ws', lsp.workspace_symbol, func.getOpts(opts, "LSP workspace symbols"))
+map('n', '<leader>ls', lsp.workspace_symbol, func.getOpts(opts, "LSP workspace symbols"))
 map('i', '<up>', lsp.signature_help, func.getOpts(opts, "LSP signature help"))
 
 -- =============================================================================
 --  Diagnostics
 -- =============================================================================
-map('n', '<leader>d', diag.open_float, func.getOpts(opts, "Show diagnostic"))
+map('n', '<leader>dd', diag.open_float, func.getOpts(opts, "Show diagnostic"))
 map('n', '[d', diag.get_prev, func.getOpts(opts, "Previous diagnostic"))
 map('n', ']d', diag.get_next, func.getOpts(opts, "Next diagnostic"))
-map('n', '<leader>ld', func.toggleDiagnostics, func.getOpts(opts, "Toggle diagnostics"))
 
 -- =============================================================================
---  Toggles
+--  Toggles  (<leader>o)
 -- =============================================================================
-map('n', '<leader>lz', func.toggleZenMode, func.getOpts(opts, "Toggle zen mode"))
-map('n', '<leader>ls', func.toggleStatusline, func.getOpts(opts, "Toggle statusline"))
-map('n', '<leader>lt', func.toggleTabline, func.getOpts(opts, "Toggle tabline"))
-map('n', '<leader>lc', func.toggleSigncolumn, func.getOpts(opts, "Toggle signcolumn"))
-map('n', '<leader>lw', '<cmd>set wrap!<cr>', func.getOpts(opts, "Toggle wrap"))
-map('n', '<leader>li', func.toggleInlayHints, func.getOpts(opts, "Toggle inlay hints"))
-map('n', '<leader>tp', func.toggleCopilot, func.getOpts(opts, "Toggle Copilot"))
-map('n', '<leader>h', func.toggleWordHighlight, func.getOpts(opts, "Toggle word highlight"))
-map({ 'n', 'v' }, '<leader>lrn', func.toggleRelativenumber, func.getOpts(opts, "Toggle relativenumber"))
-map({ 'n', 'v' }, '<leader>ln', function()
+--  Kept out of <leader>l so that group is LSP only; mixing them is what made
+--  <leader>lr (rename) wait for <leader>lrn (relativenumber).
+--  <leader>ox (transparency) is defined in themes/colorschemes.lua.
+map('n', '<leader>od', func.toggleDiagnostics, func.getOpts(opts, "Toggle diagnostics"))
+map('n', '<leader>oz', func.toggleZenMode, func.getOpts(opts, "Toggle zen mode"))
+map('n', '<leader>os', func.toggleStatusline, func.getOpts(opts, "Toggle statusline"))
+map('n', '<leader>ot', func.toggleTabline, func.getOpts(opts, "Toggle tabline"))
+map('n', '<leader>oc', func.toggleSigncolumn, func.getOpts(opts, "Toggle signcolumn"))
+map('n', '<leader>ow', '<cmd>set wrap!<cr>', func.getOpts(opts, "Toggle wrap"))
+map('n', '<leader>oi', func.toggleInlayHints, func.getOpts(opts, "Toggle inlay hints"))
+map('n', '<leader>op', func.toggleCopilot, func.getOpts(opts, "Toggle Copilot"))
+map('n', '<leader>oh', func.toggleWordHighlight, func.getOpts(opts, "Toggle word highlight"))
+map({ 'n', 'v' }, '<leader>or', func.toggleRelativenumber, func.getOpts(opts, "Toggle relativenumber"))
+map({ 'n', 'v' }, '<leader>on', function()
   func.toggleNumber()
   func.toggleRelativenumber()
 end, func.getOpts(opts, "Toggle line numbers"))

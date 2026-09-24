@@ -556,7 +556,7 @@ function M.yaziExplorer(path)
   if path == nil then path = vim.fn.getcwd() end
   local temp = vim.fn.stdpath("cache") .. "/yazi_explorer"
   -- `path` was accepted and then dropped, so yazi always opened in the cwd and
-  -- <leader>E / <leader>e never landed where the mapping asked for.
+  -- <leader>E / <leader>ee never landed where the mapping asked for.
   local yazi = "yazi " .. vim.fn.shellescape(path)
     .. " --chooser-file " .. vim.fn.shellescape(temp)
 

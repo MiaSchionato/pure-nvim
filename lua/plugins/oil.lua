@@ -17,7 +17,7 @@ require('oil').setup({
     ["<CR>"] = "actions.select",
     ["H"] = "actions.parent",
     ["L"] = "actions.select",
-    ["<leader>e"] = "actions.close",
+    ["<leader>eo"] = "actions.close",
     ["q"] = "actions.close",
     ["P"] = "actions.preview",
     ["R"] = "actions.refresh",
@@ -55,4 +55,6 @@ require('oil').setup({
      end,
    },
 })
-vim.keymap.set('n', '<leader>ot', require("oil").toggle_float, {silent = true,desc = "Oil Float" })
+-- Under explore (<leader>e) rather than <leader>ot, which is the tabline toggle
+-- in the <leader>o toggles group. The same key closes the float from inside.
+vim.keymap.set('n', '<leader>eo', require("oil").toggle_float, {silent = true,desc = "Oil Float" })

@@ -31,7 +31,7 @@ local floatGrous = {
 
 -- Required defensively: a bare require() here aborted this whole module when a
 -- theme plugin was missing or failed to clone, taking the transparency setup
--- and the <leader>ctx mapping down with it.
+-- and the <leader>ox mapping down with it.
 local okNeo, NeoSolarized = pcall(require, "NeoSolarized")
 local okOsaka, Solarized_osaka = pcall(require, "solarized-osaka")
 
@@ -79,7 +79,7 @@ local groups = {
   "MsgArea",
 }
 
-vim.keymap.set('n','<leader>ctx', function()
+vim.keymap.set('n','<leader>ox', function()
    for _, colors in pairs(groups) do
     local hl = vim.api.nvim_get_hl(0, { name = colors, link = false })
     local new_hl = vim.tbl_extend("force", hl, { bg = "NONE", ctermbg = "NONE" })
