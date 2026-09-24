@@ -1,398 +1,380 @@
+-- =============================================================================
+--  Keymaps
+-- =============================================================================
+--  Leader is <Space>. The second key groups the action:
+--
+--    b  buffers        e  explore (pickers)   l  lsp / toggles   v  window focus
+--    c  code           f  find (pickers)      n  new file        w  tabs
+--    d  diagnostics    g  git                 s  split           z  folds
+--    j  jumps          t  terminal            u  undotree
+--
+--  Non-leader keys come first: motions, text objects, surround.
+-- =============================================================================
+
 local map = vim.keymap.set
-local home = vim.uv.os_homedir():gsub("\\", "/") .. "/"
-local term = require('pure.terms')
 local func = require('configs.functions')
 local fzf = require('pure.fuzzyUtils')
 local sur = require('pure.surround')
+local term = require('pure.terms')
 local zet = require('pure.zettelkasten')
 local lsp = vim.lsp.buf
 local diag = vim.diagnostic
-local opts = {noremap = true, silent = true }
-local expr_opts = {expr = true, noremap = true, silent = true }
+
+local opts = { noremap = true, silent = true }
 
 vim.g.mapleader = ' '
 
--- SPLIT View
-map('n', "<leader>vl", "<C-w>l", func.getOpts(opts,"Windows Movments" ))
-map('n', "<leader>vh", "<C-w>h", func.getOpts(opts,"Windows Movments" ))
-map('n', "<leader>vj", "<C-w>j", func.getOpts(opts,"Windows Movments" ))
-map('n', "<leader>vk", "<C-w>k", func.getOpts(opts,"Windows Movments" ))
+local home = vim.uv.os_homedir():gsub("\\", "/") .. "/"
 
--- Basics
--- map({ 'n', 'v' }, ";", ":")
--- map({ 'n', 'v' }, ":", ";")
-map('n', "Y", "y$", opts)
-map('n', "q;", "q:", opts)
-map({'n','v','o'}, "gl", "$", opts)
-map({'n', 'v', 'o'}, "gh", "^", opts)
-map('n', "ge", "G", opts)
+-- -----------------------------------------------------------------------------
+--  Picker targets
+-- -----------------------------------------------------------------------------
+--  One table feeds explore (<leader>e_), find (<leader>f_) and new file
+--  (<leader>n_), so each directory is written once instead of three times in
+--  three near-identical blocks.
+--
+--  NOTE: these four do not exist on this machine, so their mappings are dead
+--  ends -- repoint or drop them:
+--    Projects/, Documents/MyJourney/Languages/, /tmp/
+--  ("/tmp/" is a Git-bash-only path; Neovim on Windows cannot resolve it.)
+local dirs = {
+  ['~'] = home,
+  ['.'] = home .. '.config/',
+  n     = home .. '.config/nvim/',
+  m     = home .. 'iCloudDrive/Documents/Obsidian/Atlas/',
+  p     = home .. 'Projects/',
+  l     = home .. 'Documents/MyJourney/Languages/',
+  t     = '/tmp/',
+}
 
-map('n', "=", "<cmd>foldopen<cr>", opts)
-map('n', "+", "<cmd>foldclose<cr>", opts)
-
-map("n", "<leader>x", "<cmd>so<cr>", opts)
-
-map("n", "U", "<C-r>", opts)
-
--- Window Tab mappings
-map('n', "<leader>wn", "<cmd>tabnew<CR>", func.getOpts(opts, "New Tab" ))
-map('n', "<leader>wl", "<cmd>tabnext<CR>", func.getOpts(opts, "Next Tab" ))
-map('n', "<leader>wh", "<cmd>tabprevious<CR>", func.getOpts(opts, "Previous Tab" ))
-map('n', "<leader>wq", "<cmd>tabclose<CR>", func.getOpts(opts, "Close Tab" ))
-map('n', "<leader>wo", "<cmd>tabonly<CR>", func.getOpts(opts, "Close all other Tabs" ))
-
--- == Files mappings ==
--- map('n', '<leader><leader>', fzf.fuzzyExplorer , func.getOpts(opts, "Explore current directory" ))
-map("n", "<leader><leader>",function()fzf.fuzzySearch(vim.fn.expand("%:p:h:h:h").."/")end, func.getOpts(opts, "Fuzzy Search Home Directory"))
-
-map('n', '<leader>e', function ()
-local ok =  pcall(fzf.yaziExplorer, vim.fn.expand("%:p:h").."/")
-  if not ok then
-    fzf.fuzzyExplorer(vim.fn.expand("%:p:h").."/")
+--- Run `picker` on `dir`, saying so when the directory simply is not there.
+--- Without this the picker opens, the shell fails on a missing path, and the
+--- floating window blinks shut with nothing explaining why.
+local function inDir(picker, dir)
+  return function()
+    if vim.fn.isdirectory(dir) == 0 then
+      return vim.notify('Directory does not exist: ' .. dir, vim.log.levels.WARN)
+    end
+    picker(dir)
   end
-end, func.getOpts(opts, "Explore current directory" ))
+end
 
-map("n", "<leader>E",function()
-local ok = pcall(fzf.yaziExplorer,home)
-  if not ok then
-    fzf.fuzzyExplorer(home)
+--- Explorer with a yazi front-end, falling back to the fzf one when yazi is
+--- missing or fails to start.
+local function explore(dir)
+  return function()
+    if vim.fn.isdirectory(dir) == 0 then
+      return vim.notify('Directory does not exist: ' .. dir, vim.log.levels.WARN)
+    end
+    if not pcall(fzf.yaziExplorer, dir) then
+      fzf.fuzzyExplorer(dir)
+    end
   end
-end, func.getOpts(opts, "Explore Home Directory"))
-
-map("n", "<leader>et",function()
-local ok = pcall(fzf.fuzzyExplorer,"/tmp/")
-if not ok then
-  fzf.fuzzyExplorer("/tmp/")
 end
-end, func.getOpts(opts, "Explore tmp Directory"))
 
-map("n", "<leader>ep",function()
-local ok = pcall(fzf.fuzzyExplorer,home .. "Projects/")
-if not ok then
-  fzf.fuzzyExplorer(home .. "Projects/")
+--- Directory of the current file, always with a trailing slash.
+local function here()
+  return vim.fn.expand('%:p:h') .. '/'
 end
-end, func.getOpts(opts, "Explore Projects Directory"))
 
-map("n", "<leader>en",function()
-local ok = pcall(fzf.fuzzyExplorer,home .. ".config/nvim/")
-if not ok then
-  fzf.fuzzyExplorer(home .. ".config/nvim/")
+-- =============================================================================
+--  Motions and basics
+-- =============================================================================
+map({ 'n', 'v', 'o' }, "gl", "$", func.getOpts(opts, "End of line"))
+map({ 'n', 'v', 'o' }, "gh", "^", func.getOpts(opts, "First non-blank"))
+map('n', "ge", "G", func.getOpts(opts, "Last line"))
+map('n', "gj", "<C-d>", func.getOpts(opts, "Half page down"))
+map('n', "gk", "<C-u>", func.getOpts(opts, "Half page up"))
+map('n', '<C-f>', '<C-d>', func.getOpts(opts, "Half page down"))
+map('n', '<C-p>', [[%]], func.getOpts(opts, "Jump to matching pair"))
+
+map('n', "Y", "y$", func.getOpts(opts, "Yank to end of line"))
+map('n', "U", "<C-r>", func.getOpts(opts, "Redo"))
+map('n', "q;", "q:", func.getOpts(opts, "Command-line window"))
+map('n', "J", "mzJ`z", func.getOpts(opts, "Join lines, keep cursor"))
+map('n', "vv", 'viw', func.getOpts(opts, "Select word"))
+
+map('n', "=", "<cmd>foldopen<cr>", func.getOpts(opts, "Open fold"))
+map('n', "+", "<cmd>foldclose<cr>", func.getOpts(opts, "Close fold"))
+
+map('n', '<', 'V<', func.getOpts(opts, "Outdent line"))
+map('n', '>', 'V>', func.getOpts(opts, "Indent line"))
+
+-- Visual
+map('v', "J", '5j', func.getOpts(opts, "Down 5 lines"))
+map('v', "K", '5k', func.getOpts(opts, "Up 5 lines"))
+map('v', "<", "<gv", func.getOpts(opts, "Outdent and reselect"))
+map('v', ">", ">gv", func.getOpts(opts, "Indent and reselect"))
+
+-- Move lines
+--
+-- Guarded by buffer type. The fuzzy pickers run fzf inside a terminal buffer,
+-- and any moment spent in terminal-normal mode there (fuzzyLogic only calls
+-- startinsert after a delay) meant the arrow keys fired this mapping instead of
+-- reaching fzf -- failing with "E21: Cannot make changes, 'modifiable' is off"
+-- and leaving the arrows apparently dead inside the picker.
+--
+-- Returning the key itself falls through to the builtin, because these mappings
+-- are noremap: the returned key is not looked up again.
+local function moveLine(keys, fallback)
+  return function()
+    if vim.bo.buftype ~= '' or not vim.bo.modifiable then
+      return fallback
+    end
+    return keys
+  end
 end
-end, func.getOpts(opts, "Explore Nvim config Directory"))
 
-map("n", "<leader>el",function()
-local ok = pcall(fzf.fuzzyExplorer,home .. "Documents/MyJourney/Languages/")
-if not ok then
-  fzf.fuzzyExplorer(home .. "Documents/MyJourney/Languages/")
-end
-end, func.getOpts(opts, "Explore Languages Directory"))
+local move_opts = { expr = true, silent = true, noremap = true }
+map('n', "<up>", moveLine(":m .-2<CR>==", "<up>"), func.getOpts(move_opts, "Move line up"))
+map('n', "<down>", moveLine(":m .+1<CR>==", "<down>"), func.getOpts(move_opts, "Move line down"))
+map('v', "<up>", moveLine(":m '<-2<CR>gv=gv", "<up>"), func.getOpts(move_opts, "Move selection up"))
+map('v', "<down>", moveLine(":m '>+1<CR>gv=gv", "<down>"), func.getOpts(move_opts, "Move selection down"))
 
-map('n', "<leader>e.",function()
-local ok = pcall(fzf.fuzzyExplorer,home .. ".config/")
-if not ok then
-  fzf.fuzzyExplorer(home .. ".config/")
-end
-end, func.getOpts(opts, "Explore Directory"))
+-- =============================================================================
+--  Text objects
+-- =============================================================================
+--  No expr here: with expr the rhs is evaluated as a Vimscript *expression*, so
+--  'i[' parsed as the variable `i` and raised "E121: Undefined variable: i".
+--  They stay noremap so 'i.' reaches the builtin 'is' (sentence) rather than the
+--  'is' remapped just above it.
+map({ 'x', 'o' }, 'is', 'i[', { desc = "Inner square brackets" })
+map({ 'x', 'o' }, 'as', 'a[', { desc = "Outer square brackets" })
+map({ 'x', 'o' }, 'ic', [[i{]], { desc = "Inner curly brackets" })
+map({ 'x', 'o' }, 'ac', [[a}]], { desc = "Outer curly brackets" })
+map({ 'x', 'o' }, 'i.', [[is]], { desc = "Inner sentence" })
+map({ 'x', 'o' }, 'a.', [[as]], { desc = "Outer sentence" })
 
-map('n', "<leader>em",function()
-local ok = pcall(fzf.fuzzyExplorer,home .. "Documents/MindGarden/")
-if not ok then
-  fzf.fuzzyExplorer(home .. "Documents/MindGarden/")
-end
-end, func.getOpts(opts, "Explore Directory"))
+map({ 'x', 'o' }, 'iq', function()
+  return "i" .. func.smartQuote()
+end, { expr = true, desc = "Smart inner quotes" })
 
+map({ 'x', 'o' }, 'aq', function()
+  return "a" .. func.smartQuote()
+end, { expr = true, desc = "Smart outer quotes" })
 
--- == Fuzzy Search ==
--- Fuzzy Search Directories
-map("n", "<leader>f~",function()fzf.fuzzySearch(home)end, func.getOpts(opts, "Fuzzy Search Home Directory"))
-map("n", "<leader>ff",function()fzf.fuzzySearch(vim.fn.expand("%:p:h:h").."/")end, func.getOpts(opts, "Fuzzy Search Home Directory"))
-map("n", "<leader>fp",function()fzf.fuzzySearch(home .. "Projects/")end, func.getOpts(opts, "Fuzzy Search Projects Directory"))
-map("n", "<leader>fn",function()fzf.fuzzySearch(home .. ".config/nvim/")end, func.getOpts(opts, "Fuzzy Search Nvim config Directory"))
--- map("n", "<leader>fl",function()fzf.fuzzySearch(home .. "Documents/MyJourney/Languages/")end, func.getOpts(opts, "Fuzzy Search Languages Directory"))
-map('n', "<leader>f.",function()fzf.fuzzySearch(home .. ".config/")end, func.getOpts(opts, "Fuzzy .Config Directory"))
-map('n', "<leader>fm",function()fzf.fuzzySearch(home .. "iCloudDrive/Documents/Obsidian/Atlas")end, func.getOpts(opts, "Fuzzy .Config Directory"))
-
--- Fuzzy Grep
-map('n', "<leader>fg", function() fzf.fuzzyGrep(vim.fn.expand('%:p:h:h'))end, func.getOpts(opts, "Fuzzy Grep"))
--- Fuzzy Searchs
-map('n', "<leader>f/", function() fzf.fuzzyOldfiles()end,func.getOpts(opts, "Fuzzy Oldfiless"))
-map('n', "<leader>fh", function() fzf.fuzzyHelp()end, func.getOpts(opts, "Fuzzy Help"))
-map('n', "<leader>fb", function() fzf.fuzzyBuffers()end,func.getOpts(opts, "Fuzzy Buffers"))
-map('n', "<leader>fj", function() fzf.fuzzyJump()end,func.getOpts(opts, "Fuzzy Jumps"))
-map('n', '<leader>fc', fzf.fuzzyColorscheme, func.getOpts(opts, "Fuzzy Colorschemes"))
-map('n', '<leader>fgx', zet.insertTemplate , func.getOpts(opts, "Fuzzy Insert Templates"))
--- map('n', "<leader>fgx", function() fzf.fuzzy_git_grep()end)
-
--- New File
-map("n", "<leader>nf",function () fzf.NewFile("/" .. vim.fn.expand('%:p:h:h')) end, func.getOpts(opts, "Fuzzy New File home dir"))
-map("n", "<leader>nh",function () fzf.NewFile(home) end, func.getOpts(opts, "Fuzzy New File home dir"))
-map("n", "<leader>nt",function () fzf.NewFile("/tmp/") end, func.getOpts(opts, "Fuzzy New File scratch dir"))
-map("n", "<leader>nm",function () fzf.NewFile(home .. "Documents/MindGarden/") end, func.getOpts(opts, "Fuzzy Search Files"))
-map("n", "<leader>np",function () fzf.NewFile(home .. "Projects/") end, func.getOpts(opts, "Fuzzy Search Files"))
-map("n", "<leader>nn",function () fzf.NewFile(home .. ".config/nvim/") end, func.getOpts(opts, "Fuzzy Search Files"))
-map("n", "<leader>n.",function () fzf.NewFile(home .. ".config/") end, func.getOpts(opts, "Fuzzy Search Files"))
-map("n", "<leader>nl",function () fzf.NewFile(home .. "Documents/MyJourney/Languages/") end, func.getOpts(opts, "Fuzzy Search Files"))
-
-
-
--- Git stuff
-map('n', "<leader>gl", fzf.fuzzyGit, func.getOpts(opts,"Git Fuzzy Logs"))
-map('n', "<leader>gg", fzf.fuzzyGitGrep, func.getOpts(opts,"Git Grep"))
-map('n', "<leader>gd", func.gitDiffToggle, func.getOpts(opts,"Git Diff"))
-
--- == Visual mode mappings ==
-map('v', "<leader>s", [[:s/\%V]], {desc =  "Substitute selected" })
-map('v', "<leader>n", [[:norm]], func.getOpts(opts, "Norm mode" ))
-map('v', "<leader>v", [[:s/\v]], func.getOpts(opts, "Very magic mode" ))
-map('n', "vv", 'viw', func.getOpts(opts, "Select line" ))
-
-map('v', "J", '5j', func.getOpts(opts, "Down 5 lines " ))
-map('v', "K", '5k', func.getOpts(opts, "Up 5 lines " ))
--- Better indenting in visual mode
-map('v', "<", "<gv", func.getOpts(opts, "Indent left and reselect" ))
-map('v', ">", ">gv", func.getOpts(opts, "Indent right and reselect" ))
-
--- == Normal mode mappings ==
-map('n', "<leader>p", '"*p', func.getOpts(opts, "Clipboard Paste" ))
-map("x", "<leader>p", [["_dP]])
-map({ 'n', "v" }, "<leader>y", '"*y', func.getOpts(opts, "Clipboard Paste" ))
--- '"D' selected register D and then waited for an operator that never came.
--- The black-hole register is what "delete without yanking" actually needs.
-map({ 'n', "v" },"<leader>dd", '"_d', func.getOpts(opts, "Delete without yanking" ))
-
-map("n", "<leader>xf", "<cmd>!chmod +x %<CR>", {})
-map('n', "<leader>r", [[:%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><Left>]], {desc = "Rename selected word"})
-map("n", "gj", "<C-d>")
-map("n", "gk", "<C-u>")
-
-map('n', '<C-f>', '<C-d>', opts)
-map('n', '<', 'V<', opts)
-map('n', '>', 'V>', opts)
-
--- == Insert mode mappings ==
--- map('i', "jf", "<Esc>", func.get_opts(opts, "Normal mode with jf" ))
-
--- Comments
-map('n', "<leader>ct", 'oTODO:<esc>:normal gcc<cr>A')
-
--- Code 
-map('n', "<leader>cc", fzf.CompilerCommand)
-
--- Buffer navigation
-map('n', "<leader>bn", "<cmd>bnext<CR>", func.getOpts(opts, "Next buffer" ))
-map('n', "<leader>bp", "<cmd>bprevious<CR>", func.getOpts(opts, "Previous buffer" ))
-map('n', "<leader>bq", "<cmd>bdelete<CR>", func.getOpts(opts, "Delete buffer" ))
-map('n', "<leader>bv", "<cmd>buffers<CR>", func.getOpts(opts, "View buffer" ))
-map('n', "<leader>bo", "<cmd>%bd|e#<cr>", func.getOpts(opts, "Close all buffers and reload previous" ))
-
--- Surround mappings
+-- =============================================================================
+--  Surround
+-- =============================================================================
 map("n", "s", function() sur.applySurround(false) end, { desc = "Surround word" })
 map("v", "s", function() sur.applySurround(true) end, { desc = "Surround selection" })
--- functions
 map("n", "sf", function() sur.surroundFunction(false) end, { desc = "Surround with function" })
 map("v", "sf", function() sur.surroundFunction(true) end, { desc = "Surround with function" })
--- delete surrounds
 map("n", "ds", sur.deleteSurround, { desc = "Delete surround" })
--- changing surrounds
 map("n", "cs", sur.changeSurround, { desc = "Change surround" })
 
--- Splitting & Resizing
-map('n', "<leader>sv", "<cmd>vsplit<CR>", func.getOpts(opts, "Split window vertically" ))
-map('n', "<leader>sh", "<cmd>split<CR>", func.getOpts(opts, "Split window horizontally" ))
-map('n', "<leader>+", "<cmd>resize +5<CR>", func.getOpts(opts, "Increase window height" ))
-map('n', "<leader>-", "<cmd>resize -5<CR>", func.getOpts(opts, "Decrease window height" ))
-map('n', "<leader>.", "<cmd>vertical resize -5<CR>", func.getOpts(opts, "Decrease window width" ))
-map('n', "<leader>,", "<cmd>vertical resize +5<CR>", func.getOpts(opts, "Increase window width" ))
+-- =============================================================================
+--  Editing
+-- =============================================================================
+map('n', "<leader>p", '"*p', func.getOpts(opts, "Paste from clipboard"))
+map("x", "<leader>p", [["_dP]], func.getOpts(opts, "Paste over without yanking"))
+map({ 'n', 'v' }, "<leader>y", '"*y', func.getOpts(opts, "Yank to clipboard"))
+map({ 'n', 'v' }, "<leader>dd", '"_d', func.getOpts(opts, "Delete without yanking"))
+map('n', "<leader>r", [[:%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><Left>]],
+  { desc = "Rename word under cursor" })
 
--- Move lines up/down
-map('n', "<up>", ":m .-2<CR>==", func.getOpts(opts, "Move line up" ))
-map('n', "<down>", ":m .+1<CR>==", func.getOpts(opts, "Move line down" ))
-map('v', "<up>", ":m '<-2<CR>gv=gv", func.getOpts(opts, "Move selection up" ))
-map('v', "<down>", ":m '>+1<CR>gv=gv", func.getOpts(opts, "Move selection down" ))
+map('v', "<leader>s", [[:s/\%V]], { desc = "Substitute inside selection" })
+map('v', "<leader>n", [[:norm]], func.getOpts(opts, "Run normal command on selection"))
+map('v', "<leader>v", [[:s/\v]], func.getOpts(opts, "Substitute, very magic"))
 
--- Better J behavior
-map('n', "J", "mzJ`z", func.getOpts(opts, "Join lines and keep cursor position" ))
+-- =============================================================================
+--  Code
+-- =============================================================================
+map('n', "<leader>cc", fzf.CompilerCommand, func.getOpts(opts, "Run compiler command"))
+map('n', "<leader>ct", 'oTODO:<esc>:normal gcc<cr>A', func.getOpts(opts, "Insert TODO comment"))
+map('n', "<leader>cl", func.toggleHighlightSearch, func.getOpts(opts, "Clear search highlight"))
+map("n", "<leader>x", "<cmd>so<cr>", func.getOpts(opts, "Source current file"))
+map("n", "<leader>xf", "<cmd>!chmod +x %<CR>", func.getOpts(opts, "Make file executable"))
 
--- ==== Terminal mappings ===
--- TODO: make a bottom terminal that can be toggled
--- TODO: make different terminals instances (like tab or split terminals)
-map('n', '<leader>tt', term.toggleTerminal, func.getOpts(opts, 'Toggle bottom terminal'))
-map('n', '<leader>tg',function () term.toggleTerminal("gemini")end, func.getOpts(opts, 'Toggle Gemini terminal'))
-map('t', '<S-esc>', [[<C-\><C-n>]], func.getOpts(opts, 'Close on terminal mode'))
--- <S-Esc> only reaches Neovim on terminals that report it as a distinct key
--- (CSI-u style); most send a plain <Esc>, so that mapping never fired and there
--- was no working way out of terminal mode. <Esc><Esc> works everywhere and
--- still leaves a single <Esc> for the shell and for TUIs running inside it.
-map('t', '<Esc><Esc>', [[<C-\><C-n>:q<CR>]], func.getOpts(opts, 'Leave terminal mode'))
+-- =============================================================================
+--  Windows, splits and tabs
+-- =============================================================================
+map('n', "<leader>vh", "<C-w>h", func.getOpts(opts, "Focus window left"))
+map('n', "<leader>vj", "<C-w>j", func.getOpts(opts, "Focus window below"))
+map('n', "<leader>vk", "<C-w>k", func.getOpts(opts, "Focus window above"))
+map('n', "<leader>vl", "<C-w>l", func.getOpts(opts, "Focus window right"))
 
+map('n', "<leader>sv", "<cmd>vsplit<CR>", func.getOpts(opts, "Split vertically"))
+map('n', "<leader>sh", "<cmd>split<CR>", func.getOpts(opts, "Split horizontally"))
+map('n', "<leader>+", "<cmd>resize +5<CR>", func.getOpts(opts, "Taller window"))
+map('n', "<leader>-", "<cmd>resize -5<CR>", func.getOpts(opts, "Shorter window"))
+map('n', "<leader>,", "<cmd>vertical resize +5<CR>", func.getOpts(opts, "Wider window"))
+map('n', "<leader>.", "<cmd>vertical resize -5<CR>", func.getOpts(opts, "Narrower window"))
 
--- LSP actions
-map('n', 'K', lsp.hover, func.getOpts(opts, 'LSP Hover' ))
-map('n', 'gd', lsp.definition, func.getOpts(opts, 'LSP Definition' ))
-map('n', 'gr', lsp.references, func.getOpts( opts,'LSP References' ))
-map('n', '<leader>la', lsp.code_action, func.getOpts(opts, 'LSP Code Action' ))
-map('n', '<leader>lr', lsp.rename, func.getOpts( opts,'LSP Rename' ))
-map("i", "<up>", lsp.signature_help, func.getOpts( opts,'C-h is set as left on my wezterm config' ))
-map("n", "<leader>ws",  lsp.workspace_symbol, func.getOpts(opts,' Search workspace symbols') )
-map("n", "<leader>d", diag.open_float, func.getOpts(opts,'Open diagnostic\'s floating Window'))
+map('n', "<leader>wn", "<cmd>tabnew<CR>", func.getOpts(opts, "New tab"))
+map('n', "<leader>wl", "<cmd>tabnext<CR>", func.getOpts(opts, "Next tab"))
+map('n', "<leader>wh", "<cmd>tabprevious<CR>", func.getOpts(opts, "Previous tab"))
+map('n', "<leader>wq", "<cmd>tabclose<CR>", func.getOpts(opts, "Close tab"))
+map('n', "<leader>wo", "<cmd>tabonly<CR>", func.getOpts(opts, "Close other tabs"))
 
--- Diagnostics
-map("n", "[d",  diag.get_prev)
-map("n", "]d", diag.get_next)
-map('n', '<leader>ld', func.toggleDiagnostics, func.getOpts(opts, 'Toggle Diagnostics' ))
+-- =============================================================================
+--  Buffers
+-- =============================================================================
+map('n', "<leader>bn", "<cmd>bnext<CR>", func.getOpts(opts, "Next buffer"))
+map('n', "<leader>bp", "<cmd>bprevious<CR>", func.getOpts(opts, "Previous buffer"))
+map('n', "<leader>bq", "<cmd>bdelete<CR>", func.getOpts(opts, "Delete buffer"))
+map('n', "<leader>bv", "<cmd>buffers<CR>", func.getOpts(opts, "List buffers"))
+map('n', "<leader>bo", "<cmd>%bd|e#<cr>", func.getOpts(opts, "Close all but current"))
 
--- Toggles
-map('n', '<leader>lz', func.toggleZenMode, func.getOpts(opts, 'Toggle Zen Mode' ))
-map('n', '<leader>ls', func.toggleStatusline, func.getOpts(opts,'Toggle Statusline' ))
-map('n', '<leader>lt', func.toggleTabline, func.getOpts(opts,'Toggle Tabline'))
-map('n', '<leader>lc', func.toggleSigncolumn, func.getOpts(opts,'Toggle Signcolumn'))
-map('n', '<leader>lw', '<cmd>set wrap!<cr>',func.getOpts(opts,'Toggle Signcolumn'))
-map('n', '<leader>li', func.toggleInlayHints, func.getOpts(opts,'Toggle Inlay Hints'))
-map('n', '<leader>tp', func.toggleCopilot, func.getOpts(opts,'Toggle GitHub Copilot'))
+-- =============================================================================
+--  Explore  (<leader>e)
+-- =============================================================================
+map('n', '<leader>e', function() explore(here())() end, func.getOpts(opts, "Explore current directory"))
+map('n', '<leader>E', explore(dirs['~']), func.getOpts(opts, "Explore home"))
+map('n', '<leader>e.', explore(dirs['.']), func.getOpts(opts, "Explore ~/.config"))
+map('n', '<leader>en', explore(dirs.n), func.getOpts(opts, "Explore nvim config"))
+map('n', '<leader>em', explore(dirs.m), func.getOpts(opts, "Explore Obsidian vault"))
+map('n', '<leader>ep', explore(dirs.p), func.getOpts(opts, "Explore Projects"))
+map('n', '<leader>el', explore(dirs.l), func.getOpts(opts, "Explore Languages"))
+map('n', '<leader>et', explore(dirs.t), func.getOpts(opts, "Explore /tmp"))
 
--- highlights
-map('n', '<leader>h', func.toggleWordHighlight, {desc = "Toggle Word Highlight"})
-map('n', "<leader>cl", func.toggleHighlightSearch, func.getOpts(opts, "Clear search highlights" ))
+-- =============================================================================
+--  Find  (<leader>f)
+-- =============================================================================
+map('n', '<leader><leader>', function() fzf.fuzzySearch(vim.fn.expand('%:p:h:h:h:h') .. '/') end,
+  func.getOpts(opts, "Find files, four levels up"))
+map('n', '<leader>ff', function() fzf.fuzzySearch(vim.fn.expand('%:p:h:h') .. '/') end,
+  func.getOpts(opts, "Find files, two levels up"))
+map('n', '<leader>f~', inDir(fzf.fuzzySearch, dirs['~']), func.getOpts(opts, "Find in home"))
+map('n', '<leader>f.', inDir(fzf.fuzzySearch, dirs['.']), func.getOpts(opts, "Find in ~/.config"))
+map('n', '<leader>fn', inDir(fzf.fuzzySearch, dirs.n), func.getOpts(opts, "Find in nvim config"))
+map('n', '<leader>fa', inDir(fzf.fuzzySearch, dirs.m), func.getOpts(opts, "Find in Atlas, the Obsidian vault"))
+map('n', '<leader>fp', inDir(fzf.fuzzySearch, dirs.p), func.getOpts(opts, "Find in Projects"))
 
- -- toggle number / relative line number 
-map({ 'n', 'v' }, '<leader>lrn', func.toggleRelativenumber, func.getOpts(opts, ' Toggle relativenumber'))
-map({ 'n', 'v' }, '<leader>ln', function () func.toggleNumber() func.toggleRelativenumber() end, func.getOpts(opts, 'Toggle relativenumber'))
+map('n', "<leader>fg", function() fzf.fuzzyGrep(vim.fn.expand('%:p:h:h')) end, func.getOpts(opts, "Grep"))
+map('n', "<leader>f/", fzf.fuzzyOldfiles, func.getOpts(opts, "Recent files"))
+map('n', "<leader>fh", fzf.fuzzyHelp, func.getOpts(opts, "Help tags"))
+map('n', "<leader>fb", fzf.fuzzyBuffers, func.getOpts(opts, "Buffers"))
+map('n', "<leader>fj", fzf.fuzzyJump, func.getOpts(opts, "Jump list"))
+map('n', '<leader>fc', fzf.fuzzyColorscheme, func.getOpts(opts, "Colorschemes"))
+map('n', '<leader>fgx', zet.insertTemplate, func.getOpts(opts, "Insert zettel template"))
 
--- Jumps 
-map( 'n', '<leader>jl', '<C-i>', func.getOpts(opts, ' Toggle relativenumber'))
-map( 'n', '<leader>jh', '<C-o>', func.getOpts(opts, ' Toggle relativenumber'))
+-- =============================================================================
+--  New file  (<leader>n)
+-- =============================================================================
+map("n", "<leader>nf", function() fzf.NewFile(vim.fn.expand('%:p:h:h') .. '/') end,
+  func.getOpts(opts, "New file, two levels up"))
+map("n", "<leader>nh", inDir(fzf.NewFile, dirs['~']), func.getOpts(opts, "New file in home"))
+map("n", "<leader>n.", inDir(fzf.NewFile, dirs['.']), func.getOpts(opts, "New file in ~/.config"))
+map("n", "<leader>nn", inDir(fzf.NewFile, dirs.n), func.getOpts(opts, "New file in nvim config"))
+map("n", "<leader>nm", inDir(fzf.NewFile, dirs.m), func.getOpts(opts, "New file in Obsidian vault"))
+map("n", "<leader>np", inDir(fzf.NewFile, dirs.p), func.getOpts(opts, "New file in Projects"))
+map("n", "<leader>nl", inDir(fzf.NewFile, dirs.l), func.getOpts(opts, "New file in Languages"))
+map("n", "<leader>nt", inDir(fzf.NewFile, dirs.t), func.getOpts(opts, "New file in /tmp"))
 
--- Snippets
--- map('i', '<Right>', func.snippetJumpNext, func.getOpts(expr_opts, 'Jump to the next arg on snippets'))
--- map('i', '<Left>', func.snippetJumpPrev, func.getOpts(expr_opts, ' Jump to the previous arg on snippets'))
--- map('i', '<Esc>', func.snippetStop, func.getOpts(opts, 'Close snippet'))
--- map("n", "<leader>ie", "oif err != nil {<CR>}<Esc>Oreturn err<Esc>")
+-- =============================================================================
+--  Git
+-- =============================================================================
+map('n', "<leader>gl", fzf.fuzzyGit, func.getOpts(opts, "Git log"))
+map('n', "<leader>gg", fzf.fuzzyGitGrep, func.getOpts(opts, "Git grep"))
+map('n', "<leader>gd", func.gitDiffToggle, func.getOpts(opts, "Toggle git diff"))
 
+-- =============================================================================
+--  LSP
+-- =============================================================================
+map('n', 'K', lsp.hover, func.getOpts(opts, "LSP hover"))
+map('n', 'gd', lsp.definition, func.getOpts(opts, "LSP definition"))
+map('n', 'gr', lsp.references, func.getOpts(opts, "LSP references"))
+map('n', '<leader>la', lsp.code_action, func.getOpts(opts, "LSP code action"))
+map('n', '<leader>lr', lsp.rename, func.getOpts(opts, "LSP rename"))
+map('n', '<leader>ws', lsp.workspace_symbol, func.getOpts(opts, "LSP workspace symbols"))
+map('i', '<up>', lsp.signature_help, func.getOpts(opts, "LSP signature help"))
 
---  Undotree
-map( 'n' , '<leader>u',
-function ()
+-- =============================================================================
+--  Diagnostics
+-- =============================================================================
+map('n', '<leader>d', diag.open_float, func.getOpts(opts, "Show diagnostic"))
+map('n', '[d', diag.get_prev, func.getOpts(opts, "Previous diagnostic"))
+map('n', ']d', diag.get_next, func.getOpts(opts, "Next diagnostic"))
+map('n', '<leader>ld', func.toggleDiagnostics, func.getOpts(opts, "Toggle diagnostics"))
+
+-- =============================================================================
+--  Toggles
+-- =============================================================================
+map('n', '<leader>lz', func.toggleZenMode, func.getOpts(opts, "Toggle zen mode"))
+map('n', '<leader>ls', func.toggleStatusline, func.getOpts(opts, "Toggle statusline"))
+map('n', '<leader>lt', func.toggleTabline, func.getOpts(opts, "Toggle tabline"))
+map('n', '<leader>lc', func.toggleSigncolumn, func.getOpts(opts, "Toggle signcolumn"))
+map('n', '<leader>lw', '<cmd>set wrap!<cr>', func.getOpts(opts, "Toggle wrap"))
+map('n', '<leader>li', func.toggleInlayHints, func.getOpts(opts, "Toggle inlay hints"))
+map('n', '<leader>tp', func.toggleCopilot, func.getOpts(opts, "Toggle Copilot"))
+map('n', '<leader>h', func.toggleWordHighlight, func.getOpts(opts, "Toggle word highlight"))
+map({ 'n', 'v' }, '<leader>lrn', func.toggleRelativenumber, func.getOpts(opts, "Toggle relativenumber"))
+map({ 'n', 'v' }, '<leader>ln', function()
+  func.toggleNumber()
+  func.toggleRelativenumber()
+end, func.getOpts(opts, "Toggle line numbers"))
+
+-- =============================================================================
+--  Jumps, folds, undotree
+-- =============================================================================
+map('n', '<leader>jl', '<C-i>', func.getOpts(opts, "Jump forward"))
+map('n', '<leader>jh', '<C-o>', func.getOpts(opts, "Jump back"))
+
+map('n', '<leader>zz', 'za', func.getOpts(opts, "Toggle fold"))
+map('n', '<leader>zo', 'zR', func.getOpts(opts, "Open all folds"))
+map('n', '<leader>zc', 'zM', func.getOpts(opts, "Close all folds"))
+
+map('n', '<leader>u', function()
   vim.cmd('packadd nvim.undotree')
   vim.cmd('Undotree')
-end, func.getOpts(opts, "Builtin Undotree plugin"))
+end, func.getOpts(opts, "Undotree"))
 
+-- =============================================================================
+--  Terminal
+-- =============================================================================
+map('n', '<leader>tt', term.toggleTerminal, func.getOpts(opts, "Toggle terminal"))
+map('n', '<leader>tg', function() term.toggleTerminal("gemini") end,
+  func.getOpts(opts, "Toggle Gemini terminal"))
+map('t', '<S-esc>', [[<C-\><C-n>]], func.getOpts(opts, "Leave terminal mode"))
+--  <S-Esc> only reaches Neovim on terminals reporting it as a distinct key
+--  (CSI-u style); most send a plain <Esc>. <Esc><Esc> works everywhere and still
+--  leaves a single <Esc> for the shell and for TUIs running inside it.
+map('t', '<Esc><Esc>', [[<C-\><C-n>:q<CR>]], func.getOpts(opts, "Close terminal"))
 
+-- =============================================================================
+--  Debug
+-- =============================================================================
+map({ 'n', 'v' }, '<leader>in', ':Inspect<cr>', func.getOpts(opts, "Inspect highlight under cursor"))
+map('v', '<leader>ldb', 'y:lua print(<C-r>")<cr>', func.getOpts(opts, "Print selection via lua"))
 
--- Folding
-vim.keymap.set("n", "<Space>zz", "za", { desc = "Alternar Dobra" })       -- Abre/Fecha atual
-vim.keymap.set("n", "<Space>zo", "zR", { desc = "Abrir Todas Dobras" })  -- Open All
-vim.keymap.set("n", "<Space>zc", "zM", { desc = "Fechar Todas Dobras" }) -- Close All
-
-
-
-
--- debug
-map({ 'v', 'n' }, '<leader>in', ':Inspect<cr>')
-map('v', '<leader>ldb', 'y:lua print(<C-r>")<cr>')
-map('n', '<leader>cn', ':colorscheme nightfly<cr>')
-
--- teste
-map('n', '<leader>fx', fzf.fuzzyColorscheme )
-
-
-
-
-
--- ============================================================================================================
--- textobjects
--- ============================================================================================================
-
--- No expr=true here: with it the rhs is evaluated as a Vimscript *expression*,
--- so 'i[' was parsed as the variable `i` and every one of these raised
--- "E121: Undefined variable: i" instead of selecting anything. They are plain
--- key sequences, and stay noremap so 'i.' reaches the builtin 'is' (sentence)
--- rather than the 'is' remapped just above.
-map({'x', 'o'}, 'is', 'i[', { desc = "Inner Square Brackets []" })
-map({'x', 'o'}, 'as', 'a[', { desc = "Outer Square Brackets []" })
-
-map({'x', 'o'}, 'ic', [[i{]], { desc = "Inner Curly Brackets {}" })
-map({'x', 'o'}, 'ac', [[a}]], { desc = "Outer Curly Brackets {}" })
-
-map({'x', 'o'}, 'i.', [[is]], { desc = "Inner Sentence" })
-map({'x', 'o'}, 'a.', [[as]], { desc = "Outer Sentence" })
-
-map('n', '<C-p>',[[%]] )
-
-
-map({'x', 'o'}, 'iq',function ()
-  return "i" .. func.smartQuote()
-end, {expr = true, desc = "Smart Inner Quotes"})
-
-map({'x', 'o'}, 'aq',function ()
-  return "a" .. func.smartQuote()
-end, {expr = true, desc = "Smart Outer Quotes"})
-
--- ============================================================================================================
--- Smart Tab and auto-completes
--- ============================================================================================================
-
-
-vim.schedule( function()
-
+-- =============================================================================
+--  Completion and snippets
+-- =============================================================================
+--  Deferred: the <CR> mapping needs copilot.vim's autoload on the runtimepath,
+--  which vim.pack only guarantees after this file has run.
+vim.schedule(function()
   map('i', '<tab>', function()
-  local pum = vim.fn.pumvisible()
-    if pum == 1 then
+    if vim.fn.pumvisible() == 1 then
       return "<C-n>"
     end
-
     if func.isBlank() then
       return "<tab>"
     end
-
-    if vim.snippet.active({direction = 1}) then
+    if vim.snippet.active({ direction = 1 }) then
       return "<cmd>lua vim.snippet.jump(1)<cr>"
     end
-
-      return "<right>"
-    end, { expr = true, replace_keycodes = true})
+    return "<right>"
+  end, { expr = true, replace_keycodes = true, desc = "Complete / jump forward" })
 
   map('i', '<S-tab>', function()
-    local pum = vim.fn.pumvisible()
-    if pum == 1 then
+    if vim.fn.pumvisible() == 1 then
       return "<C-p>"
     end
-
     if func.isBlank() then
       return "<S-tab>"
     end
-
-    if vim.snippet.active({direction = 1}) then
+    -- was `direction = 1` here too, so the backward jump asked whether a
+    -- *forward* jump was possible.
+    if vim.snippet.active({ direction = -1 }) then
       return "<cmd>lua vim.snippet.jump(-1)<cr>"
     end
-
-      return "<left>"
-    end, { expr = true, replace_keycodes = true})
-
+    return "<left>"
+  end, { expr = true, replace_keycodes = true, desc = "Complete / jump back" })
 
   map('i', '<CR>', 'copilot#Accept("\\<CR>")', {
     expr = true,
-    replace_keycodes = false
+    replace_keycodes = false,
+    desc = "Accept Copilot suggestion",
   })
 end)
-
--- vim.keymap.set("i", "<CR>", function()
---   if vim.fn.pumvisible() == 1 then
---     -- Pega os dados do item selecionado antes de fechar o menu
---     local item = vim.fn.complete_info({ "selected" }).items[1]
---
---     -- Se houver algo selecionado e for um snippet (ou vier do scls)
---     if item and item.word ~= "" then
---       vim.schedule(function()
---         -- Tenta expandir o que foi inserido usando o motor nativo
---         -- O scls envia o snippet no corpo, o Neovim 0.10+ detecta automaticamente
---         -- mas as vezes precisa desse trigger se o 'kind' for snippet.
---         vim.snippet.expand(item.word) 
---       end)
---     end
---     return "<C-y>"
---   end
---   return "<CR>"
--- end, { expr = true })
--- ============================================================================================================
---                                                 test
--- ============================================================================================================
