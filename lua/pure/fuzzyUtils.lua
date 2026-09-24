@@ -82,6 +82,14 @@ function M.fuzzyLogic(opts)
   -- read by the shell as "> C:/Users/Mia" and every picker failed at once.
   vim.cmd(string.format("terminal %s > %s", opts.cmd, vim.fn.shellescape(temp)))
 
+  -- Arrows reach fzf as an escape sequence (<Esc>[A). On Windows the
+  -- terminal can deliver it split when fzf is busy, fzf then reads a lone
+  -- <Esc> and quits: the grep picker closed on the first arrow key. Its own
+  -- one-byte keys for the same moves cannot be split.
+  local term_opts = { buffer = buf, nowait = true }
+  vim.keymap.set('t', '<Up>', '<C-k>', term_opts)
+  vim.keymap.set('t', '<Down>', '<C-j>', term_opts)
+
   vim.api.nvim_create_autocmd("TermClose", {
     buffer = buf,
     callback = function()
@@ -195,10 +203,18 @@ function M.fuzzySearch(path)
 end
 
 
+--- Live grep: ripgrep runs again on every change of the query, and fzf only
+--- shows its results. It used to pipe `rg .` into fzf -- every line of every
+--- file under `path`, twice (the "." was given two times), all loaded before
+--- the first key. Nothing is listed until something is typed.
 function M.fuzzyGrep(path)
   path = asDir(path)
-  local rg = "rg --column --line-number --no-heading --color=always --smart-case -- ."
-  local fzf = "fzf --ansi --delimiter : --preview 'bat --style=numbers --color=always --highlight-line {2} {1}' --preview-window 'up,60\\%,border-bottom,+{2}+3/3'"
+  local rg = "rg --column --line-number --no-heading --color=always --smart-case"
+  -- fzf wants input on stdin even with --disabled; give it an empty one.
+  local empty = vim.fn.has("win32") == 1 and "type nul" or "true"
+  local fzf = "fzf --ansi --disabled --delimiter :"
+    .. string.format(" --bind %s", vim.fn.shellescape("change:reload:" .. rg .. " -- {q}"))
+    .. " --preview 'bat --style=numbers --color=always --highlight-line {2} {1}' --preview-window 'up,60\\%,border-bottom,+{2}+3/3'"
 
   M.fuzzyLogic({
     title = "Fuzzy Grep",
@@ -208,7 +224,7 @@ function M.fuzzyGrep(path)
     -- on ":" then made {1} the bare "C" and {2} the path, so bat was handed a
     -- path where it wanted a line number. Counting fields from the end is not
     -- an option here, unlike fuzzyJump: the matched text can contain colons.
-    cmd = string.format("cd %s && %s . | %s", vim.fn.shellescape(path), rg, fzf),
+    cmd = string.format("cd %s && %s | %s", vim.fn.shellescape(path), empty, fzf),
     callback = function(selection)
       local rel, line, col = selection:match("^(.-):(%d+):(%d+)")
       if not (rel and line and col) then return end
