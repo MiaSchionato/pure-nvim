@@ -44,6 +44,13 @@ local dirs = {
   n     = home .. '.config/nvim/',
   m     = home .. 'iCloudDrive/Documents/Obsidian/Atlas/',
 }
+local file = {
+  p  = vim.fn.expand('%:p:h') .. '/',
+  pp = vim.fn.expand('%:p:h:h') .. '/',
+  ["3p"] = vim.fn.expand('%:p:h:h:h') .. '/',
+  ["4p"] = vim.fn.expand('%:p:h:h:h:h') .. '/',
+
+}
 
 --- Run `picker` on `dir`, saying so when the directory simply is not there.
 --- Without this the picker opens, the shell fails on a missing path, and the
@@ -235,9 +242,9 @@ map('n', '<leader>em', explore(dirs.m), func.getOpts(opts, "Explore Obsidian vau
 -- =============================================================================
 --  Find  (<leader>f)
 -- =============================================================================
-map('n', '<leader><leader>', function() fzf.fuzzySearch(vim.fn.expand('%:p:h:h:h:h') .. '/') end,
+map('n', '<leader><leader>', function() fzf.fuzzySearch(file["4p"]) end,
   func.getOpts(opts, "Find files, four levels up"))
-map('n', '<leader>ff', function() fzf.fuzzySearch(vim.fn.expand('%:p:h:h') .. '/') end,
+map('n', '<leader>ff', function() fzf.fuzzySearch(file.pp) end,
   func.getOpts(opts, "Find files, two levels up"))
 map('n', '<leader>f~', inDir(fzf.fuzzySearch, dirs['~']), func.getOpts(opts, "Find in home"))
 map('n', '<leader>f.', inDir(fzf.fuzzySearch, dirs['.']), func.getOpts(opts, "Find in ~/.config"))
