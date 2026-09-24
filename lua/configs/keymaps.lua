@@ -12,7 +12,7 @@
 --  No mapping may be a prefix of another one: Neovim then waits 'timeoutlen'
 --  (500 ms) after the shorter key to see whether the longer one follows. That
 --  is why every group has a full two-key form (<leader>ee, <leader>dd, ...)
---  instead of a bare <leader>e / <leader>d.
+--  instead of a bare <leader>e / <leaderdd.
 --
 --  Non-leader keys come first: motions, text objects, surround.
 -- =============================================================================
@@ -44,6 +44,7 @@ local dirs = {
   n     = home .. '.config/nvim/',
   m     = home .. 'iCloudDrive/Documents/Obsidian/Atlas/',
 }
+
 local file = {
   p  = vim.fn.expand('%:p:h') .. '/',
   pp = vim.fn.expand('%:p:h:h') .. '/',
@@ -72,6 +73,7 @@ end
 ---
 --- oil is required lazily: plugins/oil.lua loads after this file, so the module
 --- is not on the runtimepath yet when these mappings are defined.
+---
 local function explore(dir)
   return function()
     local oil = require('oil')
@@ -352,6 +354,12 @@ map('t', '<Esc><Esc>', [[<C-\><C-n>:q<CR>]], func.getOpts(opts, "Close terminal"
 -- =============================================================================
 map({ 'n', 'v' }, '<leader>in', ':Inspect<cr>', func.getOpts(opts, "Inspect highlight under cursor"))
 map('v', '<leader>ldb', 'y:lua print(<C-r>")<cr>', func.getOpts(opts, "Print selection via lua"))
+
+-- =============================================================================
+--  Todoist (Claude: Adicionar atalhos aqui para abrir o todoist)
+-- =============================================================================
+-- map({'n', 'v'}, '<leader>td', "<cmd>Todoist<cr>", func.getOpts(opts, "Todoist all tasks"))
+-- map({'n', 'v'}, '<leader>td', "<cmd>Todoist<cr>", func.getOpts(opts, "Todoist"))
 
 -- =============================================================================
 --  Completion and snippets
