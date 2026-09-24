@@ -14,6 +14,11 @@
 --    | tables |        box-drawing borders
 --    ```lang           shaded block with the language as a label
 --    `code`            shaded background
+--    ---               the frontmatter (Obsidian's properties) is hidden
+--    key: value
+--    ---
+--    [^1]: note        footnote definitions are hidden
+--    text[^1]          footnote references show as a superscript: text¹
 --
 --  Everything is drawn with 'overlay' virtual text of the same width as what
 --  it covers, so columns never shift and the cursor lands where the real
@@ -22,6 +27,8 @@
 --
 --  The line under the cursor shows the raw markdown in insert and visual mode,
 --  to edit it; in normal mode it stays rendered, like concealcursor=nc.
+--  Hidden lines (frontmatter, footnotes) come back while the cursor is on
+--  them: gg shows the frontmatter, and moving onto a footnote shows it.
 --
 --    <leader>om  toggle rendering
 -- =============================================================================
@@ -91,6 +98,7 @@ local function setHighlights()
   set('PureMdRule', { link = 'Comment' })
   set('PureMdTable', { link = 'Comment' })
   set('PureMdCheckedText', { link = 'Comment' })
+  set('PureMdFootnote', { link = 'Special' })
 
   -- Checkbox icons: fixed colours, the same in every colorscheme, so a state
   -- always reads the same at a glance. Not `default` and re-applied on
@@ -333,6 +341,104 @@ function render.code_span(buf, node, mark)
 end
 
 -- -----------------------------------------------------------------------------
+--  Hidden lines: frontmatter and footnotes
+-- -----------------------------------------------------------------------------
+--  Found by text rather than by treesitter: the markdown parser does not know
+--  footnotes, and Obsidian's rule for the frontmatter is simply "the file
+--  starts with a --- line".
+
+local superscript = { ['0'] = '⁰', ['1'] = '¹', ['2'] = '²', ['3'] = '³', ['4'] = '⁴',
+  ['5'] = '⁵', ['6'] = '⁶', ['7'] = '⁷', ['8'] = '⁸', ['9'] = '⁹' }
+
+--- True when (row, col) is inside a code block or `code`, where [^1] and
+--- --- are just text.
+local function inCode(buf, row, col)
+  local ok, node = pcall(vim.treesitter.get_node, { bufnr = buf, pos = { row, col }, ignore_injections = false })
+  while ok and node do
+    local t = node:type()
+    if t == 'fenced_code_block' or t == 'indented_code_block' or t == 'code_span' then return true end
+    node = node:parent()
+  end
+  return false
+end
+
+--- Rows (0-based, inclusive) of the frontmatter, or nil.
+local function frontmatter(buf)
+  if lineText(buf, 0) ~= '---' then return nil end
+  local lines = vim.api.nvim_buf_get_lines(buf, 1, 200, false)
+  for i, l in ipairs(lines) do
+    if l == '---' or l == '...' then return { 0, i } end
+  end
+end
+
+--- { first, last } row ranges of footnote definitions between top and bottom:
+--- the "[^id]: text" line plus the indented lines that continue it.
+local function footnotes(buf, top, bottom)
+  local ranges = {}
+  local lines = vim.api.nvim_buf_get_lines(buf, top, bottom + 1, false)
+  local i = 1
+  while i <= #lines do
+    local row = top + i - 1
+    if lines[i]:match('^ ? ? ?%[%^[^%]]+%]:') and not inCode(buf, row, #lines[i]:match('^%s*')) then
+      local last = i
+      while lines[last + 1] and lines[last + 1]:match('^\t') or (lines[last + 1] or ''):match('^    %S') do
+        last = last + 1
+      end
+      table.insert(ranges, { row, top + last - 1 })
+      i = last + 1
+    else
+      i = i + 1
+    end
+  end
+  return ranges
+end
+
+--- Hide the frontmatter and footnote definitions, except the one the cursor
+--- is in, and draw footnote references as superscripts.
+--- Returns the hidden-able ranges, so cursor moves can tell when to redraw.
+local function hideLines(buf, top, bottom, mark)
+  local cursor = vim.fn.line('.') - 1
+  local ranges = footnotes(buf, top, bottom)
+  local fm = frontmatter(buf)
+  if fm then table.insert(ranges, 1, fm) end
+
+  for _, r in ipairs(ranges) do
+    if cursor < r[1] or cursor > r[2] then
+      for row = r[1], r[2] do
+        pcall(vim.api.nvim_buf_set_extmark, buf, ns, row, 0, { conceal_lines = '' })
+      end
+    end
+  end
+
+  local lines = vim.api.nvim_buf_get_lines(buf, top, bottom + 1, false)
+  for i, text in ipairs(lines) do
+    local row = top + i - 1
+    for start, id, stop in text:gmatch('()%[%^([^%]]+)%]()') do
+      -- Not the label that opens a definition line, and not inside code.
+      local is_definition = text:sub(stop, stop) == ':' and not text:sub(1, start - 1):match('%S')
+      if not is_definition and not inCode(buf, row, start - 1) then
+        local label = id:match('^%d+$') and id:gsub('%d', superscript) or ('^' .. id)
+        mark(row, start - 1, {
+          end_col = stop - 1,
+          conceal = '',
+          virt_text = { { label, 'PureMdFootnote' } },
+          virt_text_pos = 'inline',
+        })
+      end
+    end
+  end
+  return ranges
+end
+
+--- The range of `ranges` holding row `row`, as "first:last", or ''.
+local function rangeAt(ranges, row)
+  for _, r in ipairs(ranges or {}) do
+    if row >= r[1] and row <= r[2] then return r[1] .. ':' .. r[2] end
+  end
+  return ''
+end
+
+-- -----------------------------------------------------------------------------
 --  Driver
 -- -----------------------------------------------------------------------------
 
@@ -377,6 +483,10 @@ function M.refresh()
       if fn then fn(buf, node, mark) end
     end
   end)
+
+  local ranges = hideLines(buf, top, bottom, mark)
+  vim.b[buf].pure_md_hidden = ranges
+  vim.b[buf].pure_md_revealed = rangeAt(ranges, vim.fn.line('.') - 1)
 end
 
 function M.toggle()
@@ -393,8 +503,18 @@ vim.api.nvim_create_autocmd(
     callback = function(args)
       if vim.bo[args.buf].filetype ~= 'markdown' then return end
       -- In normal mode the render does not depend on the cursor, so plain
-      -- movement needs no redraw; in visual mode the raw line follows it.
-      if args.event == 'CursorMoved' and vim.fn.mode() == 'n' then return end
+      -- movement needs no redraw -- unless it enters or leaves a hidden block
+      -- (frontmatter, footnote). In visual mode the raw line follows it.
+      if args.event == 'CursorMoved' and vim.fn.mode() == 'n'
+        and rangeAt(vim.b[args.buf].pure_md_hidden, vim.fn.line('.') - 1) == vim.b[args.buf].pure_md_revealed then
+        return
+      end
+      -- A note opens on its first line, which would reveal the frontmatter:
+      -- start just below it instead, as Obsidian does.
+      if args.event == 'BufWinEnter' and vim.fn.line('.') == 1 and active(args.buf) then
+        local fm = frontmatter(args.buf)
+        if fm then pcall(vim.api.nvim_win_set_cursor, 0, { math.min(fm[2] + 2, vim.fn.line('$')), 0 }) end
+      end
       M.refresh()
     end,
   })
