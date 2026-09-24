@@ -1,19 +1,37 @@
 -- =============================================================================
 --  Todoist
 -- =============================================================================
---  Lists Todoist tasks in a markdown table with checkboxes, and completes them
---  from Neovim. Talks to the Todoist API v1 through curl.
+--  Todoist tasks in an editable buffer, like oil.nvim does for files: edit
+--  the list as text and :w applies the difference to Todoist. Talks to the
+--  Todoist API v1 through curl.
 --
 --    :Todoist                 all active tasks
 --    :Todoist today | overdue any Todoist filter query (as in the app)
 --
---  In the task buffer:
---    <CR> / x   complete the task on the cursor line (again to reopen it)
---    r          reload
---    q          close
+--  The buffer is a markdown task list, one section per project:
 --
---  The table is plain markdown, so pure/mdview.lua draws the borders and the
---  checkbox icons.
+--    ## Work
+--    - [ ] Write the README  due:today  p1
+--      - [ ] Sub step  due:tomorrow
+--    - [ ] Review PR
+--
+--    - text first; metadata after two spaces: due:<any Todoist date phrase>
+--      and p1..p3 (no pN = normal priority)
+--    - indenting a line makes it a subtask of the line above it
+--    - the ## heading is the project: move a line under another to move it
+--    - new line = new task, deleted line = deleted task, [x] = complete
+--    - each task ends in a hidden id (concealed); a copied line becomes a
+--      new task
+--
+--  :w shows what will change and asks before sending it. How often it asks is
+--  set with vim.g.pure_todoist_confirm:
+--    'all'     every save (default)
+--    'delete'  only when the save would delete tasks
+--    'never'   never
+--  Also:
+--    <CR>       toggle the checkbox on the cursor line
+--    r          reload (asks first if there are unsaved edits)
+--    q / <Esc>  close (same)
 --
 --  Token (Todoist > Settings > Integrations > Developer), never kept in this
 --  repository. Either of:
@@ -57,7 +75,11 @@ end
 ---
 --- The Authorization header is fed to curl on stdin (-H @-) rather than as an
 --- argument, so the token never shows up in the process list.
-local function request(method, path, cb)
+---
+--- `body`, when given, is sent as JSON. It is no secret, so it can go on the
+--- command line; vim.system passes arguments without a shell, so its quotes
+--- need no escaping on any platform.
+local function request(method, path, cb, body)
   local tok = token()
   if not tok then
     return cb('No Todoist token: run :TodoistToken to set it')
@@ -65,6 +87,9 @@ local function request(method, path, cb)
 
   local base = vim.g.pure_todoist_url or api
   local cmd = { 'curl', '-sS', '-X', method, '-H', '@-', '-w', '\n%{http_code}', base .. path }
+  if body then
+    vim.list_extend(cmd, { '-H', 'Content-Type: application/json', '--data-binary', vim.json.encode(body) })
+  end
   local ok, err = pcall(vim.system, cmd, { stdin = 'Authorization: Bearer ' .. tok .. '\n', text = true },
     vim.schedule_wrap(function(res)
       if res.code ~= 0 then
@@ -100,14 +125,8 @@ local function getAll(path, cb)
 end
 
 -- -----------------------------------------------------------------------------
---  Table
+--  Shared helpers
 -- -----------------------------------------------------------------------------
-
---- Text safe inside a table cell. A '|' would end the cell; escaped as '\|'
---- it would still show its backslash, so it becomes the look-alike '¦'.
-local function cell(s)
-  return (tostring(s or ''):gsub('\n', ' '):gsub('|', '¦'))
-end
 
 --- Todoist stores priority 4 as the most urgent; the app shows that as P1.
 local function priorityLabel(p)
@@ -129,75 +148,180 @@ local function sortTasks(tasks)
   end)
 end
 
---- Pad every column to its widest cell, so the raw text lines up as well.
-local function formatTable(header, rows)
-  local widths = {}
-  for _, row in ipairs(vim.list_extend({ header }, rows)) do
-    for i, c in ipairs(row) do
-      widths[i] = math.max(widths[i] or 3, vim.fn.strdisplaywidth(c))
-    end
-  end
-  local function line(row)
-    local parts = {}
-    for i, c in ipairs(row) do
-      table.insert(parts, c .. string.rep(' ', widths[i] - vim.fn.strdisplaywidth(c)))
-    end
-    return '| ' .. table.concat(parts, ' | ') .. ' |'
-  end
-  local out = { line(header) }
-  local rule = {}
-  for i = 1, #header do rule[i] = string.rep('-', widths[i]) end
-  table.insert(out, '|-' .. table.concat(rule, '-|-') .. '-|')
-  for _, row in ipairs(rows) do table.insert(out, line(row)) end
-  return out
+--- The due date as the buffer shows and edits it: Todoist's own phrase
+--- ("every monday"), so an untouched recurring date is sent back unchanged.
+local function dueText(t)
+  return t.due and (t.due.string or t.due.date) or ''
 end
 
 -- -----------------------------------------------------------------------------
---  Buffer
+--  Task buffer
 -- -----------------------------------------------------------------------------
+--  Works like oil.nvim: the buffer is rendered from the API, `snapshot` keeps
+--  what each task looked like, and on :w the parsed buffer is compared with it
+--  to work out creates, updates, moves, completions and deletes.
 
-local state = { buf = nil, filter = nil, rows = {} } -- rows: line number -> task
+local state = {
+  buf = nil,
+  filter = nil,
+  snapshot = {}, -- id -> { content, due, priority, project_id, parent_id, checked }
+  projects = { by_name = {}, by_id = {}, inbox = nil },
+  saving = false,
+}
+
+local id_ns = vim.api.nvim_create_namespace('pure_todoist_ids')
+local hint_ns = vim.api.nvim_create_namespace('pure_todoist_hint')
+
+local function oneLine(s)
+  return (tostring(s or ''):gsub('\n', ' '):gsub('%s%s+', ' '))
+end
+
+--- `- [ ] text  due:today  p1 ‹id›` at the given depth.
+local function taskLine(t, depth)
+  local parts = { ('%s- [%s] %s'):format(string.rep('  ', depth), t.checked and 'x' or ' ', oneLine(t.content)) }
+  local due = dueText(t)
+  if due ~= '' then table.insert(parts, 'due:' .. due) end
+  local p = priorityLabel(t.priority):lower()
+  if p ~= '' then table.insert(parts, p) end
+  return table.concat(parts, '  ') .. ' ‹' .. t.id .. '›'
+end
+
+--- Parse one buffer line; nil when it is not a task.
+--- Accepts '- text' without a box too, so a quickly typed line still counts.
+local function parseLine(line)
+  local indent, rest = line:match('^(%s*)[-*+]%s+(.*)$')
+  if not indent then return nil end
+
+  local body, id = rest:match('^(.-)%s*‹([%w_%-]+)›%s*$')
+  body = body or rest
+
+  local checked = false
+  local box, after = body:match('^%[([ xX])%]%s*(.*)$')
+  if box then
+    checked = box ~= ' '
+    body = after
+  end
+
+  -- Two or more spaces separate the text from the metadata; anything there
+  -- that is not due:/pN is kept as part of the text rather than dropped.
+  local segments = vim.split(body, '%s%s+')
+  local content = vim.trim(segments[1] or '')
+  local due, priority = '', 1
+  for i = 2, #segments do
+    local seg = vim.trim(segments[i])
+    local d = seg:match('^due:%s*(.*)$')
+    if d then
+      due = d
+    elseif seg:match('^[pP][1-4]$') then
+      priority = 5 - tonumber(seg:sub(2))
+    elseif seg ~= '' then
+      content = content .. ' ' .. seg
+    end
+  end
+  if content == '' then return nil end
+
+  local width = indent:gsub('\t', '  ')
+  return { indent = #width, checked = checked, content = content, due = due, priority = priority, id = id }
+end
+
+--- Hide the ids and colour the metadata. Re-run on every change, since
+--- editing moves the text the marks were placed on.
+local function decorate(buf)
+  vim.api.nvim_buf_clear_namespace(buf, id_ns, 0, -1)
+  local priority_hl = { 'DiagnosticError', 'DiagnosticWarn', 'DiagnosticInfo' }
+  for row, line in ipairs(vim.api.nvim_buf_get_lines(buf, 0, -1, false)) do
+    if parseLine(line) then
+      local id_start, id_end = line:find('%s*‹[%w_%-]+›%s*$')
+      if id_start then
+        vim.api.nvim_buf_set_extmark(buf, id_ns, row - 1, id_start - 1, { end_col = id_end, conceal = '' })
+      end
+
+      -- Split on the same two-space separators parseLine uses, and colour the
+      -- metadata segments. Indentation yields an empty first segment; harmless.
+      local body = line:sub(1, (id_start or #line + 1) - 1)
+      local from = 1
+      local function segment(a, b)
+        local seg = body:sub(a, b)
+        local hl = seg:match('^due:') and 'Special' or (seg:match('^[pP]([1-3])$') and priority_hl[tonumber(seg:sub(2))])
+        if hl and a > 1 then
+          vim.api.nvim_buf_set_extmark(buf, id_ns, row - 1, a - 1, { end_col = b, hl_group = hl })
+        end
+      end
+      for sep_start, sep_end in body:gmatch('()%s%s+()') do
+        segment(from, sep_start - 1)
+        from = sep_end
+      end
+      segment(from, #body)
+    end
+  end
+end
 
 local function setLines(lines)
   local buf = state.buf
-  vim.bo[buf].modifiable = true
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-  vim.bo[buf].modifiable = false
   vim.bo[buf].modified = false
+  decorate(buf)
 end
 
+--- Build the buffer: one ## section per project (in Todoist's order), tasks
+--- nested under their parent. A subtask whose parent is not in this view
+--- (filtered out) is shown at the top level.
 local function render(tasks, projects)
-  local project_name = {}
-  for _, p in ipairs(projects) do project_name[p.id] = p.name end
+  state.projects = { by_name = {}, by_id = {}, inbox = nil, order = {} }
+  for _, p in ipairs(projects) do
+    state.projects.by_id[p.id] = p.name
+    if not state.projects.by_name[p.name] then state.projects.by_name[p.name] = p.id end
+    if p.inbox_project or p.is_inbox_project then state.projects.inbox = p.id end
+    table.insert(state.projects.order, p.id)
+  end
+  -- Lines above the first heading go to the Inbox, which Todoist lists first.
+  state.projects.inbox = state.projects.inbox or state.projects.order[1]
 
   sortTasks(tasks)
+  local shown = {}
+  for _, t in ipairs(tasks) do shown[t.id] = true end
 
-  local title = '# Todoist' .. (state.filter and (' — ' .. state.filter) or '')
-  local lines = { title, '', ('%d tasks · updated %s'):format(#tasks, os.date('%H:%M')), '' }
-
-  local rows = {}
+  local children, top = {}, {}
   for _, t in ipairs(tasks) do
-    table.insert(rows, {
-      t.checked and '[x]' or '[ ]',
-      cell((t.parent_id and '↳ ' or '') .. t.content),
-      cell(project_name[t.project_id] or ''),
-      cell(t.due and (t.due.string or t.due.date) or ''),
-      priorityLabel(t.priority),
-    })
+    if t.parent_id and shown[t.parent_id] then
+      children[t.parent_id] = children[t.parent_id] or {}
+      table.insert(children[t.parent_id], t)
+    else
+      top[t.project_id] = top[t.project_id] or {}
+      table.insert(top[t.project_id], t)
+    end
   end
 
-  state.rows = {}
-  local first_row = #lines + 3 -- title block, then header and delimiter rows
-  for i, t in ipairs(tasks) do state.rows[first_row + i - 1] = t end
+  local lines = { '# Todoist' .. (state.filter and (' — ' .. state.filter) or '') }
+  state.snapshot = {}
 
-  if #tasks == 0 then
-    vim.list_extend(lines, { 'Nothing to do.' })
-  else
-    vim.list_extend(lines, formatTable({ ' ✓ ', 'Task', 'Project', 'Due', 'P' }, rows))
+  local function emit(t, depth, shown_parent)
+    table.insert(lines, taskLine(t, depth))
+    state.snapshot[t.id] = {
+      content = oneLine(t.content), due = dueText(t), priority = tonumber(t.priority) or 1,
+      project_id = t.project_id, parent_id = shown_parent, checked = t.checked and true or false,
+    }
+    for _, c in ipairs(children[t.id] or {}) do emit(c, depth + 1, t.id) end
   end
-  lines[#lines + 1] = ''
-  lines[#lines + 1] = '<CR>/x complete · r reload · q close'
+
+  -- Projects Todoist knows first, in its order; then any the list lacked.
+  local order = vim.deepcopy(state.projects.order)
+  for pid in pairs(top) do
+    if not state.projects.by_id[pid] then table.insert(order, pid) end
+  end
+  for _, pid in ipairs(order) do
+    if top[pid] then
+      vim.list_extend(lines, { '', '## ' .. (state.projects.by_id[pid] or pid) })
+      for _, t in ipairs(top[pid]) do emit(t, 0, nil) end
+    end
+  end
+  if #tasks == 0 then vim.list_extend(lines, { '', 'Nothing to do. Add a line under a ## Project heading.' }) end
+
   setLines(lines)
+  vim.api.nvim_buf_clear_namespace(state.buf, hint_ns, 0, -1)
+  vim.api.nvim_buf_set_extmark(state.buf, hint_ns, 0, 0, {
+    virt_lines = { { { ':w apply · <CR> toggle · r reload · q close · indent = subtask · due:…  p1-p3', 'Comment' } } },
+  })
 end
 
 function M.reload()
@@ -217,54 +341,266 @@ function M.reload()
   end)
 end
 
---- Complete (or reopen) the task on the cursor line. The box flips at once;
---- if the API refuses, it flips back and says why.
-function M.toggle()
-  local lnum = vim.fn.line('.')
-  local task = state.rows[lnum]
-  if not task then return end
+-- -----------------------------------------------------------------------------
+--  Saving: buffer -> list of API calls
+-- -----------------------------------------------------------------------------
 
-  local done = not task.checked
-  local function mark(checked)
-    task.checked = checked
-    local line = vim.api.nvim_buf_get_lines(state.buf, lnum - 1, lnum, false)[1]
-    local new = line:gsub(checked and '%[ %]' or '%[x%]', checked and '[x]' or '[ ]', 1)
-    vim.bo[state.buf].modifiable = true
-    vim.api.nvim_buf_set_lines(state.buf, lnum - 1, lnum, false, { new })
-    vim.bo[state.buf].modifiable = false
-    vim.bo[state.buf].modified = false
+--- Parse the whole buffer into task items with their project and parent.
+--- Returns items, or nil and an error message naming the line.
+local function collect(buf)
+  local items, seen = {}, {}
+  local project = state.projects.inbox
+  local stack = {} -- open ancestors: { indent, item }
+
+  for lnum, line in ipairs(vim.api.nvim_buf_get_lines(buf, 0, -1, false)) do
+    local heading = line:match('^##%s+(.-)%s*$')
+    if heading then
+      project = state.projects.by_name[heading]
+      if not project then
+        return nil, ('line %d: no Todoist project called "%s"'):format(lnum, heading)
+      end
+      stack = {}
+    else
+      local item = parseLine(line)
+      if item then
+        if not project then
+          return nil, ('line %d: put the task under a ## Project heading'):format(lnum)
+        end
+        item.lnum, item.project_id = lnum, project
+        while #stack > 0 and stack[#stack].indent >= item.indent do table.remove(stack) end
+        item.parent = stack[#stack] and stack[#stack].item or nil
+        table.insert(stack, { indent = item.indent, item = item })
+        -- The same id twice means a copied line: the copy is a new task.
+        if item.id and (seen[item.id] or not state.snapshot[item.id]) then item.id = nil end
+        if item.id then seen[item.id] = true end
+        table.insert(items, item)
+      end
+    end
+  end
+  return items, nil, seen
+end
+
+--- Work out the API calls, in an order that respects dependencies: creates
+--- first and top-down (a new subtask needs its new parent's id), then edits,
+--- moves, completions, and deletes last.
+local function plan(items, seen)
+  local ops = { create = {}, update = {}, move = {}, close = {}, reopen = {}, delete = {} }
+
+  for _, item in ipairs(items) do
+    local s = item.id and state.snapshot[item.id]
+    if not s then
+      table.insert(ops.create, item)
+    else
+      local changes = {}
+      if item.content ~= s.content then changes.content = item.content end
+      if item.due ~= s.due then changes.due_string = item.due ~= '' and item.due or 'no date' end
+      if item.priority ~= s.priority then changes.priority = item.priority end
+      if next(changes) then table.insert(ops.update, { item = item, body = changes }) end
+
+      -- Compared with the parent as shown, so a subtask whose real parent is
+      -- filtered out of this view is not "moved" to the top level.
+      local parent_changed = (item.parent ~= nil) ~= (s.parent_id ~= nil)
+        or (item.parent and item.parent.id ~= s.parent_id)
+      if parent_changed or (not item.parent and item.project_id ~= s.project_id) then
+        table.insert(ops.move, item)
+      end
+
+      if item.checked and not s.checked then table.insert(ops.close, item) end
+      if not item.checked and s.checked then table.insert(ops.reopen, item) end
+    end
   end
 
-  mark(done)
-  request('POST', '/tasks/' .. task.id .. (done and '/close' or '/reopen'), function(err)
-    if err then
-      mark(not done)
-      return vim.notify(err, vim.log.levels.ERROR)
+  -- Deleting a parent deletes its subtasks, so only the top of each deleted
+  -- branch is sent; a separate call for a child would fail with 404.
+  for id, s in pairs(state.snapshot) do
+    if not seen[id] and not (s.parent_id and not seen[s.parent_id]) then
+      table.insert(ops.delete, { id = id, content = s.content })
     end
-    vim.notify((done and 'Completed: ' or 'Reopened: ') .. task.content)
-    -- Blocks in open notes may list the same task.
+  end
+  return ops
+end
+
+local function summary(ops)
+  local parts = {}
+  for _, key in ipairs({ 'create', 'update', 'move', 'close', 'reopen', 'delete' }) do
+    if #ops[key] > 0 then
+      local label = ({ close = 'complete' })[key] or key
+      table.insert(parts, ('%s %d'):format(label, #ops[key]))
+    end
+  end
+  return parts
+end
+
+--- Run the calls one after another (each may need an id the previous one
+--- returned), then reload. Failures are collected and reported together.
+local function apply(ops, done)
+  local calls, errors = {}, {}
+  local function add(fn) table.insert(calls, fn) end
+
+  for _, item in ipairs(ops.create) do
+    add(function(next_call)
+      local body = { content = item.content, project_id = item.project_id, priority = item.priority }
+      if item.parent then
+        if not item.parent.id then
+          table.insert(errors, ('line %d: parent was not created'):format(item.lnum))
+          return next_call()
+        end
+        body.parent_id = item.parent.id
+      end
+      if item.due ~= '' then body.due_string = item.due end
+      request('POST', '/tasks', function(err, task)
+        if err then
+          table.insert(errors, ('create "%s": %s'):format(item.content, err))
+        else
+          item.id = task and task.id
+          if item.checked and item.id then
+            return request('POST', '/tasks/' .. item.id .. '/close', function() next_call() end)
+          end
+        end
+        next_call()
+      end, body)
+    end)
+  end
+  for _, u in ipairs(ops.update) do
+    add(function(next_call)
+      request('POST', '/tasks/' .. u.item.id, function(err)
+        if err then table.insert(errors, ('update "%s": %s'):format(u.item.content, err)) end
+        next_call()
+      end, u.body)
+    end)
+  end
+  for _, item in ipairs(ops.move) do
+    add(function(next_call)
+      local body = item.parent and { parent_id = item.parent.id } or { project_id = item.project_id }
+      request('POST', '/tasks/' .. item.id .. '/move', function(err)
+        if err then table.insert(errors, ('move "%s": %s'):format(item.content, err)) end
+        next_call()
+      end, body)
+    end)
+  end
+  for key, action in pairs({ close = 'close', reopen = 'reopen' }) do
+    for _, item in ipairs(ops[key]) do
+      add(function(next_call)
+        request('POST', '/tasks/' .. item.id .. '/' .. action, function(err)
+          if err then table.insert(errors, ('%s "%s": %s'):format(action, item.content, err)) end
+          next_call()
+        end)
+      end)
+    end
+  end
+  for _, d in ipairs(ops.delete) do
+    add(function(next_call)
+      request('DELETE', '/tasks/' .. d.id, function(err)
+        if err then table.insert(errors, ('delete "%s": %s'):format(d.content, err)) end
+        next_call()
+      end)
+    end)
+  end
+
+  local i = 0
+  local function next_call()
+    i = i + 1
+    if calls[i] then return calls[i](next_call) end
+    done(errors)
+  end
+  next_call()
+end
+
+--- :w on the task buffer.
+function M.save()
+  local buf = state.buf
+  if state.saving then return vim.notify('Still saving the previous changes', vim.log.levels.WARN) end
+
+  local items, err, seen = collect(buf)
+  if not items then return vim.notify('Todoist: ' .. err, vim.log.levels.ERROR) end
+
+  local ops = plan(items, seen)
+  local parts = summary(ops)
+  if #parts == 0 then
+    vim.bo[buf].modified = false
+    return vim.notify('Todoist: no changes')
+  end
+
+  -- vim.g.pure_todoist_confirm: 'all' (default) asks before every save,
+  -- 'delete' only when tasks would be deleted, 'never' does not ask.
+  local mode = vim.g.pure_todoist_confirm or 'all'
+  if mode == 'all' or (mode == 'delete' and #ops.delete > 0) then
+    -- Deletes are named: they are the one change that cannot be undone here.
+    local question = 'Apply to Todoist: ' .. table.concat(parts, ', ') .. '?'
+    if #ops.delete > 0 then
+      local names = {}
+      for _, d in ipairs(ops.delete) do table.insert(names, '  - ' .. d.content) end
+      question = question .. '\n\nDeleting:\n' .. table.concat(names, '\n')
+    end
+    if vim.fn.confirm(question, '&Yes\n&No', 2) ~= 1 then return end
+  end
+
+  state.saving = true
+  vim.notify('Todoist: saving…')
+  apply(ops, function(errors)
+    state.saving = false
+    if #errors > 0 then
+      vim.notify('Todoist: some changes failed:\n' .. table.concat(errors, '\n'), vim.log.levels.ERROR)
+    else
+      vim.notify('Todoist: ' .. table.concat(parts, ', '))
+    end
+    M.reload()
     M.refreshBlocks()
   end)
+end
+
+--- Flip the checkbox on the cursor line (the change is sent on :w).
+local function toggleLine()
+  local line = vim.api.nvim_get_current_line()
+  local new, n = line:gsub('^(%s*[-*+]%s+)%[ %]', '%1[x]', 1)
+  if n == 0 then new, n = line:gsub('^(%s*[-*+]%s+)%[[xX]%]', '%1[ ]', 1) end
+  if n > 0 then vim.api.nvim_set_current_line(new) end
+end
+
+--- Run `fn` now, or after confirming that unsaved edits may be dropped.
+local function unlessModified(what, fn)
+  return function()
+    if vim.bo[state.buf].modified and vim.fn.confirm(
+          'Discard unsaved Todoist changes and ' .. what .. '?', '&Discard\n&Cancel', 2) ~= 1 then
+      return
+    end
+    fn()
+  end
 end
 
 function M.open(filter)
   state.filter = (filter and filter ~= '') and filter or nil
 
   if not (state.buf and vim.api.nvim_buf_is_valid(state.buf)) then
-    state.buf = vim.api.nvim_create_buf(false, true)
-    vim.bo[state.buf].buftype = 'nofile'
-    vim.bo[state.buf].bufhidden = 'hide'
-    vim.bo[state.buf].swapfile = false
-    pcall(vim.api.nvim_buf_set_name, state.buf, 'Todoist')
+    local buf = vim.api.nvim_create_buf(false, false)
+    state.buf = buf
+    -- acwrite: :w runs BufWriteCmd below instead of writing a file.
+    vim.bo[buf].buftype = 'acwrite'
+    vim.bo[buf].bufhidden = 'hide'
+    vim.bo[buf].swapfile = false
+    pcall(vim.api.nvim_buf_set_name, buf, 'todoist://tasks')
     -- mdview only draws in normal file buffers; this one opts in explicitly.
-    vim.b[state.buf].pure_mdview = true
-    vim.bo[state.buf].filetype = 'markdown'
+    vim.b[buf].pure_mdview = true
+    vim.bo[buf].filetype = 'markdown'
+    -- render-md.lua sets a textwidth for markdown, which would wrap long task
+    -- lines into two while typing -- and the second half would be a new task.
+    vim.bo[buf].textwidth = 0
 
-    local map = function(lhs, fn, desc) vim.keymap.set('n', lhs, fn, { buffer = state.buf, desc = desc }) end
-    map('<CR>', M.toggle, 'Complete / reopen task')
-    map('x', M.toggle, 'Complete / reopen task')
-    map('r', M.reload, 'Reload tasks')
-    map('q', '<cmd>close<cr>', 'Close Todoist')
+    vim.api.nvim_create_autocmd('BufWriteCmd', { buffer = buf, callback = M.save })
+    vim.api.nvim_create_autocmd({ 'TextChanged', 'TextChangedI' }, {
+      buffer = buf,
+      callback = function() decorate(buf) end,
+    })
+
+    local map = function(lhs, fn, desc) vim.keymap.set('n', lhs, fn, { buffer = buf, desc = desc }) end
+    local close = unlessModified('close', function()
+      vim.bo[buf].modified = false
+      if #vim.api.nvim_list_wins() > 1 then vim.cmd('close') else vim.cmd('bprevious') end
+    end)
+    map('<CR>', toggleLine, 'Toggle task checkbox')
+    map('r', unlessModified('reload', M.reload), 'Reload tasks')
+    map('q', close, 'Close Todoist')
+    map('<Esc>', close, 'Close Todoist')
   end
 
   local win = vim.fn.bufwinid(state.buf)
@@ -274,10 +610,12 @@ function M.open(filter)
     vim.cmd('botright split')
     vim.api.nvim_win_set_buf(0, state.buf)
   end
-  -- Set on the window showing the list: render-md.lua turns spell on for
-  -- markdown, and task names are not prose worth underlining.
+  -- Window options: render-md.lua turns spell on for markdown (task names are
+  -- not prose worth underlining), and the ids need conceal to stay hidden.
   vim.wo.spell = false
   vim.wo.wrap = false
+  vim.wo.conceallevel = 2
+  vim.wo.concealcursor = 'nc'
   M.reload()
 end
 

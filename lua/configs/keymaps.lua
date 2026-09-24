@@ -6,13 +6,13 @@
 --    b  buffers        e  explore (pickers)   l  lsp             u  undotree
 --    c  code           f  find (pickers)      n  new file        v  window focus
 --    d  diagnostics    g  git                 o  toggles         w  tabs
---    j  jumps          s  split               t  terminal        x  execute
+--    j  jumps          s  split               t  term, todoist   x  execute
 --    z  folds
 --
 --  No mapping may be a prefix of another one: Neovim then waits 'timeoutlen'
 --  (500 ms) after the shorter key to see whether the longer one follows. That
 --  is why every group has a full two-key form (<leader>ee, <leader>dd, ...)
---  instead of a bare <leader>e / <leaderdd.
+--  instead of a bare <leader>e / <leader>d.
 --
 --  Non-leader keys come first: motions, text objects, surround.
 -- =============================================================================
@@ -45,12 +45,13 @@ local dirs = {
   m     = home .. 'iCloudDrive/Documents/Obsidian/Atlas/',
 }
 
+--- Directories relative to the current file. Functions, not strings: a string
+--- would be expanded once at startup and keep pointing at the first file.
 local file = {
-  p  = vim.fn.expand('%:p:h') .. '/',
-  pp = vim.fn.expand('%:p:h:h') .. '/',
-  ["3p"] = vim.fn.expand('%:p:h:h:h') .. '/',
-  ["4p"] = vim.fn.expand('%:p:h:h:h:h') .. '/',
-
+  p      = function() return vim.fn.expand('%:p:h') .. '/' end,
+  pp     = function() return vim.fn.expand('%:p:h:h') .. '/' end,
+  ["3p"] = function() return vim.fn.expand('%:p:h:h:h') .. '/' end,
+  ["4p"] = function() return vim.fn.expand('%:p:h:h:h:h') .. '/' end,
 }
 
 --- Run `picker` on `dir`, saying so when the directory simply is not there.
@@ -244,9 +245,9 @@ map('n', '<leader>em', explore(dirs.m), func.getOpts(opts, "Explore Obsidian vau
 -- =============================================================================
 --  Find  (<leader>f)
 -- =============================================================================
-map('n', '<leader><leader>', function() fzf.fuzzySearch(file["4p"]) end,
+map('n', '<leader><leader>', function() fzf.fuzzySearch(file["4p"]()) end,
   func.getOpts(opts, "Find files, four levels up"))
-map('n', '<leader>ff', function() fzf.fuzzySearch(file.pp) end,
+map('n', '<leader>ff', function() fzf.fuzzySearch(file.pp()) end,
   func.getOpts(opts, "Find files, two levels up"))
 map('n', '<leader>f~', inDir(fzf.fuzzySearch, dirs['~']), func.getOpts(opts, "Find in home"))
 map('n', '<leader>f.', inDir(fzf.fuzzySearch, dirs['.']), func.getOpts(opts, "Find in ~/.config"))
@@ -356,10 +357,10 @@ map({ 'n', 'v' }, '<leader>in', ':Inspect<cr>', func.getOpts(opts, "Inspect high
 map('v', '<leader>ldb', 'y:lua print(<C-r>")<cr>', func.getOpts(opts, "Print selection via lua"))
 
 -- =============================================================================
---  Todoist (Claude: Adicionar atalhos aqui para abrir o todoist)
+--  Todoist  (<leader>t, beside the terminals)
 -- =============================================================================
--- map({'n', 'v'}, '<leader>td', "<cmd>Todoist<cr>", func.getOpts(opts, "Todoist all tasks"))
--- map({'n', 'v'}, '<leader>td', "<cmd>Todoist<cr>", func.getOpts(opts, "Todoist"))
+map('n', '<leader>td', '<cmd>Todoist<cr>', func.getOpts(opts, "Todoist all tasks"))
+map('n', '<leader>tD', '<cmd>Todoist today | overdue<cr>', func.getOpts(opts, "Todoist today and overdue"))
 
 -- =============================================================================
 --  Completion and snippets
