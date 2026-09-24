@@ -282,6 +282,18 @@ map('n', '<leader>nz', zet.insertTemplate, func.getOpts(opts, "Insert zettel tem
 map('n', "<leader>gl", fzf.fuzzyGit, func.getOpts(opts, "Git log"))
 map('n', "<leader>gg", fzf.fuzzyGitGrep, func.getOpts(opts, "Git grep"))
 map('n', "<leader>gd", func.gitDiffToggle, func.getOpts(opts, "Toggle git diff"))
+-- pure/git.lua: required on use, like the other pure modules' keys.
+local git = function(fn) return function(...) return require('pure.git')[fn](...) end end
+map('n', "<leader>gs", git('status'), func.getOpts(opts, "Git status (interactive)"))
+map('n', "<leader>ga", git('addFile'), func.getOpts(opts, "Git add current file"))
+map('n', "<leader>gA", git('addAll'), func.getOpts(opts, "Git add all"))
+map('n', "<leader>gu", git('unstageFile'), func.getOpts(opts, "Git unstage current file"))
+map('n', "<leader>gr", git('restoreFile'), func.getOpts(opts, "Git discard changes to current file"))
+map('n', "<leader>gc", git('commit'), func.getOpts(opts, "Git commit"))
+map('n', "<leader>gp", git('push'), func.getOpts(opts, "Git push"))
+map('n', "<leader>gP", git('pull'), func.getOpts(opts, "Git pull"))
+map('n', "<leader>gb", git('blameLine'), func.getOpts(opts, "Git blame current line"))
+map('n', "<leader>gB", git('switchBranch'), func.getOpts(opts, "Git switch branch"))
 
 -- =============================================================================
 --  LSP
