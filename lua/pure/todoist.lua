@@ -261,9 +261,18 @@ local function decorate(buf)
       -- The same split parseLine uses, run on the line minus its id.
       local _, _, _, ranges = splitMeta(line:sub(1, (id_start or #line + 1) - 1))
       for _, r in ipairs(ranges) do
-        local hl = r[3] == 'due' and 'Special' or priority_hl[tonumber(r[3]:sub(2))]
-        if hl then
-          vim.api.nvim_buf_set_extmark(buf, id_ns, row - 1, r[1] - 1, { end_col = r[2], hl_group = hl })
+        if r[3] == 'due' then
+          vim.api.nvim_buf_set_extmark(buf, id_ns, row - 1, r[1] - 1, { end_col = r[2], hl_group = 'Special' })
+        else
+          -- 'pN' is concealed into a coloured flag (p4, normal priority, into
+          -- nothing). Like the ids it shows as text again while the line is
+          -- being edited, since the window's concealcursor is 'nc'.
+          local n = tonumber(r[3]:sub(2))
+          vim.api.nvim_buf_set_extmark(buf, id_ns, row - 1, r[1] - 1, {
+            end_col = r[2],
+            conceal = priority_hl[n] and '󰈻' or '',
+            hl_group = priority_hl[n],
+          })
         end
       end
     end
