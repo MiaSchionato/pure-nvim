@@ -385,8 +385,27 @@ map('n', '<leader>jl', '<C-i>', func.getOpts(opts, "Jump forward"))
 map('n', '<leader>jh', '<C-o>', func.getOpts(opts, "Jump back"))
 
 map('n', '<leader>zz', 'za', func.getOpts(opts, "Toggle fold"))
-map('n', '<leader>zo', 'zR', func.getOpts(opts, "Open all folds"))
-map('n', '<leader>zc', 'zM', func.getOpts(opts, "Close all folds"))
+-- Folds are made automatically (treesitter, or indentation), and those
+-- methods refuse zf. Folding a selection by hand switches the window to manual
+-- folds -- the automatic ones stay -- and <leader>zr goes back to automatic.
+map('x', '<leader>zf', function()
+  vim.wo.foldmethod = 'manual'
+  vim.cmd('normal! zf')
+end, func.getOpts(opts, "Fold selection"))
+map('n', '<leader>zd', function()
+  local ok, err = pcall(vim.cmd, 'normal! zd')
+  if not ok then vim.notify(err:gsub('^.-E%d+: ', ''), vim.log.levels.WARN) end
+end, func.getOpts(opts, "Delete fold"))
+map('n', '<leader>zr', function() require('pure.folding').auto() end,
+  func.getOpts(opts, "Reset folds to automatic"))
+-- One key for zR / zM: opens everything if any fold is closed, otherwise
+-- closes them all.
+map('n', '<leader>za', function()
+  for lnum = 1, vim.fn.line('$') do
+    if vim.fn.foldclosed(lnum) ~= -1 then return vim.cmd('normal! zR') end
+  end
+  vim.cmd('normal! zM')
+end, func.getOpts(opts, "Toggle all folds"))
 
 map('n', '<leader>u', function()
   vim.cmd('packadd nvim.undotree')
