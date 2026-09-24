@@ -99,7 +99,7 @@ o.autochdir = true
 vim.g.pure_todoist_confirm = 'never'
 -- Folder where the task list and a timestamped history of every change are
 -- kept (tasks.md, history.md, tasks.json). Unset or '' turns archiving off.
-vim.g.pure_todoist_archive = vim.fn.stdpath('data') .. '/todoist-archive'
+vim.g.pure_todoist_archive = '~/iCloudDrive/Documents/Obsidian/Atlas/9-Archive/Todoist/'
 
 -- Obsidian vault (pure/zettelkasten.lua, obsidian.nvim, <leader>em / fa / nm).
 -- Left unset, it is asked for on a fresh install and remembered, like the
