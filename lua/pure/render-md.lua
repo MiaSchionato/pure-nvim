@@ -37,13 +37,9 @@ vim.api.nvim_create_autocmd("FileType", {
     vim.api.nvim_set_hl(0, "@markup.heading.4.markdown", { link = "Special" })
     vim.api.nvim_set_hl(0, "PureMdChecked", { link = "String", default = true }) vim.api.nvim_set_hl(0, "PureMdUnchecked", { link = "Comment", default = true })
 
-    -- Conceal markers for a cleaner look using Treesitter groups
-    vim.fn.matchadd("Conceal", [[^#\+\s]], 10, -1, { conceal = "" })
-    vim.fn.matchadd("Conceal", [[^-\ze\s]], 10, -1, { conceal = "•" })
-    vim.fn.matchadd("Conceal", [[`]], 10, -1, { conceal = "" })
-    vim.fn.matchadd("Conceal", '-\\s\\[\\s\\]', 10, -1, { conceal = "󰄱" })
-    vim.fn.matchadd("Conceal", '-\\s\\[[xX]\\]', 10, -1, { conceal = "󰄲" })
-    vim.fn.matchadd("Comment", [[^\s*-\s\[[xX]\].*$]], 9, -1)
+    -- Headings, bullets, checkboxes and the rest are drawn by pure/mdview.lua.
+    -- The regex conceals that used to be here matched inside code blocks too,
+    -- and matchadd() is per window, so they piled up on every FileType.
 
     -- Keymaps
     vim.keymap.set("n", "<leader>ft", "'[,']!column -t -s '|' -o '|'", {buffer = true}) -- Table format

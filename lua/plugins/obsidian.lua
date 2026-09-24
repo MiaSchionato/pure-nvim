@@ -19,6 +19,9 @@ end
 
 require("obsidian").setup {
   legacy_commands = false, -- this will be removed in 4.0.0
+  -- pure/mdview.lua renders markdown; obsidian's own UI would draw a second
+  -- set of checkboxes and bullets over it.
+  ui = { enable = false },
   workspaces = {
     {
       name = "Atlas",
