@@ -97,7 +97,6 @@ map('n', '<C-p>', [[%]], func.getOpts(opts, "Jump to matching pair"))
 
 map('n', "Y", "y$", func.getOpts(opts, "Yank to end of line"))
 map('n', "U", "<C-r>", func.getOpts(opts, "Redo"))
-map('n', "q;", "q:", func.getOpts(opts, "Command-line window"))
 map('n', "J", "mzJ`z", func.getOpts(opts, "Join lines, keep cursor"))
 map('n', "vv", 'viw', func.getOpts(opts, "Select word"))
 
