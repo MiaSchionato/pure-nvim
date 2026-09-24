@@ -56,4 +56,4 @@ The `windows` branch adds the Windows-only setup on top of `main`. The pickers b
 
 ### Obsidian
 
-`lua/plugins/obsidian.lua` expects the vault at `~/iCloudDrive/Documents/Obsidian/Atlas`. Change the workspace path to match your own vault.
+`lua/plugins/obsidian.lua` expects the vault at `~/iCloudDrive/Documents/Obsidian/Atlas` and skips its setup when that folder does not exist. Change the path to match your own vault.
