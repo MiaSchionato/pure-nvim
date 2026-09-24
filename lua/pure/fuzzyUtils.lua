@@ -131,8 +131,18 @@ function M.fuzzyLogic(opts)
       end)
     end
     })
+  -- Enter terminal mode straight away, then once more on the next tick.
+  --
+  -- This used to be deferred by 50ms alone, which left the picker sitting in
+  -- terminal-normal mode for that window. Arrow keys pressed in it hit the
+  -- move-line mappings rather than fzf, so the first keystroke after opening a
+  -- picker could be swallowed. The deferred call is kept as a second attempt in
+  -- case something steals focus while the job starts.
+  vim.cmd("startinsert")
   vim.defer_fn(function()
-    vim.cmd("startinsert")
+    if vim.api.nvim_get_current_buf() == buf and vim.api.nvim_get_mode().mode ~= "t" then
+      vim.cmd("startinsert")
+    end
   end, 50)
 end
 
