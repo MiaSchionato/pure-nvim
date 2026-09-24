@@ -97,3 +97,6 @@ o.autochdir = true
 -- When :w in the task list asks before sending: 'all', 'delete' (only when
 -- tasks would be deleted) or 'never'.
 vim.g.pure_todoist_confirm = 'delete'
+-- Folder where the task list and a timestamped history of every change are
+-- kept (tasks.md, history.md, tasks.json). Unset or '' turns archiving off.
+vim.g.pure_todoist_archive = vim.fn.stdpath('data') .. '/todoist-archive'

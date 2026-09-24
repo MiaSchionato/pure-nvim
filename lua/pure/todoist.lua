@@ -42,6 +42,10 @@
 --      Windows). :TodoistToken writes it for you.
 --    - the TODOIST_API_TOKEN environment variable
 --
+--  Archive: set vim.g.pure_todoist_archive to a folder to keep tasks.md (the
+--  full list), history.md (each change, with its time) and tasks.json there,
+--  written in the background and only when something changed. See "Archive".
+--
 --  When neither exists, Neovim asks for it on startup, with the option to stop
 --  asking. :TodoistToken sets the token later and turns the question back on.
 -- =============================================================================
@@ -238,19 +242,30 @@ end
 
 --- Record the state of every parsed item (and forget completed and deleted
 --- tasks). Returns true when the file changed.
+local state_names = { ['~'] = 'in progress', ['!'] = 'important', ['>'] = 'deferred', ['-'] = 'cancelled' }
+
+--- Also returns history entries for the marks that changed.
 local function saveStates(items, deleted_ids)
   local store = readStates()
   local before = vim.json.encode(store)
+  local entries = {}
   for _, item in ipairs(items) do
-    if item.id then store[item.id] = (not item.checked) and item.mark or nil end
+    if item.id then
+      local mark = (not item.checked) and item.mark or nil
+      if mark ~= store[item.id] and not item.checked then
+        table.insert(entries, mark and ('marked [%s] %s · %s'):format(mark, state_names[mark] or '', item.content)
+          or ('cleared mark · ' .. item.content))
+      end
+      store[item.id] = mark
+    end
   end
   for _, id in ipairs(deleted_ids or {}) do store[id] = nil end
   local after = vim.json.encode(store)
-  if after == before then return false end
+  if after == before then return false, entries end
   vim.fn.mkdir(vim.fn.stdpath('data'), 'p')
   local f = io.open(states_file, 'w')
   if f then f:write(after) f:close() end
-  return true
+  return true, entries
 end
 
 --- `- [ ] text due:today p1 ‹id›` at the given depth; `mark` is a local state.
@@ -335,6 +350,182 @@ local function setLines(lines)
   decorate(buf)
 end
 
+-- -----------------------------------------------------------------------------
+--  Archive
+-- -----------------------------------------------------------------------------
+--  With vim.g.pure_todoist_archive set to a folder, the plugin keeps there:
+--
+--    tasks.md    the full task list as the buffer shows it, without the ids
+--    history.md  one timestamped line per change: those made here with :w,
+--                and those made elsewhere (the app, the phone), noticed when
+--                the full list is reloaded
+--    tasks.json  the last full list, to tell what changed since
+--
+--  tasks.md and tasks.json hold no timestamp and are rewritten only when their
+--  content differs, so reloading an unchanged list touches nothing. All disk
+--  work goes through libuv's asynchronous calls, off the editing path; only
+--  the text is prepared on the main loop.
+
+local archive = { skip_external = false }
+local uv = vim.uv
+
+--- The archive folder (created on first use), or nil when archiving is off.
+local function archiveDir()
+  local dir = vim.g.pure_todoist_archive
+  if type(dir) ~= 'string' or dir == '' then return nil end
+  dir = vim.fs.normalize(vim.fn.expand(dir))
+  vim.fn.mkdir(dir, 'p')
+  return dir
+end
+
+local function readAsync(path, cb)
+  uv.fs_open(path, 'r', 438, function(err, fd)
+    if err then return cb(nil) end
+    uv.fs_fstat(fd, function(_, stat)
+      uv.fs_read(fd, stat and stat.size or 0, 0, function(_, data)
+        uv.fs_close(fd)
+        cb(data)
+      end)
+    end)
+  end)
+end
+
+--- `flags` 'w' replaces, 'a' appends. Errors are reported on the main loop.
+local function writeAsync(path, data, flags)
+  uv.fs_open(path, flags, 420, function(err, fd)
+    if err then
+      return vim.schedule(function()
+        vim.notify('Todoist archive: cannot write ' .. path .. ': ' .. err, vim.log.levels.WARN)
+      end)
+    end
+    uv.fs_write(fd, data, -1, function() uv.fs_close(fd) end)
+  end)
+end
+
+--- Replace `path` with `data` only if it differs from what is there.
+local function writeIfChanged(path, data)
+  readAsync(path, function(old)
+    if old ~= data then writeAsync(path, data, 'w') end
+  end)
+end
+
+--- Append one line per entry to history.md, all with the same time.
+local function logEntries(dir, entries)
+  if not dir or #entries == 0 then return end
+  local stamp = os.date('%Y-%m-%d %H:%M:%S')
+  local out = {}
+  for _, e in ipairs(entries) do table.insert(out, ('- %s · %s\n'):format(stamp, e)) end
+  writeAsync(dir .. '/history.md', table.concat(out), 'a')
+end
+
+function archive.log(entries)
+  logEntries(archiveDir(), entries)
+end
+
+--- One record per task, as a JSON array sorted by id: arrays keep their order,
+--- so the same list always encodes to the same text (object key order does
+--- not), and an unchanged list is recognised as such.
+local function records(tasks, project_names)
+  local list = {}
+  for _, t in ipairs(tasks) do
+    table.insert(list, { t.id, oneLine(t.content), dueText(t), tonumber(t.priority) or 1,
+      project_names[t.project_id] or t.project_id or '' })
+  end
+  table.sort(list, function(a, b) return a[1] < b[1] end)
+  return list
+end
+
+--- What changed between two record lists, as history entries.
+local function externalChanges(old, new)
+  local before, after, entries = {}, {}, {}
+  for _, r in ipairs(old) do before[r[1]] = r end
+  for _, r in ipairs(new) do after[r[1]] = r end
+  for id, r in pairs(after) do
+    local o = before[id]
+    if not o then
+      table.insert(entries, ('added elsewhere · %s (%s)'):format(r[2], r[5]))
+    else
+      local diffs = {}
+      if o[2] ~= r[2] then table.insert(diffs, ('text: "%s" → "%s"'):format(o[2], r[2])) end
+      if o[3] ~= r[3] then table.insert(diffs, ('due: %s → %s'):format(o[3] ~= '' and o[3] or 'none', r[3] ~= '' and r[3] or 'none')) end
+      if o[4] ~= r[4] then table.insert(diffs, ('priority: p%d → p%d'):format(5 - o[4], 5 - r[4])) end
+      if o[5] ~= r[5] then table.insert(diffs, ('project: %s → %s'):format(o[5], r[5])) end
+      if #diffs > 0 then table.insert(entries, ('changed elsewhere · %s · %s'):format(r[2], table.concat(diffs, '; '))) end
+    end
+  end
+  for id, o in pairs(before) do
+    if not after[id] then table.insert(entries, ('gone elsewhere (completed or deleted) · %s'):format(o[2])) end
+  end
+  table.sort(entries)
+  return entries
+end
+
+--- Archive the full task list: tasks.md and tasks.json when they changed, and
+--- history lines for anything that changed outside Neovim since last time.
+--- Only called with the unfiltered list; a filtered view is not the archive.
+function archive.snapshot(tasks, projects)
+  local dir = archiveDir()
+  if not dir then return end
+
+  local names, order = {}, {}
+  for _, p in ipairs(projects) do
+    names[p.id] = p.name
+    table.insert(order, p.id)
+  end
+
+  -- tasks.md, grouped and nested like the buffer, local states included.
+  local sorted = vim.deepcopy(tasks)
+  sortTasks(sorted)
+  local shown, children, top = {}, {}, {}
+  for _, t in ipairs(sorted) do shown[t.id] = true end
+  for _, t in ipairs(sorted) do
+    if t.parent_id and shown[t.parent_id] then
+      children[t.parent_id] = children[t.parent_id] or {}
+      table.insert(children[t.parent_id], t)
+    else
+      top[t.project_id] = top[t.project_id] or {}
+      table.insert(top[t.project_id], t)
+    end
+  end
+  local marks = readStates()
+  local md = { '# Todoist' }
+  local function emit(t, depth)
+    table.insert(md, (taskLine(t, depth, marks[t.id]):gsub('%s*‹[%w_%-]+›%s*$', '')))
+    for _, c in ipairs(children[t.id] or {}) do emit(c, depth + 1) end
+  end
+  for pid in pairs(top) do
+    if not names[pid] then table.insert(order, pid) end
+  end
+  for _, pid in ipairs(order) do
+    if top[pid] then
+      vim.list_extend(md, { '', '## ' .. (names[pid] or pid) })
+      for _, t in ipairs(top[pid]) do emit(t, 0) end
+    end
+  end
+  local md_text = table.concat(md, '\n') .. '\n'
+
+  local new = records(tasks, names)
+  local json_text = vim.json.encode(new) .. '\n'
+  -- After a save the list differs from tasks.json by our own changes, which
+  -- history.md already has; comparing now would log them again as external.
+  local skip = archive.skip_external
+  archive.skip_external = false
+
+  writeIfChanged(dir .. '/tasks.md', md_text)
+  readAsync(dir .. '/tasks.json', function(old_text)
+    if old_text == json_text then return end
+    local ok, old = pcall(vim.json.decode, old_text or '')
+    local entries
+    if not old_text or not ok or type(old) ~= 'table' then
+      entries = { ('archive started · %d tasks'):format(#new) }
+    elseif not skip then
+      entries = externalChanges(old, new)
+    end
+    writeAsync(dir .. '/tasks.json', json_text, 'w')
+    if entries then logEntries(dir, entries) end
+  end)
+end
+
 --- Build the buffer: one ## section per project (in Todoist's order), tasks
 --- nested under their parent. A subtask whose parent is not in this view
 --- (filtered out) is shown at the top level.
@@ -398,6 +589,7 @@ local function render(tasks, projects)
   end
 
   setLines(lines)
+  if not state.filter then archive.snapshot(tasks, projects) end
   vim.api.nvim_buf_clear_namespace(state.buf, hint_ns, 0, -1)
   vim.api.nvim_buf_set_extmark(state.buf, hint_ns, 0, 0, {
     virt_lines = { { { ':w apply · <CR>/x toggle · r reload · q close · indent = subtask · due:…  p1-p3', 'Comment' } } },
@@ -533,8 +725,10 @@ end
 
 --- Run the calls one after another (each may need an id the previous one
 --- returned), then reload. Failures are collected and reported together.
-local function apply(ops, done)
+--- `log` collects a history entry for every call that succeeded.
+local function apply(ops, done, log)
   local calls, errors = {}, {}
+  local project_name = function(id) return state.projects.by_id[id] or id end
   local function add(fn) table.insert(calls, fn) end
 
   for _, item in ipairs(ops.create) do
@@ -553,7 +747,10 @@ local function apply(ops, done)
           table.insert(errors, ('create "%s": %s'):format(item.content, err))
         else
           item.id = task and task.id
+          local extra = (item.due ~= '' and (' due:' .. item.due) or '') .. (item.priority > 1 and (' p' .. (5 - item.priority)) or '')
+          table.insert(log, ('created · %s (%s)%s'):format(item.content, project_name(item.project_id), extra))
           if item.checked and item.id then
+            table.insert(log, 'completed · ' .. item.content)
             return request('POST', '/tasks/' .. item.id .. '/close', function() next_call() end)
           end
         end
@@ -563,8 +760,19 @@ local function apply(ops, done)
   end
   for _, u in ipairs(ops.update) do
     add(function(next_call)
+      local was = state.snapshot[u.item.id] or {}
       request('POST', '/tasks/' .. u.item.id, function(err)
-        if err then table.insert(errors, ('update "%s": %s'):format(u.item.content, err)) end
+        if err then
+          table.insert(errors, ('update "%s": %s'):format(u.item.content, err))
+        else
+          local diffs = {}
+          if u.body.content then table.insert(diffs, ('text: "%s" → "%s"'):format(was.content or '?', u.body.content)) end
+          if u.body.due_string then
+            table.insert(diffs, ('due: %s → %s'):format((was.due or '') ~= '' and was.due or 'none', u.item.due ~= '' and u.item.due or 'none'))
+          end
+          if u.body.priority then table.insert(diffs, ('priority: p%d → p%d'):format(5 - (was.priority or 1), 5 - u.body.priority)) end
+          table.insert(log, ('edited · %s · %s'):format(u.item.content, table.concat(diffs, '; ')))
+        end
         next_call()
       end, u.body)
     end)
@@ -573,7 +781,12 @@ local function apply(ops, done)
     add(function(next_call)
       local body = item.parent and { parent_id = item.parent.id } or { project_id = item.project_id }
       request('POST', '/tasks/' .. item.id .. '/move', function(err)
-        if err then table.insert(errors, ('move "%s": %s'):format(item.content, err)) end
+        if err then
+          table.insert(errors, ('move "%s": %s'):format(item.content, err))
+        else
+          table.insert(log, item.parent and ('moved · %s → under "%s"'):format(item.content, item.parent.content)
+            or ('moved · %s → %s'):format(item.content, project_name(item.project_id)))
+        end
         next_call()
       end, body)
     end)
@@ -582,7 +795,11 @@ local function apply(ops, done)
     for _, item in ipairs(ops[key]) do
       add(function(next_call)
         request('POST', '/tasks/' .. item.id .. '/' .. action, function(err)
-          if err then table.insert(errors, ('%s "%s": %s'):format(action, item.content, err)) end
+          if err then
+            table.insert(errors, ('%s "%s": %s'):format(action, item.content, err))
+          else
+            table.insert(log, (action == 'close' and 'completed · ' or 'reopened · ') .. item.content)
+          end
           next_call()
         end)
       end)
@@ -591,7 +808,11 @@ local function apply(ops, done)
   for _, d in ipairs(ops.delete) do
     add(function(next_call)
       request('DELETE', '/tasks/' .. d.id, function(err)
-        if err then table.insert(errors, ('delete "%s": %s'):format(d.content, err)) end
+        if err then
+          table.insert(errors, ('delete "%s": %s'):format(d.content, err))
+        else
+          table.insert(log, 'deleted · ' .. d.content)
+        end
         next_call()
       end)
     end)
@@ -619,7 +840,9 @@ function M.save()
   if #parts == 0 then
     -- Nothing for Todoist, but a [~] / [!] / [>] / [-] may have changed.
     vim.bo[buf].modified = false
-    return vim.notify(saveStates(items) and 'Todoist: checkbox states saved (kept locally)' or 'Todoist: no changes')
+    local changed, entries = saveStates(items)
+    archive.log(entries)
+    return vim.notify(changed and 'Todoist: checkbox states saved (kept locally)' or 'Todoist: no changes')
   end
 
   -- vim.g.pure_todoist_confirm: 'all' (default) asks before every save,
@@ -644,12 +867,17 @@ function M.save()
 
   state.saving = true
   vim.notify('Todoist: saving…')
+  local log = {}
   apply(ops, function(errors)
     state.saving = false
     -- After apply, so new tasks have their ids; before the reload draws them.
     local deleted_ids = {}
     for _, d in ipairs(ops.delete) do table.insert(deleted_ids, d.id) end
-    saveStates(items, deleted_ids)
+    local _, mark_entries = saveStates(items, deleted_ids)
+    vim.list_extend(log, mark_entries)
+    archive.log(log)
+    -- The reload below brings our own changes back; they are logged already.
+    archive.skip_external = true
     if #errors > 0 then
       vim.notify('Todoist: some changes failed:\n' .. table.concat(errors, '\n'), vim.log.levels.ERROR)
     else
@@ -674,7 +902,7 @@ function M.save()
       end
     end)
     M.refreshBlocks()
-  end)
+  end, log)
 end
 
 --- Run `fn` now, or after confirming that unsaved edits may be dropped.
@@ -1042,7 +1270,11 @@ vim.api.nvim_create_autocmd('VimEnter', {
     vim.defer_fn(function()
       if not token() or #vim.api.nvim_list_uis() == 0 or state.loaded then return end
       fetch(nil, function(err, tasks, projects)
-        if not err and not state.loaded then prefetched[''] = { tasks = tasks, projects = projects } end
+        if err then return end
+        -- Archive in the background too, so it stays current even on days
+        -- the list is never opened.
+        archive.snapshot(tasks, projects)
+        if not state.loaded then prefetched[''] = { tasks = tasks, projects = projects } end
       end)
     end, 1000)
   end,
