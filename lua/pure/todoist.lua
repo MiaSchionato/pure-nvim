@@ -566,7 +566,13 @@ function M.save()
       for _, d in ipairs(ops.delete) do table.insert(names, '  - ' .. d.content) end
       question = question .. '\n\nDeleting:\n' .. table.concat(names, '\n')
     end
-    if vim.fn.confirm(question, '&Yes\n&No', 2) ~= 1 then return end
+    -- What <CR> answers: Yes for creates and edits, No when something would
+    -- be deleted, so a reflexive Enter never deletes a task. (It used to be
+    -- No always, and a save confirmed with Enter silently did nothing.)
+    local default = #ops.delete > 0 and 2 or 1
+    if vim.fn.confirm(question, '&Yes\n&No', default) ~= 1 then
+      return vim.notify('Todoist: nothing sent; the edits are still in the buffer')
+    end
   end
 
   state.saving = true
