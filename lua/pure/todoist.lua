@@ -17,15 +17,22 @@
 --
 --  Token (Todoist > Settings > Integrations > Developer), never kept in this
 --  repository. Either of:
---    - the TODOIST_API_TOKEN environment variable
 --    - a file holding just the token: stdpath('data')/todoist_token
 --      (~/.local/share/nvim/todoist_token, or %LOCALAPPDATA%\nvim-data\ on
---      Windows)
+--      Windows). :TodoistToken writes it for you.
+--    - the TODOIST_API_TOKEN environment variable
+--
+--  When neither exists, Neovim asks for it on startup, with the option to stop
+--  asking. :TodoistToken sets the token later and turns the question back on.
 -- =============================================================================
 
 local M = {}
 
 local api = 'https://api.todoist.com/api/v1'
+
+-- Both live in the data directory, outside the config repository.
+local token_file = vim.fn.stdpath('data') .. '/todoist_token'
+local no_prompt_file = vim.fn.stdpath('data') .. '/todoist_no_prompt'
 
 -- -----------------------------------------------------------------------------
 --  HTTP
@@ -34,11 +41,12 @@ local api = 'https://api.todoist.com/api/v1'
 local function token()
   local env = vim.env.TODOIST_API_TOKEN
   if env and env ~= '' then return env end
-  local f = io.open(vim.fn.stdpath('data') .. '/todoist_token', 'r')
+  local f = io.open(token_file, 'r')
   if not f then return nil end
-  local t = f:read('*l')
+  local t = vim.trim(f:read('*l') or '')
   f:close()
-  return t and vim.trim(t) or nil
+  -- An empty file counts as no token, so the startup question still comes up.
+  return t ~= '' and t or nil
 end
 
 local function urlencode(s)
@@ -52,8 +60,7 @@ end
 local function request(method, path, cb)
   local tok = token()
   if not tok then
-    return cb('No Todoist token: set TODOIST_API_TOKEN or write it to '
-      .. vim.fn.stdpath('data') .. '/todoist_token')
+    return cb('No Todoist token: run :TodoistToken to set it')
   end
 
   local base = vim.g.pure_todoist_url or api
@@ -266,6 +273,85 @@ function M.open(filter)
   vim.wo.wrap = false
   M.reload()
 end
+
+-- -----------------------------------------------------------------------------
+--  Token setup
+-- -----------------------------------------------------------------------------
+
+--- Ask for the token with hidden input, save it to `token_file` and check it
+--- against the API. Also turns the startup question back on.
+function M.setToken()
+  -- inputsecret shows '*' while typing and keeps the answer out of the
+  -- command-line history, unlike input() or a :let.
+  local ok, input = pcall(vim.fn.inputsecret, 'Todoist API token (empty to cancel): ')
+  input = ok and vim.trim(input or '') or ''
+  if input == '' then
+    return vim.notify('Todoist token not changed')
+  end
+  if input:find('%s') then
+    return vim.notify('That does not look like a token (it has spaces); nothing saved', vim.log.levels.WARN)
+  end
+
+  vim.fn.mkdir(vim.fn.stdpath('data'), 'p')
+  local f, err = io.open(token_file, 'w')
+  if not f then
+    return vim.notify('Could not write ' .. token_file .. ': ' .. tostring(err), vim.log.levels.ERROR)
+  end
+  f:write(input, '\n')
+  f:close()
+  -- Owner read/write only (0600). Windows ignores the mode; its per-user
+  -- AppData folder already keeps the file private.
+  pcall(vim.uv.fs_chmod, token_file, tonumber('600', 8))
+  os.remove(no_prompt_file)
+
+  if vim.env.TODOIST_API_TOKEN and vim.env.TODOIST_API_TOKEN ~= '' then
+    vim.notify('Saved, but TODOIST_API_TOKEN is set and takes precedence over the file', vim.log.levels.WARN)
+  end
+
+  -- One cheap request to tell a typo apart from a working token now, rather
+  -- than on the first :Todoist.
+  vim.notify('Todoist token saved, checking it…')
+  request('GET', '/projects?limit=1', function(req_err)
+    if req_err then
+      vim.notify('Todoist rejected the token: ' .. req_err .. '\nRun :TodoistToken to try again.',
+        vim.log.levels.WARN)
+    else
+      vim.notify('Todoist token works')
+    end
+  end)
+end
+
+--- Startup question, only when there is no token, the user did not opt out,
+--- and a real UI is attached (never in headless runs or scripts).
+local function askOnStartup()
+  if token() or vim.uv.fs_stat(no_prompt_file) or #vim.api.nvim_list_uis() == 0 then return end
+
+  -- confirm(), not vim.ui.select: here vim.ui.select is the fzf picker from
+  -- fuzzyUtils, and the token prompt opened from its callback was cancelled at
+  -- once while the picker's terminal closed -- the token then went into the
+  -- buffer as typed text. confirm() is a plain command-line question.
+  local choice = vim.fn.confirm('No Todoist API token found (needed by :Todoist).',
+    "&Enter it now\n&Ask me next time\n&Don't ask again", 2)
+  if choice == 1 then
+    M.setToken()
+  elseif choice == 3 then
+    local f = io.open(no_prompt_file, 'w')
+    if f then f:close() end
+    vim.notify("Won't ask again. Run :TodoistToken whenever you want to set it.")
+  end
+end
+
+vim.api.nvim_create_autocmd('VimEnter', {
+  group = vim.api.nvim_create_augroup('PureTodoist', { clear = true }),
+  once = true,
+  -- Scheduled so the dashboard and the first screen are drawn before the
+  -- question takes the command line.
+  callback = function() vim.schedule(askOnStartup) end,
+})
+
+vim.api.nvim_create_user_command('TodoistToken', M.setToken, {
+  desc = 'Set the Todoist API token (hidden input)',
+})
 
 vim.api.nvim_create_user_command('Todoist', function(opts) M.open(opts.args) end, {
   nargs = '*',
