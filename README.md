@@ -61,3 +61,14 @@ The `windows` branch adds the Windows-only setup on top of `main`. The pickers b
 ### Todoist
 
 `:Todoist` lists your active tasks as a checkbox table (`:Todoist today`, `:Todoist overdue` or any other Todoist filter narrows it); `<CR>` or `x` completes the task under the cursor, `r` reloads and `q` closes. It needs an API token from Todoist (Settings → Integrations → Developer). When none is found Neovim asks for it on startup (with a "don't ask again" option); `:TodoistToken` sets or replaces it any time, with hidden input, and checks it against the API. It is stored in `stdpath('data')/todoist_token`, outside this repository; a `TODOIST_API_TOKEN` environment variable takes precedence. Avoid typing the token into a shell, whose history may be versioned.
+
+Tasks can also live in a note, as in Obsidian's Todoist plugin (same syntax, so the note works in both):
+
+````markdown
+```todoist
+name: Today
+filter: "today | overdue"
+```
+````
+
+The tasks are drawn under the block without being written to the file. `:TodoistRefresh` reloads them, and `:Todoist` with the cursor inside the block opens that filter as the interactive list.

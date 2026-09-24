@@ -120,6 +120,15 @@ local function dueSortKey(task)
   return task.due and task.due.date or '9999-99-99'
 end
 
+--- Due date first (none last), then the most urgent priority.
+local function sortTasks(tasks)
+  table.sort(tasks, function(a, b)
+    local da, db = dueSortKey(a), dueSortKey(b)
+    if da ~= db then return da < db end
+    return (tonumber(a.priority) or 1) > (tonumber(b.priority) or 1)
+  end)
+end
+
 --- Pad every column to its widest cell, so the raw text lines up as well.
 local function formatTable(header, rows)
   local widths = {}
@@ -161,11 +170,7 @@ local function render(tasks, projects)
   local project_name = {}
   for _, p in ipairs(projects) do project_name[p.id] = p.name end
 
-  table.sort(tasks, function(a, b)
-    local da, db = dueSortKey(a), dueSortKey(b)
-    if da ~= db then return da < db end
-    return (tonumber(a.priority) or 1) > (tonumber(b.priority) or 1)
-  end)
+  sortTasks(tasks)
 
   local title = '# Todoist' .. (state.filter and (' — ' .. state.filter) or '')
   local lines = { title, '', ('%d tasks · updated %s'):format(#tasks, os.date('%H:%M')), '' }
@@ -237,6 +242,8 @@ function M.toggle()
       return vim.notify(err, vim.log.levels.ERROR)
     end
     vim.notify((done and 'Completed: ' or 'Reopened: ') .. task.content)
+    -- Blocks in open notes may list the same task.
+    M.refreshBlocks()
   end)
 end
 
@@ -273,6 +280,200 @@ function M.open(filter)
   vim.wo.wrap = false
   M.reload()
 end
+
+-- -----------------------------------------------------------------------------
+--  Blocks in notes
+-- -----------------------------------------------------------------------------
+--  A fenced block in any markdown file, in the syntax of Obsidian's Todoist
+--  plugin, so the same note works in both:
+--
+--    ```todoist
+--    name: Today
+--    filter: "today | overdue"
+--    ```
+--
+--  The tasks are drawn under the block as virtual lines; the file keeps only
+--  the query. They load when the note is shown and are cached for a few
+--  minutes; :TodoistRefresh reloads them. :Todoist with the cursor inside a
+--  block opens that filter as the interactive list, to complete tasks.
+--  The plugin's older JSON form ({"name": ..., "filter": ...}) is read too.
+
+local block_ns = vim.api.nvim_create_namespace('pure_todoist_block')
+local cache_ttl = 5 * 60 -- seconds
+local cache = {}         -- filter ('' for all) -> { time, tasks?, err?, loading? }
+local project_cache = { time = 0, names = {} }
+
+--- `key: value` lines, values optionally quoted. Only name and filter are
+--- used; the Obsidian plugin's other keys (sorting, groupBy, ...) are ignored.
+local function parseBlockBody(lines)
+  local text = vim.trim(table.concat(lines, '\n'))
+  if text:sub(1, 1) == '{' then
+    -- luanil: a JSON null must become nil, not vim.NIL (which is truthy).
+    local ok, obj = pcall(vim.json.decode, text, { luanil = { object = true, array = true } })
+    if ok and type(obj) == 'table' then
+      local str = function(v) return type(v) == 'string' and v or nil end
+      return { name = str(obj.name), filter = str(obj.filter) }
+    end
+  end
+  local conf = {}
+  for _, line in ipairs(lines) do
+    local key, value = line:match('^%s*([%w_]+)%s*:%s*(.-)%s*$')
+    if key then
+      conf[key] = value:match('^"(.*)"$') or value:match("^'(.*)'$") or value
+    end
+  end
+  return { name = conf.name, filter = conf.filter }
+end
+
+--- Every ```todoist block in `buf`: { first, last (0-based fence rows), name, filter }.
+local function findBlocks(buf)
+  local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+  local blocks, i = {}, 1
+  while i <= #lines do
+    if lines[i]:match('^%s*```%s*todoist%s*$') then
+      local j = i + 1
+      while j <= #lines and not lines[j]:match('^%s*```%s*$') do j = j + 1 end
+      local conf = parseBlockBody(vim.list_slice(lines, i + 1, j - 1))
+      conf.first, conf.last = i - 1, math.min(j, #lines) - 1
+      table.insert(blocks, conf)
+      i = j + 1
+    else
+      i = i + 1
+    end
+  end
+  return blocks
+end
+
+local function blockAt(buf, row)
+  for _, b in ipairs(findBlocks(buf)) do
+    if row >= b.first and row <= b.last then return b end
+  end
+end
+
+--- Load `filter` into the cache unless it is fresh or already loading, then
+--- call `on_done` (used to redraw).
+local function load(filter, on_done)
+  local key = filter or ''
+  local entry = cache[key]
+  if entry and (entry.loading or os.time() - entry.time < cache_ttl) then return end
+  cache[key] = { time = os.time(), loading = true, tasks = entry and entry.tasks }
+
+  local path = filter and ('/tasks/filter?query=' .. urlencode(filter)) or '/tasks'
+  getAll(path, function(err, tasks)
+    local function done()
+      cache[key] = { time = os.time(), tasks = tasks, err = err }
+      on_done()
+    end
+    if err or os.time() - project_cache.time < cache_ttl then return done() end
+    getAll('/projects', function(_, projects)
+      project_cache = { time = os.time(), names = {} }
+      for _, p in ipairs(projects or {}) do project_cache.names[p.id] = p.name end
+      done()
+    end)
+  end)
+end
+
+local priority_hl = { [4] = 'DiagnosticError', [3] = 'DiagnosticWarn', [2] = 'DiagnosticInfo' }
+
+--- The virtual lines for one block: a header, one line per task, a footer.
+local function blockLines(block, entry, width)
+  local title = block.name or block.filter or 'Todoist'
+  local lines = {}
+  local function add(chunks) table.insert(lines, chunks) end
+
+  if not entry or (entry.loading and not entry.tasks) then
+    add({ { '  󰔟 ' .. title .. ' · loading…', 'Comment' } })
+    return lines
+  end
+  if entry.err then
+    add({ { '  ' .. title .. ': ' .. entry.err, 'DiagnosticWarn' } })
+    return lines
+  end
+
+  local tasks = vim.deepcopy(entry.tasks or {})
+  sortTasks(tasks)
+  add({ { '╭─ ', 'Comment' }, { title, 'Title' }, { (' (%d)'):format(#tasks), 'Comment' } })
+  if #tasks == 0 then
+    add({ { '│ ', 'Comment' }, { 'Nothing to do.', 'Comment' } })
+  end
+
+  -- Task text padded to a common width so project and due line up.
+  local name_width = 10
+  for _, t in ipairs(tasks) do
+    name_width = math.max(name_width, vim.fn.strdisplaywidth((t.parent_id and '↳ ' or '') .. t.content))
+  end
+  name_width = math.min(name_width, math.max(width - 40, 20))
+
+  for _, t in ipairs(tasks) do
+    local text = (t.parent_id and '↳ ' or '') .. t.content:gsub('\n', ' ')
+    if vim.fn.strdisplaywidth(text) > name_width then
+      text = vim.fn.strcharpart(text, 0, name_width - 1) .. '…'
+    end
+    text = text .. string.rep(' ', name_width - vim.fn.strdisplaywidth(text))
+    local chunks = {
+      { '│ ', 'Comment' },
+      { t.checked and '󰄲 ' or '󰄱 ', t.checked and 'PureMdChecked' or 'PureMdUnchecked' },
+      { text, t.checked and 'Comment' or 'Normal' },
+    }
+    local project = project_cache.names[t.project_id]
+    if project then table.insert(chunks, { '  ' .. project, 'Comment' }) end
+    if t.due then table.insert(chunks, { '  ' .. (t.due.string or t.due.date), 'Special' }) end
+    local p = tonumber(t.priority) or 1
+    if p > 1 then table.insert(chunks, { '  ' .. priorityLabel(p), priority_hl[p] }) end
+    add(chunks)
+  end
+  add({ { '╰─ ', 'Comment' }, { ':Todoist in the block to complete tasks', 'Comment' } })
+  return lines
+end
+
+--- Draw every block of `buf` from the cache, starting loads as needed.
+function M.renderBlocks(buf)
+  buf = (buf and buf ~= 0) and buf or vim.api.nvim_get_current_buf()
+  if not vim.api.nvim_buf_is_valid(buf) then return end
+  vim.api.nvim_buf_clear_namespace(buf, block_ns, 0, -1)
+
+  local blocks = findBlocks(buf)
+  if #blocks == 0 then return end
+
+  local win = vim.fn.bufwinid(buf)
+  local width = win ~= -1 and vim.api.nvim_win_get_width(win) or 80
+
+  for _, block in ipairs(blocks) do
+    if not token() then
+      cache[block.filter or ''] = { time = 0, err = 'no token, run :TodoistToken' }
+    else
+      load(block.filter, function() M.renderBlocks(buf) end)
+    end
+    -- Hung under the last line of the query, not the closing fence: Neovim
+    -- conceals the fence lines of markdown code blocks, and virtual lines
+    -- attached to a concealed line are hidden with it.
+    local row = block.last > block.first + 1 and block.last - 1 or block.last
+    vim.api.nvim_buf_set_extmark(buf, block_ns, row, 0, {
+      virt_lines = blockLines(block, cache[block.filter or ''], width),
+    })
+  end
+end
+
+--- Reload every block in every loaded markdown buffer.
+function M.refreshBlocks()
+  cache = {}
+  project_cache.time = 0
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_loaded(buf) and vim.bo[buf].filetype == 'markdown' then
+      M.renderBlocks(buf)
+    end
+  end
+end
+
+vim.api.nvim_create_autocmd({ 'BufWinEnter', 'InsertLeave', 'TextChanged' }, {
+  group = vim.api.nvim_create_augroup('PureTodoistBlocks', { clear = true }),
+  pattern = { '*.md', '*.markdown' },
+  callback = function(args) M.renderBlocks(args.buf) end,
+})
+
+vim.api.nvim_create_user_command('TodoistRefresh', M.refreshBlocks, {
+  desc = 'Reload the ```todoist blocks in open notes',
+})
 
 -- -----------------------------------------------------------------------------
 --  Token setup
@@ -317,6 +518,7 @@ function M.setToken()
         vim.log.levels.WARN)
     else
       vim.notify('Todoist token works')
+      M.refreshBlocks() -- open notes were showing "no token"
     end
   end)
 end
@@ -353,7 +555,14 @@ vim.api.nvim_create_user_command('TodoistToken', M.setToken, {
   desc = 'Set the Todoist API token (hidden input)',
 })
 
-vim.api.nvim_create_user_command('Todoist', function(opts) M.open(opts.args) end, {
+vim.api.nvim_create_user_command('Todoist', function(opts)
+  -- Without a filter, inside a ```todoist block, open that block's filter.
+  if opts.args == '' then
+    local block = blockAt(vim.api.nvim_get_current_buf(), vim.fn.line('.') - 1)
+    if block then return M.open(block.filter) end
+  end
+  M.open(opts.args)
+end, {
   nargs = '*',
   desc = 'Todoist tasks as a checkbox table (optional filter, e.g. :Todoist today)',
 })
