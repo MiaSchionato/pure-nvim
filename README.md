@@ -42,7 +42,6 @@ A server is enabled only when its executable is found on `PATH` (`lua/configs/ls
 | `gopls` | Go | `go install golang.org/x/tools/gopls@latest` |
 | `clangd` | C / C++ | LLVM / distro package |
 | `csharp-ls` | C# | `dotnet tool install --global csharp-ls` (needs the .NET SDK) |
-| `marksman` | Markdown | [release binaries](https://github.com/artempyanykh/marksman/releases) |
 | `markdown-oxide` | Markdown (notes) | [release binaries](https://github.com/Feel-ix-343/markdown-oxide/releases) |
 | `simple-completion-language-server` | buffer words and snippets | `cargo install --git https://github.com/estin/simple-completion-language-server` |
 
