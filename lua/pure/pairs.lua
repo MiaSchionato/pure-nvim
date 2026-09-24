@@ -10,8 +10,26 @@ local pair = {
   ['`'] = '`',
 }
 
+local function nextChar()
+  local col = vim.api.nvim_win_get_cursor(0)[2]
+  return vim.api.nvim_get_current_line():sub(col + 1, col + 1)
+end
+
+-- Typing a closer that is already there steps over it instead of inserting a
+-- second one. Without this, "[ ]" typed by hand came out as "[ ]]": '[' had
+-- already added the ']', and the ']' typed after the space added another.
 for open, close in pairs(pair) do
-  vim.keymap.set('i', open, open .. close .. "<Left>", { noremap = true })
+  vim.keymap.set('i', open, function()
+    -- Quotes open and close with the same key.
+    if open == close and nextChar() == close then return '<Right>' end
+    return open .. close .. '<Left>'
+  end, { expr = true, noremap = true })
+
+  if open ~= close then
+    vim.keymap.set('i', close, function()
+      return nextChar() == close and '<Right>' or close
+    end, { expr = true, noremap = true })
+  end
 end
 
 local function delete_pair()
