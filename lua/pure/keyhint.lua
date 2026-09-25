@@ -265,6 +265,10 @@ query = function(mode, trigger)
   local typed = {}
   local shown, timer = false, nil
   local result
+  -- showcmd would print the trigger's Lua callback ("~@<fd>") in the
+  -- statusline for as long as this waits; the window title shows the keys.
+  local showcmd = vim.o.showcmd
+  vim.o.showcmd = false
 
   while true do
     local keys = start .. table.concat(typed)
@@ -310,6 +314,7 @@ query = function(mode, trigger)
   end
 
   close()
+  vim.o.showcmd = showcmd
   if result then run(buf, mode, result, count, register) end
 end
 
