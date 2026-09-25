@@ -38,7 +38,12 @@ folder) and expands it:
 | `{{time}}` | now, `HH:mm` |
 | `{{date:FORMAT}}`, `{{time:FORMAT}}` | a Moment.js format, as in Obsidian: `{{date:dddd, D [de] MMMM}}`; text in `[brackets]` is copied as is |
 | `{{week}}` | ISO week, `2026-W39` |
-| `{{month}}` | `2026-09` |
+| `{{month}}` | `2026-09` (in a weekly note, the month of its Thursday) |
+| `{{start}}` / `{{end}}` | first / last day of the note's period: Monday / Sunday of a week, 1st / last of a month; `{{start:FORMAT}}` takes a format |
+| `{{date+1}}`, `{{end+1:MMM D}}` … | a date shifted by that many days; works on `date`, `time`, `start` and `end` |
+| `{{days}}` | a list of links to the daily note of each day of the period: `- [[…/2026-09-21\|Mon 21/09]]` |
+| `{{worklogs}}` | each day's `Work log` section embedded, as the lines of a callout (`> …`) |
+| `{{weeks}}` | a list of links to the weekly note of each ISO week that touches the period |
 | `{{prev}}` / `{{next}}` | in a periodic note: the name of the previous / next day, week or month (for navigation links) |
 | `{{quote}}` | a line of `9-Archive/Periodic/Quotes.md` (lines starting with `- `), a different one each day |
 | `{{idea}}` | a `[[link]]` to one of your permanent notes, a different one each day |
@@ -85,10 +90,23 @@ Picking one of these opens the note for the current period:
   empty one made by Obsidian's daily button; a note with any text, saved or
   not, is left as it is;
 - dates in it (`{{date}}`, `{{prev}}` …) are those of the note's period, so an
-  old daily shows its own neighbours.
+  old daily shows its own neighbours. A week is dated by its **Thursday** – in
+  ISO 8601 that decides the week's year and month, so a week from 28 September
+  to 4 October belongs to October – and a month by its first day.
 
 Day steps are counted from noon, so a daylight saving change can never turn
 "yesterday" into two days ago.
+
+## Trash
+
+With `vim.g.pure_trash_cleanup` set (`true` in `configs.lua`), everything in
+the Delete template's folder (`0-Inbox/Trash`) is deleted each time Neovim
+starts with a UI, as Obsidian's TrashCleaner script did. A number instead of
+`true` keeps what was modified in the last that many days; `false` turns it
+off. Files are deleted for good, not moved to the recycle bin.
+
+It never touches a note open in that Neovim, never runs in `--headless`
+(scripts, tests), and only acts on a folder strictly inside the vault.
 
 ## obsidian.nvim
 
