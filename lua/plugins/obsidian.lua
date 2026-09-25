@@ -80,6 +80,15 @@ local function setup(vault)
           expr = true,
           desc = "Obsidian Smart Action, falling back to LSP hover",
         })
+
+        -- <CR> inside a ```todoist block opens its tasks (pure/todoist.lua);
+        -- anywhere else it is obsidian's own smart action, as before.
+        -- Not an expr mapping: opening a window is not allowed from one.
+        vim.keymap.set("n", "<CR>", function()
+          require("pure.todoist").enter(function()
+            vim.api.nvim_feedkeys(vim.keycode(actions.smart_action()), "n", false)
+          end)
+        end, { buffer = true, desc = "Todoist block, else Obsidian Smart Action" })
       end,
     },
   }
