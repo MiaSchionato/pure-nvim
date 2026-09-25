@@ -16,7 +16,10 @@ Windows) to use it as the configuration.
 home-made modules (pickers, markdown, key hints, git, Todoist, notes), the
 language servers installed on the machine and the NeoSolarized (default, embedded with its Apache-2.0 license) and myghtfly themes work. Put
 `vim.g.pure_portable = false` near the top of the file to install and load
-everything. The pickers need `fzf`, `fd`, `rg` and `bat`.
+everything. The pickers need `fzf`, `fd`, `rg` and `bat`; on Debian and
+Ubuntu the packages install the last two as `fdfind` and `batcat`, which are
+found as well. Tested on Windows and on Ubuntu; on macOS the file explorer
+uses its BSD `ls`.
 
 Documentation: `<leader>fh` inside Neovim, or the `docs/` folder of the main
 repository.
