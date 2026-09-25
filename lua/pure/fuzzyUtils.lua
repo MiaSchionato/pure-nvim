@@ -55,6 +55,56 @@ local function lsIgnores()
     table.insert(parts, "--ignore=" .. vim.fn.shellescape(dir))
   end
   return table.concat(parts, " ")
+end--- The name a tool goes by on this system. Debian and Ubuntu, and so
+--- Raspberry Pi OS, ship fd as "fdfind" and bat as "batcat" because other
+--- packages had taken the short names; asking for "fd" there found nothing.
+--- @param name string
+--- @param alt string
+--- @return string
+local function tool(name, alt)
+  if vim.fn.executable(name) == 0 and vim.fn.executable(alt) == 1 then
+    return alt
+  end
+  return name
+end
+
+--- Whether `ls` is GNU's. --color and --ignore are GNU only: macOS ships BSD
+--- ls, where the explorer's listing failed with "unrecognized option".
+--- Asked once. On Windows the pickers run through Git bash, whose ls is GNU's.
+local gnu_ls
+local function isGnuLs()
+  if gnu_ls == nil then
+    if vim.fn.has("win32") == 1 then
+      gnu_ls = true
+    else
+      local ok, res = pcall(function() return vim.system({ "ls", "--version" }):wait() end)
+      gnu_ls = ok and res.code == 0
+    end
+  end
+  return gnu_ls
+end
+
+--- The explorer's listing: hidden files included, "/" after directories, the
+--- ignored directories left out.
+--- @return string
+local function lsList()
+  if isGnuLs() then
+    return "ls -ap --color=always " .. lsIgnores()
+  end
+  -- BSD ls has no --ignore, so grep drops them instead. Without colours: grep
+  -- can only match a whole name when no escape sequence surrounds it.
+  local parts = {}
+  for _, dir in ipairs(ignoredDirs()) do
+    table.insert(parts, "-e " .. vim.fn.shellescape(dir .. "/"))
+  end
+  if #parts == 0 then return "ls -ap" end
+  return "ls -ap | grep -vxF " .. table.concat(parts, " ")
+end
+
+--- `ls` for the explorer's preview of a directory, in colour on both kinds.
+--- @return string
+local function lsPreview()
+  return isGnuLs() and "ls -apF --color=always" or "CLICOLOR_FORCE=1 ls -apFG"
 end
 
 -- fzf starts its child processes (--preview above all) through its own shell,
@@ -205,7 +255,7 @@ end
 function M.fuzzySearch(path)
   if path == nil then path = vim.uv.os_homedir():gsub("\\", "/") .. "/" end
   path = asDir(path)
-  local fd = "fd --hidden " .. fdExcludes() .. " --type file . --strip-cwd-prefix --base-directory  "
+  local fd = tool("fd", "fdfind") .. " --hidden " .. fdExcludes() .. " --type file . --strip-cwd-prefix --base-directory  "
   local fzf = "fzf --keep-right --tiebreak=end"
 
   M.fuzzyLogic({
@@ -235,7 +285,7 @@ function M.fuzzyGrep(path)
     -- An empty query would match every line; list nothing instead. POSIX
     -- test: fzf runs reload through sh (Git bash on the windows branch).
     .. string.format(" --bind %s", vim.fn.shellescape("change:reload:[ -z {q} ] || " .. rg .. " -- {q}"))
-    .. " --preview 'bat --style=numbers --color=always --highlight-line {2} {1}' --preview-window 'up,60\\%,border-bottom,+{2}+3/3'"
+    .. " --preview '" .. tool("bat", "batcat") .. " --style=numbers --color=always --highlight-line {2} {1}' --preview-window 'up,60\\%,border-bottom,+{2}+3/3'"
 
   M.fuzzyLogic({
     title = "Fuzzy Grep",
@@ -333,7 +383,7 @@ end
 
 function M.fuzzyGitGrep()
   local git_grep = "git grep --line-number --column"
-  local fzf = "fzf --ansi --delimiter : --preview 'bat --style=numbers --color=always --highlight-line {2} {1}' --preview-window 'up,60\\%,border-bottom,+{2}+3/3'"
+  local fzf = "fzf --ansi --delimiter : --preview '" .. tool("bat", "batcat") .. " --style=numbers --color=always --highlight-line {2} {1}' --preview-window 'up,60\\%,border-bottom,+{2}+3/3'"
   -- Already cd's below, so git grep prints relative names and {1}/{2} line up.
   local path = asDir(vim.fn.expand("%:p:h"))
 
@@ -375,7 +425,7 @@ function M.fuzzyJump()
   pickList(jumps, {
     title = "fuzzy jumps",
     ratio = 0.8,
-    fzf = "--ansi --delimiter : --preview 'bat --style=numbers --color=always --highlight-line {-2} {1..-3}' --preview-window 'up,60\\%,border-bottom,+{-2}+3/3'",
+    fzf = "--ansi --delimiter : --preview '" .. tool("bat", "batcat") .. " --style=numbers --color=always --highlight-line {-2} {1..-3}' --preview-window 'up,60\\%,border-bottom,+{-2}+3/3'",
   }, function(selection)
     -- Windows paths start with a drive letter, so a '^([^:]+):' pattern would
     -- stop at the 'C:' colon; the lazy '.-' matches up to ':line:col'.
@@ -510,7 +560,7 @@ end
 
 function M.NewFile(path)
   path = asDir(path)
-  local fd = "fd --hidden " .. fdExcludes() .. " --type directory . --strip-cwd-prefix --base-directory  "
+  local fd = tool("fd", "fdfind") .. " --hidden " .. fdExcludes() .. " --type directory . --strip-cwd-prefix --base-directory  "
   local fzf = "fzf --keep-right --tiebreak=end"
   M.fuzzyLogic({
     title = "Select New File Path",
@@ -542,14 +592,15 @@ function M.fuzzyExplorer(path)
   if path == nil then path = vim.fn.getcwd() end
 
   -- Use ls -ap to show hidden files and classify with indicators (/ for dirs)
-  local list_cmd = "ls -ap --color=always " .. lsIgnores()
+  local list_cmd = lsList()
 
   -- Preview command for fzf. It's executed in `path` directory.
   -- Added --line-range to bat to avoid lagging on large files.
   -- POSIX 'if/then/fi'. This was fish syntax ("if ...; ...; else ...; end"),
   -- which the bash 'shell' set in init.lua rejects, so the preview pane only
   -- ever rendered a syntax error.
-  local preview_cmd = "if [ -d {} ]; then ls -apF --color=always {}; else bat --color=always --style=numbers --line-range :500 {}; fi"
+  local preview_cmd = "if [ -d {} ]; then " .. lsPreview() .. " {}; else " .. tool("bat", "batcat")
+    .. " --color=always --style=numbers --line-range :500 {}; fi"
   local fzf_cmd = string.format("fzf --ansi --preview='%s' --print-query", preview_cmd)
 
   M.fuzzyLogic({
@@ -584,6 +635,10 @@ function M.fuzzyExplorer(path)
             end
           end  })
 end
+
+-- Exposed for tests.
+M._lsList, M._lsPreview, M._tool = lsList, lsPreview, tool
+M._setGnuLs = function(v) gnu_ls = v end
 
 return M
 
