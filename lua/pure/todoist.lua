@@ -1078,9 +1078,8 @@ local function parseBlockBody(lines)
   return { name = conf.name, filter = conf.filter }
 end
 
---- Every ```todoist block in `buf`: { first, last (0-based fence rows), name, filter }.
-local function findBlocks(buf)
-  local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+--- Every ```todoist block in `lines`: { first, last (0-based fence rows), name, filter }.
+local function blocksIn(lines)
   local blocks, i = {}, 1
   while i <= #lines do
     if lines[i]:match('^%s*```%s*todoist%s*$') then
@@ -1095,6 +1094,10 @@ local function findBlocks(buf)
     end
   end
   return blocks
+end
+
+local function findBlocks(buf)
+  return blocksIn(vim.api.nvim_buf_get_lines(buf, 0, -1, false))
 end
 
 local function blockAt(buf, row)
@@ -1184,6 +1187,8 @@ function M.renderBlocks(buf)
   buf = (buf and buf ~= 0) and buf or vim.api.nvim_get_current_buf()
   if not vim.api.nvim_buf_is_valid(buf) then return end
   vim.api.nvim_buf_clear_namespace(buf, block_ns, 0, -1)
+  -- Written into the note as text instead (see "Sync into notes").
+  if vim.g.pure_todoist_sync then return end
 
   local blocks = findBlocks(buf)
   if #blocks == 0 then return end
@@ -1216,11 +1221,22 @@ end
 
 --- { first, last } rows of the blocks pure/mdview.lua may hide: those with a
 --- line before or after them to hang the tasks on.
+local regionOf -- in "Sync into notes" below
+
+--- With syncing on, the region's two markers are hidden too, leaving only the
+--- tasks.
 function M.hiddenBlocks(buf)
   local ranges = {}
-  local count = vim.api.nvim_buf_line_count(buf)
-  for _, b in ipairs(findBlocks(buf)) do
-    if b.last + 1 < count or b.first > 0 then table.insert(ranges, { b.first, b.last }) end
+  local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+  local synced = vim.g.pure_todoist_sync and true or false
+  for _, b in ipairs(blocksIn(lines)) do
+    local region = synced and regionOf(lines, b)
+    if region then
+      table.insert(ranges, { b.first, region.first })
+      table.insert(ranges, { region.last, region.last })
+    elseif synced or b.last + 1 < #lines or b.first > 0 then
+      table.insert(ranges, { b.first, b.last })
+    end
   end
   return ranges
 end
@@ -1279,6 +1295,319 @@ vim.api.nvim_create_autocmd('FileType', {
 vim.api.nvim_create_user_command('TodoistRefresh', M.refreshBlocks, {
   desc = 'Reload the ```todoist blocks in open notes',
 })
+
+
+-- -----------------------------------------------------------------------------
+--  Sync into notes
+-- -----------------------------------------------------------------------------
+--  With vim.g.pure_todoist_sync on, the tasks of each ```todoist block are
+--  written into its note as a real task list, right under the block and
+--  between two markers (HTML comments, which Obsidian does not show):
+--
+--    ```todoist
+--    filter: "today | overdue"
+--    ```
+--    <!-- todoist -->
+--    - [ ] [Write the README](https://app.todoist.com/app/task/123) · 2026-09-25 · P1 · Work
+--      - [ ] [Sub step](https://app.todoist.com/app/task/124) · 2026-09-26 · Work
+--    <!-- /todoist -->
+--
+--  Only the lines between the markers are ever rewritten, and only when they
+--  would change; the rest of the note is never touched. Ticking a box there
+--  ([x], in Neovim or in Obsidian) completes the task in Todoist on the next
+--  sync. Any other edit between the markers is overwritten by the next sync.
+--
+--  When: at startup, every `interval` minutes, and when a note with a block
+--  is opened or saved. Which notes: those of the vault that hold a block
+--  (not the templates, the trash or hidden folders), and any other open note
+--  with one. A note named after a date (a daily, 2026-09-24) is only updated
+--  on that day, so past dailies keep the list they had. A note open with
+--  unsaved changes is left alone until it is saved.
+--
+--    vim.g.pure_todoist_sync = { interval = 10 }  on, every 10 minutes
+--    vim.g.pure_todoist_sync = true                on, every 10 minutes
+--    vim.g.pure_todoist_sync = false (or unset)    off: the tasks are drawn
+--                                                  as virtual lines instead
+
+local sync_begin, sync_end = '<!-- todoist -->', '<!-- /todoist -->'
+local task_url = 'https://app.todoist.com/app/task/'
+
+--- The sync settings, or nil when syncing is off.
+local function syncConfig()
+  local c = vim.g.pure_todoist_sync
+  if c == true then return { interval = 10 } end
+  if type(c) == 'table' then return { interval = tonumber(c.interval) or 10 } end
+end
+
+--- The region under `block`: 0-based rows of its two markers. `false` when
+--- the begin marker is there without an end marker (left alone, to never
+--- eat the rest of the note), nil when there is none yet.
+function regionOf(lines, block)
+  local row = block.last + 1
+  if vim.trim(lines[row + 1] or '') ~= sync_begin then return nil end
+  for r = row + 1, #lines - 1 do
+    local text = vim.trim(lines[r + 1])
+    if text == sync_end then return { first = row, last = r } end
+    if text == sync_begin or text:match('^```') then break end
+  end
+  return false
+end
+
+--- One task as a line of the region.
+local function syncLine(t, depth, projects)
+  local text = oneLine(t.content):gsub('([%[%]])', '\\%1')
+  local parts = { ('%s- [ ] [%s](%s%s)'):format(string.rep('  ', depth), text, task_url, t.id) }
+  -- The date itself: a phrase like "today" stops being true the next day.
+  -- Recurring tasks keep theirs ("every monday").
+  local due = t.due and (t.due.is_recurring and t.due.string or t.due.date)
+  if due then table.insert(parts, due) end
+  local p = priorityLabel(t.priority)
+  if p ~= '' then table.insert(parts, p) end
+  if projects[t.project_id] then table.insert(parts, projects[t.project_id]) end
+  return table.concat(parts, ' · ')
+end
+
+--- The region's lines, markers included: subtasks indented under their
+--- parent when the parent is in the list too.
+local function regionLines(tasks, projects)
+  local list = vim.deepcopy(tasks or {})
+  sortTasks(list)
+  local present, children = {}, {}
+  for _, t in ipairs(list) do present[t.id] = true end
+  for _, t in ipairs(list) do
+    if t.parent_id and present[t.parent_id] then
+      children[t.parent_id] = children[t.parent_id] or {}
+      table.insert(children[t.parent_id], t)
+    end
+  end
+
+  local out = { sync_begin }
+  local function add(t, depth)
+    table.insert(out, syncLine(t, depth, projects))
+    for _, c in ipairs(children[t.id] or {}) do add(c, depth + 1) end
+  end
+  for _, t in ipairs(list) do
+    if not (t.parent_id and present[t.parent_id]) then add(t, 0) end
+  end
+  if #out == 1 then table.insert(out, '*Nothing to do.*') end
+  table.insert(out, sync_end)
+  return out
+end
+
+--- Ids of the tasks ticked in `region`.
+local function tickedIds(lines, region, into)
+  for r = region.first + 1, region.last - 1 do
+    local id = (lines[r + 1] or ''):match('^%s*[-*] %[[xX]%] .-' .. vim.pesc(task_url) .. '([%w_]+)%)')
+    if id then into[id] = true end
+  end
+end
+
+--- A note named after a date other than today (a past or future daily).
+local function frozen(path)
+  local y, m, d = vim.fs.basename(path):match('(%d%d%d%d)%-(%d%d)%-(%d%d)')
+  return y ~= nil and (y .. '-' .. m .. '-' .. d) ~= os.date('%Y-%m-%d')
+end
+
+local function bufferOf(path)
+  path = vim.fs.normalize(path)
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_loaded(buf) and vim.fs.normalize(vim.api.nvim_buf_get_name(buf)) == path then
+      return buf
+    end
+  end
+end
+
+--- The note's lines and its buffer, if loaded. nil while it has unsaved
+--- changes: those are never overwritten.
+local function noteLines(path)
+  local buf = bufferOf(path)
+  if buf then
+    if vim.bo[buf].modified then return nil end
+    return vim.api.nvim_buf_get_lines(buf, 0, -1, false), buf
+  end
+  -- 'b' keeps the file byte for byte, final newline or not.
+  local ok, lines = pcall(vim.fn.readfile, path, 'b')
+  return ok and lines or nil
+end
+
+--- Rewrite the regions of one note that changed.
+local function syncNote(path, fetched, projects)
+  local lines, buf = noteLines(path)
+  if not lines then return end
+  local edits = {}
+  local blocks = blocksIn(lines)
+  -- Bottom up, so the rows of the blocks above stay valid while editing.
+  for i = #blocks, 1, -1 do
+    local b = blocks[i]
+    local region = regionOf(lines, b)
+    local new = fetched[b.filter or '']
+    if region ~= false and new then
+      local s, e = b.last + 1, b.last + 1
+      if region then s, e = region.first, region.last + 1 end
+      new = regionLines(new, projects)
+      if not vim.deep_equal(vim.list_slice(lines, s + 1, e), new) then
+        table.insert(edits, { s, e, new })
+      end
+    end
+  end
+  if #edits == 0 then return end
+
+  if buf then
+    for _, ed in ipairs(edits) do vim.api.nvim_buf_set_lines(buf, ed[1], ed[2], false, ed[3]) end
+    -- noautocmd: this write must not trigger another sync.
+    vim.api.nvim_buf_call(buf, function() vim.cmd('silent noautocmd update') end)
+  else
+    for _, ed in ipairs(edits) do
+      for _ = ed[1] + 1, ed[2] do table.remove(lines, ed[1] + 1) end
+      for k, l in ipairs(ed[3]) do table.insert(lines, ed[1] + k, l) end
+    end
+    vim.fn.writefile(lines, path, 'b')
+  end
+end
+
+--- The notes to sync: `paths`, or every note of the vault with a block plus
+--- the open ones that have one. `cb(paths)`.
+local function notesToSync(paths, cb)
+  if paths then return cb(paths) end
+  local found, seen = {}, {}
+  local function add(p)
+    p = vim.fs.normalize(p)
+    if not seen[p] then seen[p] = true table.insert(found, p) end
+  end
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    local name = vim.api.nvim_buf_get_name(buf)
+    if vim.api.nvim_buf_is_loaded(buf) and name:match('%.md$') and #findBlocks(buf) > 0 then add(name) end
+  end
+
+  local ok_z, zet = pcall(require, 'pure.zettelkasten')
+  local vault = ok_z and zet.vaultPath() or nil
+  if not vault then return cb(found) end
+  local templates = vim.g.pure_templates or 'Templates'
+  local trash = (zet._destinations or {}).Delete or '0-Inbox/Trash'
+  -- ripgrep skips hidden folders (.obsidian, .trash) on its own.
+  local ok = pcall(vim.system, {
+    'rg', '-l', '--glob', '*.md', '--glob', '!' .. templates .. '/**', '--glob', '!' .. trash .. '/**',
+    '-e', [[^\s*```\s*todoist\s*$]], vault,
+  }, { text = true }, vim.schedule_wrap(function(res)
+    for p in (res.stdout or ''):gmatch('[^\r\n]+') do add(p) end
+    cb(found)
+  end))
+  if not ok then cb(found) end
+end
+
+local syncing = false
+-- Asked for while a sync was running (a :w during the timer's sync): run
+-- once more when it ends. `true` means every note.
+local pending = nil
+
+local function queue(paths)
+  if pending == true or not paths then pending = true return end
+  pending = pending or {}
+  vim.list_extend(pending, paths)
+end
+
+--- Sync the notes at `paths` (all of them when nil): complete the tasks
+--- ticked there, fetch every block's filter, rewrite the regions.
+function M.sync(paths)
+  if not syncConfig() or not token() then return end
+  if syncing then return queue(paths) end
+  syncing = true
+
+  -- Always releases the lock, even after an error, and runs what was queued.
+  local function finish(err)
+    syncing = false
+    if err then vim.notify('Todoist sync: ' .. err, vim.log.levels.WARN) end
+    if pending then
+      local next_paths = pending ~= true and pending or nil
+      pending = nil
+      M.sync(next_paths)
+    end
+  end
+
+  local function run(files)
+    local notes, filters, ticked = {}, {}, {}
+    for _, path in ipairs(files) do
+      local lines = not frozen(path) and noteLines(path)
+      if lines then
+        local blocks = blocksIn(lines)
+        if #blocks > 0 then table.insert(notes, path) end
+        for _, b in ipairs(blocks) do
+          filters[b.filter or ''] = b.filter or false
+          local region = regionOf(lines, b)
+          if region then tickedIds(lines, region, ticked) end
+        end
+      end
+    end
+    if #notes == 0 then return finish() end
+
+    local ids = vim.tbl_keys(ticked)
+    local keys = vim.tbl_keys(filters)
+    local fetched, projects, errors = {}, {}, {}
+
+    local function write()
+      for _, path in ipairs(notes) do
+        local ok, err = pcall(syncNote, path, fetched, projects)
+        if not ok then table.insert(errors, path .. ': ' .. tostring(err)) end
+      end
+      finish(#errors > 0 and table.concat(errors, '\n') or nil)
+    end
+    local function fetchNext(i)
+      if i > #keys then
+        return getAll('/projects', function(_, list)
+          for _, p in ipairs(list or {}) do projects[p.id] = p.name end
+          write()
+        end)
+      end
+      local filter = filters[keys[i]] or nil
+      local path = filter and ('/tasks/filter?query=' .. urlencode(filter)) or '/tasks'
+      getAll(path, function(err, tasks)
+        if err then table.insert(errors, err) else fetched[keys[i]] = tasks end
+        fetchNext(i + 1)
+      end)
+    end
+    local function closeNext(i)
+      if i > #ids then return fetchNext(1) end
+      request('POST', '/tasks/' .. ids[i] .. '/close', function(err)
+        -- Already done or deleted in Todoist: nothing to report.
+        if err and not err:match('HTTP 404') then table.insert(errors, err) end
+        closeNext(i + 1)
+      end)
+    end
+    closeNext(1)
+  end
+
+  notesToSync(paths, function(files)
+    local ok, err = pcall(run, files)
+    if not ok then finish(tostring(err)) end
+  end)
+end
+
+do
+  local group = vim.api.nvim_create_augroup('PureTodoistSync', { clear = true })
+  local timer
+
+  local function start()
+    local config = syncConfig()
+    if not config or timer then return end
+    timer = vim.uv.new_timer()
+    timer:start(3000, config.interval * 60 * 1000, vim.schedule_wrap(function() M.sync() end))
+  end
+  vim.api.nvim_create_autocmd('VimEnter', { group = group, callback = start })
+  if vim.v.vim_did_enter == 1 then start() end
+
+  vim.api.nvim_create_autocmd({ 'BufWinEnter', 'BufWritePost' }, {
+    group = group,
+    pattern = { '*.md', '*.markdown' },
+    callback = function(args)
+      if syncConfig() and #findBlocks(args.buf) > 0 then
+        M.sync({ vim.api.nvim_buf_get_name(args.buf) })
+      end
+    end,
+  })
+  vim.api.nvim_create_user_command('TodoistSync', function() M.sync() end, {
+    desc = 'Write the tasks of every ```todoist block into its note now',
+  })
+end
 
 -- -----------------------------------------------------------------------------
 --  Token setup
