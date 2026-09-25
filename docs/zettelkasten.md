@@ -97,6 +97,23 @@ Picking one of these opens the note for the current period:
 Day steps are counted from noon, so a daylight saving change can never turn
 "yesterday" into two days ago.
 
+## Syncing the vault: `:VaultSync`
+
+Saves the vault's notes open in Neovim, commits everything that changed
+(`Sync from <computer>, <date>`), pulls, and pushes only if the pull worked.
+The order is fixed on purpose: the remote is encrypted with git-remote-gcrypt,
+whose pushes are always forced, so a push from a machine that had not pulled
+would replace what the other machine sent instead of being refused.
+
+- The pull **merges**, whatever `pull.rebase` says, so a conflict leaves one
+  state to fix. It lists the files: fix the conflict markers, then
+  `:VaultSync` again, which commits the fix and pushes. Nothing is pushed
+  while markers are left, and a rebase started by hand is left for you to
+  finish.
+- git runs in the background; gpg asks for its passphrase in its own window
+  (on macOS that needs `pinentry-mac`).
+- The branch has to track a remote once: `git push -u <remote> main`.
+
 ## Trash
 
 With `vim.g.pure_trash_cleanup` set (`true` in `configs.lua`), everything in
