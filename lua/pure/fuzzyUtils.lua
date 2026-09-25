@@ -232,7 +232,9 @@ function M.fuzzyGrep(path)
   -- By shell, not by OS: the windows branch runs these through Git bash.
   local empty = vim.o.shell:lower():match("cmd%.exe$") and "type nul" or "true"
   local fzf = "fzf --ansi --disabled --delimiter :"
-    .. string.format(" --bind %s", vim.fn.shellescape("change:reload:" .. rg .. " -- {q}"))
+    -- An empty query would match every line; list nothing instead. POSIX
+    -- test: fzf runs reload through sh (Git bash on the windows branch).
+    .. string.format(" --bind %s", vim.fn.shellescape("change:reload:[ -z {q} ] || " .. rg .. " -- {q}"))
     .. " --preview 'bat --style=numbers --color=always --highlight-line {2} {1}' --preview-window 'up,60\\%,border-bottom,+{2}+3/3'"
 
   M.fuzzyLogic({
