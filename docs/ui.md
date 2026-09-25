@@ -4,10 +4,12 @@
 
 Shown when Neovim starts without a file. The planet (`ascii.lua`,
 `M.saturn`) is centred and scaled up by the largest whole factor that fits
-the window, and redrawn when the window changes size.
+the window, and redrawn when the window changes size. Blank lines fill the
+window to the bottom, so no `~` shows under the drawing.
 
 | Key | What |
 |---|---|
+| `d` | today's daily note, created from the template if it is not there yet ([zettelkasten](zettelkasten.md)) |
 | `n` | new empty buffer |
 | `q` | quit |
 | `u` | update plugins (`vim.pack.update()`) |
