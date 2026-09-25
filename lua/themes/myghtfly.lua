@@ -9,12 +9,6 @@ local M = {}
 -- entrypoint. Setting it here (at require time) made Neovim believe the theme
 -- was already active, so its highlights were never actually applied.
 
--- Background and foreground
-if vim.g.neovide then
-  local bg = "NONE"
-else
-end
-
 local none = "NONE"
 local black = "#011627"
 local white = "#c3ccdc"
@@ -162,7 +156,7 @@ local groups = {
    DiagnosticSignWarn= { bg = none, fg = tan },
 
   -- Indent,
-   MiniIndentscopeSymbol= { fg = blue }, -- tabline bg
+   PureIndentscopeSymbol= { fg = blue }, -- tabline bg
 
   -- Pick,
    MiniPickNormal= { bg = none,},
@@ -268,22 +262,22 @@ local groups = {
 -- Normal/NormalNC while both were still nil (they were only assigned in the
 -- if/else below it), so the apply-loop iterated over an empty table and Normal
 -- kept Neovim's default background -- the theme never took the background over.
--- MiniNotifyNormal was declared `local` inside each branch and discarded, so it
--- never applied either.
+-- The notification colour (then MiniNotifyNormal) was declared `local` inside
+-- each branch and discarded, so it never applied either.
 local neovideSupport
 if vim.g.neovide then
   neovideSupport = {
     Normal           = { bg = "#011627", fg = white },
     -- NormalNC      = { bg = "#011627" },
     NormalFloat      = { bg = none, fg = blue },
-    MiniNotifyNormal = { bg = none, fg = malibu },
+    PureNotifyNormal = { bg = none, fg = malibu },
   }
 else
   neovideSupport = {
     Normal           = { bg = none, fg = white },
     NormalNC         = { bg = none },
     NormalFloat      = { bg = none, fg = blue },
-    MiniNotifyNormal = { bg = none, fg = malibu },
+    PureNotifyNormal = { bg = none, fg = malibu },
   }
 end
 

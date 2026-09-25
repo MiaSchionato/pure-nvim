@@ -37,15 +37,25 @@ vim.api.nvim_create_autocmd("VimEnter", {
 })
 
 
--- Highlight todo tasks
-vim.api.nvim_create_autocmd({"BufEnter", "BufWinEnter"},{
-  pattern = '*',
-  callback = function ()
-    pcall(vim.fn.matchdelete, 1234)
-    vim.fn.matchadd("Todo", [[TODO:.*]],10,1234)
-    vim.api.nvim_set_hl(0, "Todo", {bg = 'grey', fg = 'NvimLightGrey2'})
-  end
-
+-- Highlight "TODO:" lines.
+-- The colour is set once and again after a colorscheme change (it was reset
+-- on every BufEnter). The match is added once per window, and only in
+-- windows showing a real file -- not terminals, pickers or the dashboard.
+local function todoColour()
+  vim.api.nvim_set_hl(0, "PureTodo", { bg = 'grey', fg = 'NvimLightGrey2' })
+end
+todoColour()
+vim.api.nvim_create_autocmd("ColorScheme", { callback = todoColour })
+vim.api.nvim_create_autocmd({ "BufWinEnter", "WinEnter" }, {
+  callback = function()
+    local has = vim.w.pure_todo_match
+    if vim.bo.buftype == '' then
+      if not has then vim.w.pure_todo_match = vim.fn.matchadd("PureTodo", [[TODO:.*]], 10) end
+    elseif has then
+      pcall(vim.fn.matchdelete, has)
+      vim.w.pure_todo_match = nil
+    end
+  end,
 })
 
 local netrwGroup = vim.api.nvim_create_augroup("PureNetrw", {clear = true})
@@ -89,54 +99,18 @@ vim.api.nvim_create_autocmd("VimLeave", {
     -- os.remove() takes a literal filename and never expands a glob, so these
     -- calls could only ever try to delete files literally named "*" and did
     -- nothing. Remove the scratch files this config actually creates.
+    -- pick_* are pickList's lists (removed after each pick; this catches any
+    -- left by a picker still open at exit).
     local cache = vim.fn.stdpath('cache')
-    local scratch = {
-      'opts_run', 'Jump_list', 'buffer_list', 'oldfiles_list',
-      'colorscheme_list', 'ui_select', 'yazi_explorer',
-    }
-    for _, name in ipairs(scratch) do
-      os.remove(cache .. '/' .. name)
+    os.remove(cache .. '/opts_run')
+    for _, file in ipairs(vim.fn.glob(cache .. '/pick_*', true, true)) do
+      os.remove(file)
     end
   end,
 })
 
--- PopUp Menu Completion
-vim.api.nvim_create_autocmd("InsertCharPre", {
-  callback = function()
-    if vim.fn.pumvisible() == 0 and vim.v.char:match("[%w_]") then
+-- Completion as you type is Neovim's own 'autocomplete' (configs.lua). It
+-- replaces an InsertCharPre handler that fed <C-x><C-o> / <C-x><C-n> on every
+-- typed letter.
 
-      vim.schedule(function()
-
-        if next(vim.lsp.get_clients({bufnr = 0})) and vim.bo.omnifunc ~= "" then
-          vim.fn.feedkeys(vim.api.nvim_replace_termcodes("<C-x><C-o>", true, false, true), "n")
-        else
-          vim.fn.feedkeys(vim.api.nvim_replace_termcodes("<C-x><C-n>", true, false, true), "n")
-        end
-      end)
-    end
-  end,
-})
-
-vim.api.nvim_create_autocmd("CompleteDone", {
-  callback = function()
-    local completed_item = vim.v.completed_item
-    if completed_item and completed_item.user_data and completed_item.user_data.nvim and completed_item.user_data.nvim.lsp then
-    end
-  end
-})
-
-vim.api.nvim_create_autocmd("User", {
-  pattern = "ObsidianNoteEnter",
-  callback = function(ev)
-    -- remove the default mappings
-    -- vim.keymap.del("n", "<CR>", { buffer = true })
-    -- vim.keymap.del("n", "]o", { buffer = true })
-    -- vim.keymap.del("n", "[o", { buffer = true })
-
-    -- add your own
-    -- vim.keymap.set("n", "<S-k>", require("obsidian.api").smart_action, { buffer = true })
-    -- vim.keymap.del("n", "]l", { buffer = true })
-    -- vim.keymap.del("n", "[l", { buffer = true })
-  end,
-})
 

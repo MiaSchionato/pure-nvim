@@ -8,8 +8,7 @@ local lang_settings_group = vim.api.nvim_create_augroup('LanguageSettings', { cl
 local servers = {
   'lua_ls',
   'gopls',
-  'markdown_oxide',
-  'marksman',
+  'markdown_oxide', -- Obsidian-aware; marksman was a second markdown server
   'clangd',
   -- 'copilot',  -- provided by the copilot.vim plugin (plugins/copilot.lua),
   --                which runs its own language server. Enabling it here too

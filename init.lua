@@ -4,6 +4,9 @@
 -- Loads every .lua file under 'lua/' as a module.
 
 require('pure.fuzzyUtils').setup()
+-- Before the loader, so vim.notify calls made while the modules below load
+-- already reach the notification window (the loader order is alphabetical).
+require('pure.notify')
 
 -- stdpath() may return either separator depending on how XDG_CONFIG_HOME was
 -- set, so normalise to '/' once and build the glob without a trailing slash.

@@ -13,22 +13,27 @@ function _G.PureFoldText()
     return clean_line .. " ... 󰁂 " .. lines_count .. " linhas "
 end
 
+-- Automatic folds for the current window: treesitter when the buffer has a
+-- parser, indentation otherwise. Also what <leader>zr goes back to after
+-- folding by hand; the manual folds are dropped then.
+function M.auto()
+    local ok, parser = pcall(vim.treesitter.get_parser)
+
+    -- The fallback used to sit *inside* the success branch, where `ok` is
+    -- always true, so it was dead code and buffers without a parser kept
+    -- whatever foldmethod happened to be set.
+    if ok and parser then
+        vim.opt_local.foldmethod = "expr"
+        vim.opt_local.foldexpr = "v:lua.vim.treesitter.foldexpr()"
+    else
+        vim.opt_local.foldmethod = "indent"
+    end
+end
+
 vim.api.nvim_create_autocmd("FileType", {
     group = fold_group,
     pattern = "*",
-    callback = function()
-        local ok, parser = pcall(vim.treesitter.get_parser)
-
-        -- The fallback used to sit *inside* the success branch, where `ok` is
-        -- always true, so it was dead code and buffers without a parser kept
-        -- whatever foldmethod happened to be set.
-        if ok and parser then
-            vim.opt_local.foldmethod = "expr"
-            vim.opt_local.foldexpr = "v:lua.vim.treesitter.foldexpr()"
-        else
-            vim.opt_local.foldmethod = "indent"
-        end
-    end
+    callback = M.auto,
 })
 
 return M
