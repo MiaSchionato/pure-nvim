@@ -6,7 +6,8 @@
     root_markers = { '.git', 'init.lua' },
     settings = {
       ext_snippets = {
-        vim.fn.stdpath('config') .. '/snippets',
+        -- The one-file build (scripts/bundle.lua) unpacks them elsewhere.
+        (vim.g.pure_bundle_dir or vim.fn.stdpath('config')) .. '/snippets',
       },
     },
 

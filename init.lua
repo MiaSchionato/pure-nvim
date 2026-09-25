@@ -16,6 +16,8 @@ require('pure.notify')
 -- 'configs.autocmds'. Lua resolves that name too, so nothing errored -- it just
 -- cached each module under a bogus key, and any normal require() of the same
 -- file loaded and executed a SECOND copy.
+-- [bundle:loader] scripts/bundle.lua replaces everything up to the closing
+-- marker with a fixed module list, to build the one-file version.
 local lua_root = vim.fs.normalize(vim.fn.stdpath('config')) .. '/lua'
 local files_to_load = vim.fn.glob(lua_root .. '/**/*.lua', true, true)
 
@@ -34,6 +36,7 @@ for _, file_path in ipairs(files_to_load) do
     table.insert(failures, module_name .. ': ' .. tostring(err))
   end
 end
+-- [/bundle:loader]
 
 -- Reported after startup so the message survives the intro screen, instead of
 -- being swallowed the way the old notify() call was.
