@@ -19,6 +19,9 @@
 --    ---
 --    [^1]: note        footnote definitions are hidden
 --    text[^1]          footnote references show as a superscript: text¹
+--    [[path/note|Text]]  wikilinks show only their text: Text
+--    [[note#Section]]    ... or the note (and section): note > Section
+--    ![[image.png]]      embeds get an icon: image or file
 --
 --  Everything is drawn with 'overlay' virtual text of the same width as what
 --  it covers, so columns never shift and the cursor lands where the real
@@ -99,6 +102,7 @@ local function setHighlights()
   set('PureMdTable', { link = 'Comment' })
   set('PureMdCheckedText', { link = 'Comment' })
   set('PureMdFootnote', { link = 'Special' })
+  set('PureMdLink', { link = '@markup.link.label' })
 
   -- Checkbox icons: fixed colours, the same in every colorscheme, so a state
   -- always reads the same at a glance. Not `default` and re-applied on
@@ -430,12 +434,72 @@ local function hideLines(buf, top, bottom, mark)
   return ranges
 end
 
+local embed_icons = { image = '\u{F02E9}', file = '\u{F0219}' } -- md-image, md-file_document
+local image_ext = { png = true, jpg = true, jpeg = true, gif = true, svg = true, webp = true, bmp = true }
+
+--- What Obsidian shows for the inside of a [[wikilink]]: the alias after
+--- '|' if there is one, else the target, with '#' sections as ' > '.
+local function wikilinkText(inner)
+  local alias = inner:match('|(.*)$')
+  if alias and alias ~= '' then return alias end
+  local target = inner:gsub('|.*$', '')
+  local note, rest = target:match('^([^#]*)#(.*)$')
+  if not note then return target end
+  -- [[#Section]] links inside the same note show just the section.
+  local parts = vim.tbl_filter(function(p) return p ~= '' end, vim.split(rest, '#', { plain = true }))
+  local shown = table.concat(parts, ' > ')
+  return note ~= '' and (note .. ' > ' .. shown) or shown
+end
+
+--- [[target|alias]] drawn as its text. Obsidian's own syntax, which the
+--- markdown parser does not know (it already hides the URL of [text](url)).
+local function wikilinks(buf, top, bottom, mark)
+  local lines = vim.api.nvim_buf_get_lines(buf, top, bottom + 1, false)
+  for i, text in ipairs(lines) do
+    local row = top + i - 1
+    for start, inner, stop in text:gmatch('()%[%[([^%[%]]-)%]%]()') do
+      if inner ~= '' and not inCode(buf, row, start - 1) then
+        local shown = wikilinkText(inner)
+        -- ![[...]] embeds a note or a file: the '!' becomes an icon.
+        if text:sub(start - 1, start - 1) == '!' then
+          start = start - 1
+          local is_image = inner:gsub('|.*$', ''):lower():match('%.(%a+)$')
+          is_image = is_image and image_ext[is_image]
+          shown = (is_image and embed_icons.image or embed_icons.file) .. ' ' .. shown
+        end
+        mark(row, start - 1, {
+          end_col = stop - 1,
+          conceal = '',
+          virt_text = { { shown, 'PureMdLink' } },
+          virt_text_pos = 'inline',
+        })
+      end
+    end
+  end
+end
+
 --- The range of `ranges` holding row `row`, as "first:last", or ''.
 local function rangeAt(ranges, row)
   for _, r in ipairs(ranges or {}) do
     if row >= r[1] and row <= r[2] then return r[1] .. ':' .. r[2] end
   end
   return ''
+end
+
+-- -----------------------------------------------------------------------------
+--  Code fences
+-- -----------------------------------------------------------------------------
+--  Neovim's own markdown highlights hide the whole ```lang line
+--  (conceal_lines), which also hid the language label render.code draws
+--  there. Load the same query without that directive; the backticks and
+--  the language name are still concealed, the line itself stays.
+do
+  local parts = {}
+  for _, file in ipairs(vim.treesitter.query.get_files('markdown', 'highlights')) do
+    local text = table.concat(vim.fn.readfile(file), '\n')
+    table.insert(parts, (text:gsub('%(#set! conceal_lines ""%)', '')))
+  end
+  pcall(vim.treesitter.query.set, 'markdown', 'highlights', table.concat(parts, '\n'))
 end
 
 -- -----------------------------------------------------------------------------
@@ -485,6 +549,7 @@ function M.refresh()
   end)
 
   local ranges = hideLines(buf, top, bottom, mark)
+  wikilinks(buf, top, bottom, mark)
   vim.b[buf].pure_md_hidden = ranges
   vim.b[buf].pure_md_revealed = rangeAt(ranges, vim.fn.line('.') - 1)
 end

@@ -112,5 +112,21 @@ vim.api.nvim_create_autocmd("VimLeave", {
 -- Completion as you type is Neovim's own 'autocomplete' (configs.lua). It
 -- replaces an InsertCharPre handler that fed <C-x><C-o> / <C-x><C-n> on every
 -- typed letter.
+--
+-- Where a language server completes, it alone fills the menu: it already
+-- knows the buffer's names, and the plain word sources listed each of them a
+-- second time ("banana" and "banana  Variable"). Prose keeps the words.
+vim.api.nvim_create_autocmd("LspAttach", {
+  callback = function(args)
+    local client = vim.lsp.get_client_by_id(args.data.client_id)
+    local prose = { markdown = true, text = true, gitcommit = true }
+    -- Copilot is a language server too, but for inline suggestions only.
+    if client and not client.name:lower():find("copilot", 1, true)
+      and client:supports_method("textDocument/completion")
+      and not prose[vim.bo[args.buf].filetype] then
+      vim.bo[args.buf].complete = "o"
+    end
+  end,
+})
 
 
