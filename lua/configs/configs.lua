@@ -104,11 +104,12 @@ o.autochdir = true
 vim.g.pure_todoist_confirm = 'never'
 -- Folder where the task list and a timestamped history of every change are
 -- kept (tasks.md, history.md, tasks.json). Unset or '' turns archiving off.
-vim.g.pure_todoist_archive = '~/iCloudDrive/Documents/Obsidian/Atlas/9-Archive/Todoist/'
+-- Relative to the Obsidian vault below, so it moves with the vault.
+vim.g.pure_todoist_archive = '9-Archive/Todoist/'
 
 -- Obsidian vault (pure/zettelkasten.lua, obsidian.nvim, <leader>em / fa / nm).
 -- Left unset, it is asked for on a fresh install and remembered, like the
 -- Todoist token; :ZettelVault changes it. Setting it here overrides that.
--- vim.g.pure_vault = '~/iCloudDrive/Documents/Obsidian/Atlas'
+-- vim.g.pure_vault = '~/Atlas'
 -- Language of day and month names in template dates: 'en' or 'pt'.
 -- vim.g.pure_templates_locale = 'pt'

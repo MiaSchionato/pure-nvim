@@ -55,7 +55,7 @@ The `windows` branch adds the Windows-only setup on top of `main`. The pickers b
 
 ### Obsidian
 
-`lua/plugins/obsidian.lua` expects the vault at `~/iCloudDrive/Documents/Obsidian/Atlas` and skips its setup when that folder does not exist. Change the path to match your own vault.
+The vault is asked for on the first start and remembered; `:ZettelVault` changes it and `vim.g.pure_vault` in `lua/configs/configs.lua` overrides it. `lua/plugins/obsidian.lua`, the templates (`<leader>nz`) and the Todoist archive all follow it, and obsidian.nvim's setup is skipped while no vault is set.
 
 ### Todoist
 
