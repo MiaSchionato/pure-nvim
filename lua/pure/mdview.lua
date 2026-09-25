@@ -21,6 +21,7 @@
 --    text[^1]          footnote references show as a superscript: text¹
 --    [[path/note|Text]]  wikilinks show only their text: Text
 --    [[note#Section]]    ... or the note (and section): note > Section
+--    ![[image.png]]      embeds get an icon: image or file
 --
 --  Everything is drawn with 'overlay' virtual text of the same width as what
 --  it covers, so columns never shift and the cursor lands where the real
@@ -433,6 +434,9 @@ local function hideLines(buf, top, bottom, mark)
   return ranges
 end
 
+local embed_icons = { image = '\u{F02E9}', file = '\u{F0219}' } -- md-image, md-file_document
+local image_ext = { png = true, jpg = true, jpeg = true, gif = true, svg = true, webp = true, bmp = true }
+
 --- What Obsidian shows for the inside of a [[wikilink]]: the alias after
 --- '|' if there is one, else the target, with '#' sections as ' > '.
 local function wikilinkText(inner)
@@ -455,10 +459,18 @@ local function wikilinks(buf, top, bottom, mark)
     local row = top + i - 1
     for start, inner, stop in text:gmatch('()%[%[([^%[%]]-)%]%]()') do
       if inner ~= '' and not inCode(buf, row, start - 1) then
+        local shown = wikilinkText(inner)
+        -- ![[...]] embeds a note or a file: the '!' becomes an icon.
+        if text:sub(start - 1, start - 1) == '!' then
+          start = start - 1
+          local is_image = inner:gsub('|.*$', ''):lower():match('%.(%a+)$')
+          is_image = is_image and image_ext[is_image]
+          shown = (is_image and embed_icons.image or embed_icons.file) .. ' ' .. shown
+        end
         mark(row, start - 1, {
           end_col = stop - 1,
           conceal = '',
-          virt_text = { { wikilinkText(inner), 'PureMdLink' } },
+          virt_text = { { shown, 'PureMdLink' } },
           virt_text_pos = 'inline',
         })
       end
@@ -472,6 +484,22 @@ local function rangeAt(ranges, row)
     if row >= r[1] and row <= r[2] then return r[1] .. ':' .. r[2] end
   end
   return ''
+end
+
+-- -----------------------------------------------------------------------------
+--  Code fences
+-- -----------------------------------------------------------------------------
+--  Neovim's own markdown highlights hide the whole ```lang line
+--  (conceal_lines), which also hid the language label render.code draws
+--  there. Load the same query without that directive; the backticks and
+--  the language name are still concealed, the line itself stays.
+do
+  local parts = {}
+  for _, file in ipairs(vim.treesitter.query.get_files('markdown', 'highlights')) do
+    local text = table.concat(vim.fn.readfile(file), '\n')
+    table.insert(parts, (text:gsub('%(#set! conceal_lines ""%)', '')))
+  end
+  pcall(vim.treesitter.query.set, 'markdown', 'highlights', table.concat(parts, '\n'))
 end
 
 -- -----------------------------------------------------------------------------
