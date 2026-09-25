@@ -12,7 +12,25 @@ window to the bottom, so no `~` shows under the drawing.
 | `d` | today's daily note, created from the template if it is not there yet ([zettelkasten](zettelkasten.md)) |
 | `n` | new empty buffer |
 | `q` | quit |
-| `u` | update plugins (`vim.pack.update()`) |
+| `u` | update: the configuration's repository, then the plugins (below) |
+
+### Updating (`u`, or `:PureUpdate` anywhere – `lua/pure/update.lua`)
+
+Keeps machines in step: commit and push on one, press `u` on the other.
+
+1. `git fetch` in the config folder, in the background (a clone of
+   `main` / `windows`, or of `single-file`).
+2. New commits upstream: they are listed, and **Yes** pulls them
+   (`--ff-only`: it never merges or overwrites anything).
+3. After a pull it offers to restart Neovim (`:restart`) so the new
+   configuration runs; press `u` again then for the plugins, which the new
+   configuration may have changed.
+4. Nothing new: `vim.pack.update()` for the plugins (skipped in the portable
+   one-file build).
+
+It touches nothing, and says why, when this machine has commits that were
+not pushed while upstream has new ones (pull by hand to merge them), or when
+a local change to a file would be overwritten by the pull.
 
 `vim.g.pure_dashboard_scale = 1` keeps the drawing at its original size (any
 number fixes the scale; `'auto'` is the default). The statusline, tabline and
