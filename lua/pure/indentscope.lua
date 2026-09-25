@@ -96,11 +96,14 @@ end
 -- -----------------------------------------------------------------------------
 --  Drawing
 -- -----------------------------------------------------------------------------
+-- What is drawn now, to skip redrawing the same line (see draw()).
+local drawn_key
+
 local function clear()
   if drawn_buf and vim.api.nvim_buf_is_valid(drawn_buf) then
     vim.api.nvim_buf_clear_namespace(drawn_buf, ns, 0, -1)
   end
-  drawn_buf = nil
+  drawn_buf, drawn_key = nil, nil
 end
 
 local function enabled(buf)
@@ -111,21 +114,23 @@ local function enabled(buf)
 end
 
 local function draw()
-  clear()
   local buf = vim.api.nvim_get_current_buf()
-  if not enabled(buf) then return end
-
-  local scope = M.getScope()
-  if not scope then return end
-
+  local scope = enabled(buf) and M.getScope() or nil
   -- Only the visible part needs marks, so a long block costs no more than a
   -- screenful. Horizontal scroll moves the column the line has to be drawn at.
   local leftcol = vim.fn.winsaveview().leftcol
-  local win_col = scope.col - leftcol
-  if win_col < 0 then return end
+  local win_col = scope and (scope.col - leftcol) or -1
+  local first = scope and math.max(scope.top, vim.fn.line('w0'))
+  local last = scope and math.min(scope.bottom, vim.fn.line('w$'))
 
-  local first = math.max(scope.top, vim.fn.line('w0'))
-  local last = math.min(scope.bottom, vim.fn.line('w$'))
+  -- The same line as already drawn (typing inside a block, moving within
+  -- it): leave it. Clearing and drawing it again redrew every one of its
+  -- lines each time the cursor rested.
+  local key = scope and table.concat({ buf, vim.b[buf].changedtick, first, last, win_col }, ':')
+  if key and key == drawn_key and drawn_buf == buf then return end
+
+  clear()
+  if not scope or win_col < 0 then return end
   for lnum = first, last do
     -- Skip lines whose text starts at or before that column (a line inside a
     -- string, for instance); drawing there would cover real characters.
@@ -138,7 +143,7 @@ local function draw()
       })
     end
   end
-  drawn_buf = buf
+  drawn_buf, drawn_key = buf, key
 end
 
 --- Redraw after `delay` ms without movement, so holding j does not redraw on

@@ -403,7 +403,7 @@ end
 --- Hide the frontmatter and footnote definitions, except the one the cursor
 --- is in, and draw footnote references as superscripts.
 --- Returns the hidden-able ranges, so cursor moves can tell when to redraw.
-local function hideLines(buf, top, bottom, mark)
+local function hideLines(buf, top, bottom, mark, place)
   local cursor = vim.fn.line('.') - 1
   local ranges = footnotes(buf, top, bottom)
   local fm = frontmatter(buf)
@@ -414,7 +414,7 @@ local function hideLines(buf, top, bottom, mark)
   for _, r in ipairs(ranges) do
     if cursor < r[1] or cursor > r[2] then
       for row = r[1], r[2] do
-        pcall(vim.api.nvim_buf_set_extmark, buf, ns, row, 0, { conceal_lines = '' })
+        place(row, 0, { conceal_lines = '' })
       end
     end
   end
@@ -541,11 +541,59 @@ local function active(buf)
     and (vim.bo[buf].buftype == '' or vim.b[buf].pure_mdview == true)
 end
 
---- Redraw the visible part of the current window's buffer.
-function M.refresh()
+-- Marks drawn per buffer: extmark id -> the key of what it draws.
+local drawn = {}
+-- What the last refresh saw per buffer, to skip one that would change nothing.
+local last_state = {}
+
+--- Make the buffer's marks `want` ({ row, col, opts, key }), touching only
+--- what differs from what is drawn. Clearing and redrawing every mark made
+--- Neovim redraw the whole window on every key typed, several times: the
+--- render flickered while typing, most of all on Windows terminals.
+local function reconcile(buf, want)
+  local have = drawn[buf] or {}
+  local keep = {}
+  for _, m in ipairs(vim.api.nvim_buf_get_extmarks(buf, ns, 0, -1, {})) do
+    local id = m[1]
+    -- Keyed by where the mark is now: edits move marks with the text.
+    local key = have[id] and (m[2] .. ':' .. m[3] .. ':' .. have[id])
+    if key and not keep[key] then
+      keep[key] = id
+    else
+      vim.api.nvim_buf_del_extmark(buf, ns, id)
+    end
+  end
+  local now = {}
+  for _, w in ipairs(want) do
+    local key = w.row .. ':' .. w.col .. ':' .. w.key
+    local id = keep[key]
+    if id then
+      keep[key] = nil
+      now[id] = w.key
+    else
+      local ok, new_id = pcall(vim.api.nvim_buf_set_extmark, buf, ns, w.row, w.col, w.opts)
+      if ok then now[new_id] = w.key end
+    end
+  end
+  for _, id in pairs(keep) do vim.api.nvim_buf_del_extmark(buf, ns, id) end
+  drawn[buf] = now
+end
+
+--- Redraw the visible part of the current window's buffer. Skipped when
+--- nothing it depends on changed since the last time (text, cursor, view,
+--- mode): typing one key fires three or four events. `force` redraws anyway.
+function M.refresh(force)
   local buf = vim.api.nvim_get_current_buf()
-  vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
-  if not active(buf) then return end
+  if not active(buf) then
+    vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+    drawn[buf], last_state[buf] = nil, nil
+    return
+  end
+  local cursor = vim.api.nvim_win_get_cursor(0)
+  local state = table.concat({ vim.b[buf].changedtick, cursor[1], cursor[2], vim.fn.line('w0'),
+    vim.fn.line('w$'), vim.api.nvim_win_get_width(0), vim.fn.mode() }, ':')
+  if not force and last_state[buf] == state then return end
+  last_state[buf] = state
 
   local ok, parser = pcall(vim.treesitter.get_parser, buf, 'markdown')
   if not ok or not parser then return end
@@ -559,10 +607,15 @@ function M.refresh()
   local mode = vim.fn.mode()
   local raw_row = (mode:match('^[iRvV\22]')) and (vim.fn.line('.') - 1) or -1
 
+  local want = {}
+  -- Every mark goes through here; reconcile() below applies them.
+  local function place(row, col, opts)
+    opts.priority = opts.priority or 200
+    table.insert(want, { row = row, col = col, opts = opts, key = vim.inspect(opts, { newline = '', indent = '' }) })
+  end
   local function mark(row, col, opts)
     if row == raw_row or row < top or row > bottom then return end
-    opts.priority = opts.priority or 200
-    pcall(vim.api.nvim_buf_set_extmark, buf, ns, row, col, opts)
+    place(row, col, opts)
   end
 
   parser:for_each_tree(function(tree, ltree)
@@ -575,8 +628,9 @@ function M.refresh()
     end
   end)
 
-  local ranges = hideLines(buf, top, bottom, mark)
+  local ranges = hideLines(buf, top, bottom, mark, place)
   wikilinks(buf, top, bottom, mark)
+  reconcile(buf, want)
   vim.b[buf].pure_md_hidden = ranges
   vim.b[buf].pure_md_revealed = rangeAt(ranges, vim.fn.line('.') - 1)
   vim.b[buf].pure_md_link = cursorLink()
@@ -618,7 +672,7 @@ vim.api.nvim_create_autocmd(
 vim.api.nvim_create_autocmd('FileType', {
   group = group,
   pattern = 'markdown',
-  callback = function() vim.schedule(function() setHighlights(); M.refresh() end) end,
+  callback = function() vim.schedule(function() setHighlights(); M.refresh(true) end) end,
 })
 vim.api.nvim_create_autocmd('ColorScheme', { group = group, callback = setHighlights })
 setHighlights()
