@@ -19,6 +19,8 @@
 --    ---
 --    [^1]: note        footnote definitions are hidden
 --    text[^1]          footnote references show as a superscript: text¹
+--    [[path/note|Text]]  wikilinks show only their text: Text
+--    [[note#Section]]    ... or the note (and section): note > Section
 --
 --  Everything is drawn with 'overlay' virtual text of the same width as what
 --  it covers, so columns never shift and the cursor lands where the real
@@ -99,6 +101,7 @@ local function setHighlights()
   set('PureMdTable', { link = 'Comment' })
   set('PureMdCheckedText', { link = 'Comment' })
   set('PureMdFootnote', { link = 'Special' })
+  set('PureMdLink', { link = '@markup.link.label' })
 
   -- Checkbox icons: fixed colours, the same in every colorscheme, so a state
   -- always reads the same at a glance. Not `default` and re-applied on
@@ -430,6 +433,39 @@ local function hideLines(buf, top, bottom, mark)
   return ranges
 end
 
+--- What Obsidian shows for the inside of a [[wikilink]]: the alias after
+--- '|' if there is one, else the target, with '#' sections as ' > '.
+local function wikilinkText(inner)
+  local alias = inner:match('|(.*)$')
+  if alias and alias ~= '' then return alias end
+  local target = inner:gsub('|.*$', '')
+  local note, rest = target:match('^([^#]*)#(.*)$')
+  if not note then return target end
+  -- [[#Section]] links inside the same note show just the section.
+  local parts = vim.tbl_filter(function(p) return p ~= '' end, vim.split(rest, '#', { plain = true }))
+  local shown = table.concat(parts, ' > ')
+  return note ~= '' and (note .. ' > ' .. shown) or shown
+end
+
+--- [[target|alias]] drawn as its text. Obsidian's own syntax, which the
+--- markdown parser does not know (it already hides the URL of [text](url)).
+local function wikilinks(buf, top, bottom, mark)
+  local lines = vim.api.nvim_buf_get_lines(buf, top, bottom + 1, false)
+  for i, text in ipairs(lines) do
+    local row = top + i - 1
+    for start, inner, stop in text:gmatch('()%[%[([^%[%]]-)%]%]()') do
+      if inner ~= '' and not inCode(buf, row, start - 1) then
+        mark(row, start - 1, {
+          end_col = stop - 1,
+          conceal = '',
+          virt_text = { { wikilinkText(inner), 'PureMdLink' } },
+          virt_text_pos = 'inline',
+        })
+      end
+    end
+  end
+end
+
 --- The range of `ranges` holding row `row`, as "first:last", or ''.
 local function rangeAt(ranges, row)
   for _, r in ipairs(ranges or {}) do
@@ -485,6 +521,7 @@ function M.refresh()
   end)
 
   local ranges = hideLines(buf, top, bottom, mark)
+  wikilinks(buf, top, bottom, mark)
   vim.b[buf].pure_md_hidden = ranges
   vim.b[buf].pure_md_revealed = rangeAt(ranges, vim.fn.line('.') - 1)
 end
