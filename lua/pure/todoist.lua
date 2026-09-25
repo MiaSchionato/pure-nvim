@@ -1358,16 +1358,26 @@ function regionOf(lines, block)
 end
 
 --- One task as a line of the region.
+--- A task as the region shows it: text, due, priority (4 = P1), project
+--- name. Also what the baseline remembers, to tell edits made in a note.
+local function taskFields(t, projects)
+  return {
+    c = oneLine(t.content),
+    -- The date itself: a phrase like "today" stops being true the next day.
+    -- Recurring tasks keep theirs ("every monday").
+    d = t.due and (t.due.is_recurring and t.due.string or t.due.date) or '',
+    p = tonumber(t.priority) or 1,
+    j = projects[t.project_id] or '',
+  }
+end
+
+--- One task as a line of the region.
 local function syncLine(t, depth, projects)
-  local text = oneLine(t.content):gsub('([%[%]])', '\\%1')
-  local parts = { ('%s- [ ] [%s](%s%s)'):format(string.rep('  ', depth), text, task_url, t.id) }
-  -- The date itself: a phrase like "today" stops being true the next day.
-  -- Recurring tasks keep theirs ("every monday").
-  local due = t.due and (t.due.is_recurring and t.due.string or t.due.date)
-  if due then table.insert(parts, due) end
-  local p = priorityLabel(t.priority)
-  if p ~= '' then table.insert(parts, p) end
-  if projects[t.project_id] then table.insert(parts, projects[t.project_id]) end
+  local f = taskFields(t, projects)
+  local parts = { ('%s- [ ] [%s](%s%s)'):format(string.rep('  ', depth), (f.c:gsub('([%[%]])', '\\%1')), task_url, t.id) }
+  if f.d ~= '' then table.insert(parts, f.d) end
+  if priorityLabel(f.p) ~= '' then table.insert(parts, priorityLabel(f.p)) end
+  if f.j ~= '' then table.insert(parts, f.j) end
   return table.concat(parts, ' · ')
 end
 
@@ -1398,11 +1408,104 @@ local function regionLines(tasks, projects)
   return out
 end
 
---- Ids of the tasks ticked in `region`.
-local function tickedIds(lines, region, into)
+-- Baseline: what the last sync wrote into each region, kept in
+-- stdpath('data')/todoist_sync.json. A line that differs from it was edited
+-- in the note (in Neovim or Obsidian) and is sent to Todoist; a line that
+-- still matches it just takes whatever Todoist now says.
+local baseline_file = vim.fn.stdpath('data') .. '/todoist_sync.json'
+local baseline
+
+local function loadBaseline()
+  if baseline then return baseline end
+  local ok, data = pcall(function()
+    return vim.json.decode(table.concat(vim.fn.readfile(baseline_file), '\n'))
+  end)
+  baseline = (ok and type(data) == 'table') and data or {}
+  baseline.tasks = type(baseline.tasks) == 'table' and baseline.tasks or {}     -- id -> fields
+  baseline.regions = type(baseline.regions) == 'table' and baseline.regions or {} -- key -> { ids }
+  return baseline
+end
+
+--- Save, keeping only the tasks some region still lists.
+local function saveBaseline()
+  if not baseline then return end
+  local used = {}
+  for _, ids in pairs(baseline.regions) do
+    for _, id in ipairs(ids) do used[id] = baseline.tasks[id] end
+  end
+  baseline.tasks = used
+  pcall(vim.fn.writefile, { vim.json.encode(baseline) }, baseline_file)
+end
+
+local function regionKey(path, block)
+  return vim.fs.normalize(path) .. '\n' .. (block.filter or '')
+end
+
+--- A task line of a region, parsed: { depth, checked, id?, c, d, p, j? }.
+--- " · " parts after the text: P1..P3 is the priority, a project's name the
+--- project, anything else the due date (any Todoist phrase: "tomorrow").
+local function parseItem(line, by_name)
+  local indent, mark, rest = line:match('^(%s*)[-*] %[(.)%] ?(.*)$')
+  if not indent then return nil end
+  local item = { depth = #(indent:gsub('\t', '  ')), checked = mark == 'x' or mark == 'X', d = '', p = 1 }
+  local text, id, tail = rest:match('^%[(.-)%]%(' .. vim.pesc(task_url) .. '([%w_]+)%)(.*)$')
+  if text then
+    item.id, item.c = id, (text:gsub('\\([%[%]])', '%1'))
+  else
+    local cut = rest:find(' · ', 1, true)
+    item.c = vim.trim(cut and rest:sub(1, cut - 1) or rest)
+    tail = cut and rest:sub(cut) or ''
+  end
+  for _, part in ipairs(vim.split(tail, ' · ', { plain = true })) do
+    part = vim.trim(part)
+    local n = part:match('^[Pp]([1-3])$')
+    if n then
+      item.p = 5 - tonumber(n)
+    elseif by_name[part] then
+      item.j = part
+    elseif part ~= '' and item.d == '' then
+      item.d = part
+    end
+  end
+  return item
+end
+
+--- What was changed in a region since the last sync, added to `ops`:
+--- close (ticked), update (text, due, priority), move (project), create (new
+--- lines, under the line above when indented) and `missing` (ids the last
+--- sync wrote here that are gone: deleted, unless seen in another note).
+local function regionOps(lines, region, key, by_name, ops)
+  local base = loadBaseline()
+  local here, stack = {}, {}
   for r = region.first + 1, region.last - 1 do
-    local id = (lines[r + 1] or ''):match('^%s*[-*] %[[xX]%] .-' .. vim.pesc(task_url) .. '([%w_]+)%)')
-    if id then into[id] = true end
+    local item = parseItem(lines[r + 1] or '', by_name)
+    if item then
+      while #stack > 0 and stack[#stack].depth >= item.depth do table.remove(stack) end
+      local parent = stack[#stack]
+      if item.id then
+        here[item.id] = true
+        ops.seen[item.id] = true
+        local was = base.tasks[item.id]
+        if item.checked then
+          table.insert(ops.close, item)
+        elseif was then
+          local body = {}
+          if item.c ~= '' and item.c ~= was.c then body.content = item.c end
+          if item.d ~= was.d then body.due_string = item.d ~= '' and item.d or 'no date' end
+          if item.p ~= was.p then body.priority = item.p end
+          if next(body) then table.insert(ops.update, { item = item, body = body }) end
+          if item.j and item.j ~= was.j then
+            table.insert(ops.move, { item = item, project_id = by_name[item.j] })
+          end
+        end
+      elseif item.c ~= '' and not item.checked then
+        table.insert(ops.create, { item = item, parent_id = parent and parent.id })
+      end
+      table.insert(stack, item)
+    end
+  end
+  for _, id in ipairs(base.regions[key] or {}) do
+    if not here[id] then ops.missing[id] = true end
   end
 end
 
@@ -1486,6 +1589,13 @@ local function syncNote(path, fetched, projects)
     local region = regionOf(lines, b)
     local new = fetched[b.filter or '']
     if region ~= false and new then
+      -- Remember what this region now holds (see "Baseline").
+      local base, ids = loadBaseline(), {}
+      for _, t in ipairs(new) do
+        base.tasks[t.id] = taskFields(t, projects)
+        table.insert(ids, t.id)
+      end
+      base.regions[regionKey(path, b)] = ids
       local s, e = b.last + 1, b.last + 1
       if region then s, e = region.first, region.last + 1 end
       new = regionLines(new, projects)
@@ -1576,7 +1686,7 @@ function M.sync(paths)
   end
 
   local function run(files)
-    local notes, filters, ticked = {}, {}, {}
+    local notes, filters = {}, {}
     for _, path in ipairs(files) do
       local lines = not frozen(path) and syncable(path) and noteLines(path)
       if lines then
@@ -1587,31 +1697,24 @@ function M.sync(paths)
           if not (b.filter and b.filter:find('{{', 1, true)) then
             filters[b.filter or ''] = b.filter or false
           end
-          local region = regionOf(lines, b)
-          if region then tickedIds(lines, region, ticked) end
         end
       end
     end
     if #notes == 0 then return finish() end
 
-    local ids = vim.tbl_keys(ticked)
     local keys = vim.tbl_keys(filters)
-    local fetched, projects, errors = {}, {}, {}
+    local fetched, projects, by_name, errors = {}, {}, {}, {}
 
     local function write()
       for _, path in ipairs(notes) do
         local ok, err = pcall(syncNote, path, fetched, projects)
         if not ok then table.insert(errors, path .. ': ' .. tostring(err)) end
       end
+      saveBaseline()
       finish(#errors > 0 and table.concat(errors, '\n') or nil)
     end
     local function fetchNext(i)
-      if i > #keys then
-        return getAll('/projects', function(_, list)
-          for _, p in ipairs(list or {}) do projects[p.id] = p.name end
-          write()
-        end)
-      end
+      if i > #keys then return write() end
       local filter = filters[keys[i]] or nil
       local path = filter and ('/tasks/filter?query=' .. urlencode(filter)) or '/tasks'
       getAll(path, function(err, tasks)
@@ -1619,15 +1722,91 @@ function M.sync(paths)
         fetchNext(i + 1)
       end)
     end
-    local function closeNext(i)
-      if i > #ids then return fetchNext(1) end
-      request('POST', '/tasks/' .. ids[i] .. '/close', function(err)
-        -- Already done or deleted in Todoist: nothing to report.
-        if err and not err:match('HTTP 404') then table.insert(errors, err) end
-        closeNext(i + 1)
-      end)
+
+    --- The calls for what was changed in the notes, one after the other.
+    local function send(ops)
+      local calls = {}
+      local function call(method, path, body, what)
+        table.insert(calls, function(done)
+          request(method, path, function(err)
+            -- Already done or deleted in Todoist: nothing to report.
+            if err and not err:match('HTTP 404') then table.insert(errors, what .. ': ' .. err) end
+            done()
+          end, body)
+        end)
+      end
+      for _, item in ipairs(ops.close) do
+        call('POST', '/tasks/' .. item.id .. '/close', nil, 'complete "' .. item.c .. '"')
+      end
+      for _, u in ipairs(ops.update) do
+        call('POST', '/tasks/' .. u.item.id, u.body, 'edit "' .. u.item.c .. '"')
+      end
+      for _, m in ipairs(ops.move) do
+        call('POST', '/tasks/' .. m.item.id .. '/move', { project_id = m.project_id }, 'move "' .. m.item.c .. '"')
+      end
+      for _, c in ipairs(ops.create) do
+        local body = { content = c.item.c }
+        if c.item.d ~= '' then body.due_string = c.item.d end
+        if c.item.p > 1 then body.priority = c.item.p end
+        if c.parent_id then
+          body.parent_id = c.parent_id
+        elseif c.item.j then
+          body.project_id = by_name[c.item.j]
+        end
+        call('POST', '/tasks', body, 'create "' .. c.item.c .. '"')
+      end
+      for _, d in ipairs(ops.delete) do
+        call('DELETE', '/tasks/' .. d.id, nil, 'delete "' .. d.c .. '"')
+      end
+      local function nextCall(i)
+        if i > #calls then return fetchNext(1) end
+        calls[i](function() nextCall(i + 1) end)
+      end
+      nextCall(1)
     end
-    closeNext(1)
+
+    -- Project names first: a note line names its project by name.
+    getAll('/projects', function(perr, list)
+      if perr then table.insert(errors, perr) end
+      for _, p in ipairs(list or {}) do
+        projects[p.id] = p.name
+        by_name[p.name] = p.id
+      end
+
+      local ops = { close = {}, update = {}, move = {}, create = {}, delete = {}, seen = {}, missing = {} }
+      for _, path in ipairs(notes) do
+        local lines = noteLines(path)
+        for _, b in ipairs(lines and blocksIn(lines) or {}) do
+          local region = regionOf(lines, b)
+          if region then regionOps(lines, region, regionKey(path, b), by_name, ops) end
+        end
+      end
+      -- Gone from one note but still in another: not deleted.
+      for id in pairs(ops.missing) do
+        if not ops.seen[id] then
+          table.insert(ops.delete, { id = id, c = (loadBaseline().tasks[id] or {}).c or id })
+        end
+      end
+
+      local total = #ops.close + #ops.update + #ops.move + #ops.create + #ops.delete
+      local mode = vim.g.pure_todoist_confirm or 'all'
+      local ask = #vim.api.nvim_list_uis() > 0
+        and ((mode == 'all' and total > 0) or (mode == 'delete' and #ops.delete > 0))
+      if ask then
+        local lines = {}
+        for _, c in ipairs(ops.create) do table.insert(lines, '+ ' .. c.item.c) end
+        for _, u in ipairs(ops.update) do table.insert(lines, '~ ' .. u.item.c) end
+        for _, m in ipairs(ops.move) do table.insert(lines, '→ ' .. m.item.c .. ' (' .. m.item.j .. ')') end
+        for _, c in ipairs(ops.close) do table.insert(lines, '✓ ' .. c.c) end
+        for _, d in ipairs(ops.delete) do table.insert(lines, '✗ ' .. d.c) end
+        -- Enter is No when something would be deleted, as in the task list.
+        local choice = vim.fn.confirm('Send these note edits to Todoist?\n' .. table.concat(lines, '\n'),
+          '&Yes\n&No', #ops.delete > 0 and 2 or 1)
+        -- Declined: the notes are rewritten from Todoist, undoing the edits.
+        if choice ~= 1 then return fetchNext(1) end
+      end
+      send(ops)
+    end)
   end
 
   notesToSync(paths, function(files)
