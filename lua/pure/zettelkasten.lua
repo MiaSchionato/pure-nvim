@@ -32,6 +32,28 @@ local M = {}
 local vault_file = vim.fn.stdpath('data') .. '/obsidian_vault'
 local no_prompt_file = vim.fn.stdpath('data') .. '/obsidian_vault_no_prompt'
 
+--- Templates that are a note *per period* rather than a note about something.
+---
+--- Picking one of these does not insert into the current buffer: it works out
+--- which note the period maps to, creates it from the template if it is not
+--- there yet, and opens it. Opening the same period twice just returns to the
+--- note, so the template never runs over what you already wrote.
+---
+--- `name` is an os.date format; %G-W%V is the ISO week, which Windows' strftime
+--- does support (checked: 2026-09-25 gives 2026-W39).
+local periodic = {
+  Daily   = { folder = '9-Archive/Periodic/Daily',   name = '%Y-%m-%d', step = 86400 },
+  Weekly  = { folder = '9-Archive/Periodic/Weekly',  name = '%G-W%V',   step = 604800 },
+  Monthly = { folder = '9-Archive/Periodic/Monthly', name = '%Y-%m',    step = nil },
+}
+
+--- Where the quote of the day and the note archive live, relative to the vault.
+local QUOTES = '9-Archive/Periodic/Quotes.md'
+local PERMANENT = '3-Zettelkasten/Permanent'
+
+--- Short weekday names used by the diary file names.
+local DIARY_WEEKDAY = { 'dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb' }
+
 --- Folder each template sends its note to, relative to the vault root.
 --- "{{title}}" is expanded, which is what puts a project in its own folder.
 --- A template missing here simply leaves the note where it is.
@@ -243,27 +265,89 @@ local function currentTitle()
   return name ~= '' and name or 'Untitled'
 end
 
+--- One line of Quotes.md, picked by the day of the year so it is stable for a
+--- given day and cycles through the file.
+--- @param when integer
+--- @return string
+local function quoteOfTheDay(when)
+  local root = vaultPath()
+  if not root then return '' end
+  local file = io.open(root .. '/' .. QUOTES, 'r')
+  if not file then return '' end
+
+  local quotes = {}
+  for line in file:lines() do
+    if line:sub(1, 2) == '- ' then
+      quotes[#quotes + 1] = line:sub(3)
+    end
+  end
+  file:close()
+  if #quotes == 0 then return '' end
+
+  return quotes[(tonumber(os.date('%j', when)) % #quotes) + 1]
+end
+
+--- One of your own permanent notes, resurfaced by the day of the year.
+--- @param when integer
+--- @return string
+local function resurfacedNote(when)
+  local root = vaultPath()
+  if not root then return '' end
+
+  local notes = vim.fn.globpath(root .. '/' .. PERMANENT, '*.md', false, true)
+  if #notes == 0 then
+    return 'Write your first permanent note and it will show up here.'
+  end
+  table.sort(notes)
+
+  local pick = notes[(tonumber(os.date('%j', when)) % #notes) + 1]
+  return '[[' .. vim.fn.fnamemodify(pick, ':t:r') .. ']]'
+end
+
 --- Expand the template placeholders.
 ---
---- Every date comes from a single os.time() taken here, so a template using
---- both {{date}} and {{time}} cannot straddle a second boundary. The previous
---- version built its table of values when the module was *required*, which
---- meant {{time}} returned the moment Neovim started rather than the moment the
---- template was used.
+--- Every date comes from a single timestamp, so a template using both {{date}}
+--- and {{time}} cannot straddle a second boundary. The previous version built
+--- its table of values when the module was *required*, which meant {{time}}
+--- returned the moment Neovim started rather than the moment of use.
+---
+--- `ctx.when` is the note's own date, which for a periodic note is the day it
+--- covers rather than today. That is what makes reopening an old daily render
+--- its own neighbours instead of this week's.
 --- @param content string
---- @param title string
+--- @param ctx table
 --- @return string
-local function render(content, title)
-  local now = os.time()
-  return (content:gsub('{{(%a+)(:?)([^}]*)}}', function(name, colon, fmt)
+local function render(content, ctx)
+  local when = ctx.when or os.time()
+  local period = ctx.periodic
+
+  return (content:gsub('{{([%a_]+)(:?)([^}]*)}}', function(name, colon, fmt)
     local key = name:lower()
+
     if key == 'title' then
-      return title
+      return ctx.title
     elseif key == 'date' then
-      return formatMoment(colon == ':' and fmt or 'YYYY-MM-DD', now)
+      return formatMoment(colon == ':' and fmt or 'YYYY-MM-DD', when)
     elseif key == 'time' then
-      return formatMoment(colon == ':' and fmt or 'HH:mm', now)
+      return formatMoment(colon == ':' and fmt or 'HH:mm', when)
+    elseif key == 'week' then
+      return os.date('%G-W%V', when)
+    elseif key == 'month' then
+      return os.date('%Y-%m', when)
+    elseif key == 'quote' then
+      return quoteOfTheDay(when)
+    elseif key == 'idea' then
+      return resurfacedNote(when)
+    elseif key == 'diary' then
+      -- Matches the diary file names: "2026-09-25, sex"
+      return os.date('%Y-%m-%d', when) .. ', ' .. DIARY_WEEKDAY[tonumber(os.date('%w', when)) + 1]
+    elseif key == 'prev' or key == 'next' then
+      -- Only meaningful inside a periodic note, where a step is defined.
+      if not (period and period.step) then return '' end
+      local delta = key == 'prev' and -period.step or period.step
+      return os.date(period.name, when + delta)
     end
+
     return nil -- unknown placeholder: leave it untouched
   end))
 end
@@ -317,8 +401,52 @@ local function moveCurrentFile(folder)
   vim.notify('Moved to ' .. folder_name)
 end
 
+--- Open the note for a period, creating it from `template` when missing.
+---
+--- Unlike the other templates this does not touch the current buffer: the note
+--- is a file whose name comes from the date, so it is written straight to disk
+--- and opened. An existing note is opened untouched.
+--- @param template string  template file name, e.g. "Daily.md"
+--- @param period table     entry from `periodic`
+--- @param when integer     timestamp of the period to open
+local function openPeriodic(template, period, when)
+  local root = vaultPath()
+  if not root then return end
+
+  local dir = root .. '/' .. period.folder
+  local path = dir .. '/' .. os.date(period.name, when) .. '.md'
+
+  if vim.uv.fs_stat(path) then
+    return vim.cmd('edit ' .. vim.fn.fnameescape(path))
+  end
+
+  local file = io.open(templatesPath() .. '/' .. template, 'r')
+  if not file then
+    return vim.notify('Could not read ' .. template, vim.log.levels.ERROR)
+  end
+  local content = file:read('*a')
+  file:close()
+
+  vim.fn.mkdir(dir, 'p')
+  vim.cmd('edit ' .. vim.fn.fnameescape(path))
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, vim.split(render(content, {
+    title = os.date(period.name, when),
+    when = when,
+    periodic = period,
+  }), '\n'))
+  vim.cmd('silent write')
+  vim.notify('Created ' .. period.folder .. '/' .. os.date(period.name, when))
+end
+
+--- Open today's daily note, or another day with an offset in days.
+--- @param offset integer|nil
+function M.openDaily(offset)
+  local period = periodic.Daily
+  openPeriodic('Daily.md', period, os.time() + (offset or 0) * 86400)
+end
+
 --- Pick a template, expand it at the cursor, and move the note if the template
---- has a destination.
+--- has a destination. Periodic templates open their own note instead.
 function M.insertTemplate()
   local dir = templatesPath()
   if not dir then
@@ -341,6 +469,15 @@ function M.insertTemplate()
   vim.ui.select(files, { prompt = 'Template' }, function(selected)
     if not selected then return end
 
+    local name = selected:gsub('%.md$', '')
+
+    -- A periodic template addresses a note of its own, so it opens that note
+    -- rather than expanding into whatever buffer happens to be focused.
+    local period = periodic[name]
+    if period then
+      return openPeriodic(selected, period, os.time())
+    end
+
     local file = io.open(dir .. '/' .. selected, 'r')
     if not file then
       return vim.notify('Could not read ' .. selected, vim.log.levels.ERROR)
@@ -348,12 +485,11 @@ function M.insertTemplate()
     local content = file:read('*a')
     file:close()
 
-    local title = currentTitle()
-    local lines = vim.split(render(content, title), '\n')
+    local lines = vim.split(render(content, { title = currentTitle() }), '\n')
     local row = vim.api.nvim_win_get_cursor(0)[1]
     vim.api.nvim_buf_set_lines(0, row - 1, row - 1, false, lines)
 
-    local folder = destinations[selected:gsub('%.md$', '')]
+    local folder = destinations[name]
     if folder then
       moveCurrentFile(folder)
     end
