@@ -215,13 +215,8 @@ function M.drawDashboard()
   vim.keymap.set('n', 'd', function() require('pure.zettelkasten').openDaily() end, opts)
   vim.keymap.set('n', 'n', ':enew<CR>', opts)
   vim.keymap.set('n', 'q', ':qa<CR>', opts)
-  vim.keymap.set('n', 'u', function()
-    if vim.pack.update then
-      vim.pack.update()
-    else
-      print("vim.pack.update is not defined.")
-    end
-  end, opts)
+  -- The configuration's own repository first, then the plugins (pure/update.lua).
+  vim.keymap.set('n', 'u', function() require('pure.update').run() end, opts)
 end
 
 return M
