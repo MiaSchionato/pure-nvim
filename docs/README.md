@@ -55,7 +55,8 @@ nvim -u pure.lua          # try it; or save it as ~/.config/nvim/init.lua
 It is **portable** by default: the modules that download plugins
 (`plugins/*`, the extra themes) are skipped, so it downloads nothing; the
 home-made modules, the language servers already installed on that machine and
-the myghtfly theme all work. `vim.g.pure_portable = false` at the top of the
+the NeoSolarized and myghtfly themes all work (NeoSolarized is embedded, with
+its Apache 2.0 license). `vim.g.pure_portable = false` at the top of the
 file loads everything.
 
 It is generated, never edited: `nvim -l scripts/bundle.lua` (from the
