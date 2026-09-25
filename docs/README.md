@@ -44,13 +44,21 @@ pipes) and starts in the home folder when launched from a shortcut.
 
 ## One-file version
 
-The branch `single-file` holds `pure.lua`: this whole configuration in one
-file, for a machine where cloning the repository is not worth it.
+The branch `single-file` holds this whole configuration in one file,
+`init.lua`: cloning that branch into Neovim's config folder is a working
+configuration, with nothing else to download.
 
 ```sh
-curl -LO https://raw.githubusercontent.com/MiaSchionato/pure-nvim/single-file/pure.lua
-nvim -u pure.lua          # try it; or save it as ~/.config/nvim/init.lua
+# Linux / macOS
+git clone -b single-file --depth 1 https://github.com/MiaSchionato/pure-nvim ~/.config/nvim
 ```
+```powershell
+# Windows
+git clone -b single-file --depth 1 https://github.com/MiaSchionato/pure-nvim $env:LOCALAPPDATA\nvim
+```
+
+`git pull` in that folder updates it. (The folder must not exist yet: move
+an old configuration away first.)
 
 It is **portable** by default: the modules that download plugins
 (`plugins/*`, the extra themes) are skipped, so it downloads nothing; the
@@ -60,7 +68,8 @@ its Apache 2.0 license). `vim.g.pure_portable = false` at the top of the
 file loads everything.
 
 It is generated, never edited: `nvim -l scripts/bundle.lua` (from the
-repository root) writes `pure.lua` from the current modules. Each module
+repository root) writes `pure.lua` from the current modules (committed to
+`single-file` as `init.lua`). Each module
 becomes a `package.preload` entry with its code unchanged; `colors/`,
 `snippets/` and `docs/` are embedded and unpacked into
 `stdpath('cache')/pure-bundle` on start (`vim.g.pure_bundle_dir`).

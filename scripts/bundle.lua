@@ -5,9 +5,14 @@
 --  where cloning the repository is not worth it:
 --
 --    nvim -l scripts/bundle.lua [output]      (from the repository root;
---                                              output defaults to pure.lua)
---    nvim -u pure.lua                         (use it, or copy it to
---                                              ~/.config/nvim/init.lua)
+--                                              output defaults to pure.lua,
+--                                              never init.lua: that would
+--                                              overwrite the real one)
+--
+--  The branch single-file holds the result as init.lua, so cloning that
+--  branch into the config folder is a working configuration:
+--
+--    git clone -b single-file --depth 1 https://github.com/MiaSchionato/pure-nvim ~/.config/nvim
 --
 --  Every module under lua/ becomes a package.preload entry with its code
 --  unchanged, and init.lua's loader (between its [bundle:loader] markers)
@@ -120,8 +125,10 @@ add(([[
 --  the repository and build again. Documentation: the docs/ pages, embedded
 --  below and listed by <leader>fh.
 --
---    nvim -u pure.lua              try it
---    ~/.config/nvim/init.lua       or install it as the config
+--  As the configuration: the single-file branch cloned into the config
+--  folder (pulling it updates this file):
+--    git clone -b single-file --depth 1 https://github.com/MiaSchionato/pure-nvim ~/.config/nvim
+--  Or just try it, from wherever it is:  nvim -u init.lua
 --
 --  Portable mode is on: plugins and extra themes are not downloaded. Put
 --    vim.g.pure_portable = false
