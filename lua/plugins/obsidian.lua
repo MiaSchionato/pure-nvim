@@ -32,6 +32,15 @@ local function setup(vault)
     -- Only [ ] and [x] are task items to markdown, so the other three showed as
     -- raw brackets; now it toggles like <leader>tx and the Todoist list do.
     checkbox = { order = { " ", "x" } },
+    -- obsidian.nvim rewrote the frontmatter of every note saved in Neovim: it
+    -- added id/aliases/tags and sorted all the keys, so a daily's type, date,
+    -- week... came out alphabetical, and Templates/Daily.md saved here got a
+    -- block of its own that it then copied into every daily. Notes keep the
+    -- frontmatter that Obsidian and the templates give them.
+    frontmatter = { enabled = false },
+    -- Same folder pure/zettelkasten.lua expands templates from, so
+    -- :Obsidian template finds them too.
+    templates = { folder = vim.g.pure_templates or "Templates" },
     workspaces = {
       {
         name = vim.fs.basename(vault),
