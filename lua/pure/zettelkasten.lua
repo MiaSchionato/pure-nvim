@@ -99,12 +99,13 @@ local locales = {
 --- Moment.js tokens, longest first within each letter so "MMMM" is not eaten
 --- by "MM", "Do" is tried before "D", and so on.
 local TOKENS = {
-  'YYYY', 'YY',
+  'YYYY', 'YY', 'GGGG', 'GG',
   'MMMM', 'MMM', 'MM', 'M',
   'Do', 'DDDD', 'DDD', 'DD', 'D',
   'dddd', 'ddd', 'dd', 'd',
   'HH', 'H', 'hh', 'h',
   'mm', 'm', 'ss', 's',
+  'WW', 'W',
   'A', 'a',
 }
 
@@ -132,6 +133,10 @@ local function formatMoment(fmt, time)
     HH = ('%02d'):format(t.hour), H = tostring(t.hour), hh = ('%02d'):format(h12), h = tostring(h12),
     mm = ('%02d'):format(t.min), m = tostring(t.min), ss = ('%02d'):format(t.sec), s = tostring(t.sec),
     A = t.hour < 12 and 'AM' or 'PM', a = t.hour < 12 and 'am' or 'pm',
+    -- ISO 8601, as Moment's GGGG and W: strftime's %G and %V, which the
+    -- Windows CRT supports too.
+    GGGG = os.date('%G', time), GG = os.date('%G', time):sub(3),
+    WW = os.date('%V', time), W = tostring(tonumber(os.date('%V', time))),
   }
 
   local out, i = {}, 1
@@ -352,6 +357,24 @@ local function render(content, ctx)
   end))
 end
 
+--- A path as the file system compares it: case-blind on Windows, where the
+--- same file can be spelled C:/ or c:/.
+--- @param path string
+--- @return string
+local function pathKey(path)
+  path = vim.fs.normalize(path)
+  return vim.fn.has('win32') == 1 and path:lower() or path
+end
+
+--- Whether `path` is `folder` or somewhere below it.
+--- @param path string
+--- @param folder string
+--- @return boolean
+local function isInside(path, folder)
+  local p, f = pathKey(path), pathKey(folder)
+  return p == f or p:sub(1, #f + 1) == f .. '/'
+end
+
 --- Move the current file into `folder` (relative to the vault).
 ---
 --- Writes first, renames, then reopens at the new path and drops the stale
@@ -374,10 +397,7 @@ local function moveCurrentFile(folder)
   local target_dir = root .. '/' .. folder_name
   local target = target_dir .. '/' .. vim.fn.fnamemodify(path, ':t')
 
-  -- Case-blind on Windows, where the same file can be spelled C:/ or c:/.
-  local a, b = vim.fs.normalize(target), vim.fs.normalize(path)
-  if vim.fn.has('win32') == 1 then a, b = a:lower(), b:lower() end
-  if a == b then
+  if pathKey(target) == pathKey(path) then
     return -- already there
   end
   if vim.uv.fs_stat(target) then
@@ -401,11 +421,42 @@ local function moveCurrentFile(folder)
   vim.notify('Moved to ' .. folder_name)
 end
 
+--- Where the note for a period already is, if anywhere.
+---
+--- The period's folder is checked first, then the rest of the vault: a note
+--- made by hand in the inbox with the date as its name is that same day, and
+--- creating the canonical one beside it would leave two. The trash, the
+--- templates and hidden folders (.obsidian, .trash) do not count.
+--- @param root string
+--- @param period table
+--- @param name string  file name, e.g. "2026-09-25.md"
+--- @return string|nil
+local function findPeriodic(root, period, name)
+  local canonical = root .. '/' .. period.folder .. '/' .. name
+  if vim.uv.fs_stat(canonical) then
+    return canonical
+  end
+
+  local skip = { root .. '/' .. destinations.Delete, templatesPath() }
+  local found = vim.fs.find(function(file, dir)
+    if file:lower() ~= name:lower() then return false end
+    -- Relative to the vault, so a vault that itself sits under a dot folder
+    -- is not skipped whole.
+    if ('/' .. dir:sub(#root + 2)):find('/%.') then return false end
+    for _, folder in ipairs(skip) do
+      if isInside(dir, folder) then return false end
+    end
+    return true
+  end, { path = root, type = 'file', limit = 1 })
+  return found[1]
+end
+
 --- Open the note for a period, creating it from `template` when missing.
 ---
 --- Unlike the other templates this does not touch the current buffer: the note
 --- is a file whose name comes from the date, so it is written straight to disk
---- and opened. An existing note is opened untouched.
+--- and opened. A note that already exists, in its folder or anywhere else in
+--- the vault, is opened untouched and never gets a second copy.
 --- @param template string  template file name, e.g. "Daily.md"
 --- @param period table     entry from `periodic`
 --- @param when integer     timestamp of the period to open
@@ -414,10 +465,16 @@ local function openPeriodic(template, period, when)
   if not root then return end
 
   local dir = root .. '/' .. period.folder
-  local path = dir .. '/' .. os.date(period.name, when) .. '.md'
+  local name = os.date(period.name, when) .. '.md'
 
-  if vim.uv.fs_stat(path) then
-    return vim.cmd('edit ' .. vim.fn.fnameescape(path))
+  local existing = findPeriodic(root, period, name)
+  if existing then
+    vim.cmd('edit ' .. vim.fn.fnameescape(existing))
+    if not isInside(existing, dir) then
+      vim.notify(('%s already exists at %s, opened that one instead of making another')
+        :format(name, existing:sub(#root + 2)), vim.log.levels.WARN)
+    end
+    return
   end
 
   local file = io.open(templatesPath() .. '/' .. template, 'r')
@@ -428,14 +485,24 @@ local function openPeriodic(template, period, when)
   file:close()
 
   vim.fn.mkdir(dir, 'p')
-  vim.cmd('edit ' .. vim.fn.fnameescape(path))
+  vim.cmd('edit ' .. vim.fn.fnameescape(dir .. '/' .. name))
+
+  -- No file does not mean no note: a buffer for this path can hold text that
+  -- was never written (a write that failed, or the note typed after :e), and
+  -- expanding the template would replace it.
+  local current = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+  if #current > 1 or current[1] ~= '' then
+    return vim.notify(name .. ' is open with unsaved text, left it as it is',
+      vim.log.levels.WARN)
+  end
+
   vim.api.nvim_buf_set_lines(0, 0, -1, false, vim.split(render(content, {
     title = os.date(period.name, when),
     when = when,
     periodic = period,
   }), '\n'))
   vim.cmd('silent write')
-  vim.notify('Created ' .. period.folder .. '/' .. os.date(period.name, when))
+  vim.notify('Created ' .. period.folder .. '/' .. name)
 end
 
 --- Open today's daily note, or another day with an offset in days.
