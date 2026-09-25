@@ -266,8 +266,9 @@ end
 function M.fuzzyHelp()
   local entries, targets = {}, {}
 
-  local docs = vim.fn.stdpath("config") .. "/docs"
-  for _, name in ipairs(vim.fn.readdir(docs)) do
+  -- The one-file build (scripts/bundle.lua) unpacks them elsewhere.
+  local docs = (vim.g.pure_bundle_dir or vim.fn.stdpath("config")) .. "/docs"
+  for _, name in ipairs(vim.fn.isdirectory(docs) == 1 and vim.fn.readdir(docs) or {}) do
     local file = docs .. "/" .. name
     if name:match("%.md$") then
       local page = name == "README.md" and "index" or name:gsub("%.md$", "")

@@ -2,7 +2,9 @@
 vim.api.nvim_create_autocmd("VimEnter", {
   nested = true,
   callback = function()
-    local theme = vim.g.MY_THEME
+    -- themes/colorschemes.lua sets the default, but the one-file build skips
+    -- that file in portable mode (it downloads themes).
+    local theme = vim.g.MY_THEME or 'myghtfly'
 
     -- solarized-osaka applies itself over in themes/solarized-osaka.lua.
     if theme and theme ~= 'solarized-osaka' then
@@ -17,6 +19,11 @@ vim.api.nvim_create_autocmd("VimEnter", {
       -- Report rather than swallow: a bare pcall here is what hid the fact that
       -- no colorscheme was ever being applied.
       local applied, err = pcall(vim.cmd.colorscheme, theme)
+      -- A theme that is not installed (a plugin theme on a machine that
+      -- skipped plugins) falls back to the local one rather than no colours.
+      if not applied and theme ~= 'myghtfly' then
+        applied = pcall(vim.cmd.colorscheme, 'myghtfly')
+      end
       if not applied then
         vim.notify('Could not apply colorscheme "' .. tostring(theme) .. '": '
           .. tostring(err), vim.log.levels.WARN)
