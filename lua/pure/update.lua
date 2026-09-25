@@ -12,10 +12,16 @@
 --     Commits made here and not pushed yet, or a pull that would overwrite
 --     local changes: nothing is touched, and the message says why.
 --  3. After a pull: offers to restart Neovim (:restart), so the new
---     configuration is what runs. Press u again afterwards for the plugins:
---     a new configuration may list different ones.
---  4. Otherwise: vim.pack.update() (not in the portable one-file build,
---     which has no plugins).
+--     configuration is what runs; press u again then for the plugins (a new
+--     configuration may list different ones). Declining updates them now.
+--  4. Otherwise: the plugins, silently. vim.pack.update() is run by a
+--     separate headless Neovim with force = true: no report buffer to
+--     confirm, no progress messages, and the editor is not blocked while it
+--     downloads (vim.pack waits for every plugin before returning). One
+--     notification at the end names the plugins that changed. Not in the
+--     portable one-file build, which has no plugins.
+--
+--  Every question defaults to Yes: Enter answers it.
 -- =============================================================================
 
 local M = {}
@@ -30,11 +36,38 @@ local function git(args, cb)
   if not ok then cb(false, 'git is not installed') end
 end
 
+-- Run by the headless Neovim: update every installed plugin and print the
+-- names of those whose revision changed.
+local update_script = [[
+local before = {}
+for _, p in ipairs(vim.pack.get(nil, { info = false })) do before[p.spec.name] = p.rev end
+vim.pack.update(nil, { force = true })
+local changed = {}
+for _, p in ipairs(vim.pack.get(nil, { info = false })) do
+  if before[p.spec.name] ~= p.rev then table.insert(changed, p.spec.name) end
+end
+io.stdout:write(table.concat(changed, ', '))
+]]
+
+local updating = false
+
+--- Update the plugins in the background (see 4. above).
 local function plugins()
-  if vim.g.pure_portable then
-    return vim.notify('Portable one-file build: no plugins to update')
-  end
-  if vim.pack and vim.pack.update then vim.pack.update() end
+  if vim.g.pure_portable or not (vim.pack and vim.pack.update) or updating then return end
+  updating = true
+  local cmd = { vim.v.progpath, '--headless', '-u', 'NONE', '-c', 'lua ' .. update_script, '-c', 'qa!' }
+  local ok = pcall(vim.system, cmd, { text = true }, vim.schedule_wrap(function(res)
+    updating = false
+    local changed = vim.trim(res.stdout or '')
+    if res.code ~= 0 then
+      vim.notify('Plugin update failed: ' .. vim.trim(res.stderr or ''), vim.log.levels.WARN)
+    elseif changed ~= '' then
+      vim.notify('Plugins updated: ' .. changed .. '. Restart Neovim to use them.')
+    else
+      vim.notify('Plugins up to date')
+    end
+  end))
+  if not ok then updating = false end
 end
 
 --- Whether :restart can bring the open files back. It saves the session to
@@ -60,7 +93,8 @@ local function offerRestart(count)
       return vim.cmd(keep and 'restart' or 'restart!')
     end
   end
-  vim.notify(msg .. ' Restart Neovim to load it, then press u again for the plugins.')
+  vim.notify(msg .. ' Restart Neovim to load it.')
+  plugins()
 end
 
 --- Pull the configuration if upstream has new commits, then the plugins.
