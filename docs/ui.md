@@ -57,7 +57,8 @@ elsewhere `'shell'`.
 ## Themes (`lua/themes/colorschemes.lua`, `colors/`)
 
 `<leader>fc` picks a colorscheme; it is remembered across restarts. The
-default is `myghtfly` (in `colors/`). `<leader>ox` makes the background
+default is `NeoSolarized`; when a theme is not installed, `myghtfly` (the
+local one in `colors/`) is used instead. `<leader>ox` makes the background
 transparent. In Neovide the transparency is off (`configs/neovide.lua`).
 
 ## Toggles (`<leader>o…`)

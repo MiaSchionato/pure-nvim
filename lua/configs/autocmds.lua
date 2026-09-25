@@ -4,7 +4,7 @@ vim.api.nvim_create_autocmd("VimEnter", {
   callback = function()
     -- themes/colorschemes.lua sets the default, but the one-file build skips
     -- that file in portable mode (it downloads themes).
-    local theme = vim.g.MY_THEME or 'myghtfly'
+    local theme = vim.g.MY_THEME or 'NeoSolarized'
 
     -- solarized-osaka applies itself over in themes/solarized-osaka.lua.
     if theme and theme ~= 'solarized-osaka' then
