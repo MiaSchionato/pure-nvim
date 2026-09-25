@@ -164,6 +164,12 @@ local function render(buf, win)
     end
   end
 
+  -- Blank lines down to the bottom of the window. Past a buffer's last line
+  -- Neovim draws '~', which showed under the drawing whenever it did not fill
+  -- the window; the blank lines at the end of the art itself cannot do it,
+  -- trimArt() drops them to centre it. Recomputed on every resize.
+  while #out < height do table.insert(out, '') end
+
   vim.bo[buf].modifiable = true
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, out)
   vim.bo[buf].modifiable = false
@@ -206,6 +212,7 @@ function M.drawDashboard()
 
   -- Set your keymaps for the dashboard buffer
   local opts = { buffer = buf, silent = true, nowait = true }
+  vim.keymap.set('n', 'd', function() require('pure.zettelkasten').openDaily() end, opts)
   vim.keymap.set('n', 'n', ':enew<CR>', opts)
   vim.keymap.set('n', 'q', ':qa<CR>', opts)
   vim.keymap.set('n', 'u', function()
