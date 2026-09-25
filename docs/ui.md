@@ -25,8 +25,14 @@ Keeps machines in step: commit and push on one, press `u` on the other.
 3. After a pull it offers to restart Neovim (`:restart`) so the new
    configuration runs; press `u` again then for the plugins, which the new
    configuration may have changed.
-4. Nothing new: `vim.pack.update()` for the plugins (skipped in the portable
-   one-file build).
+4. Nothing new (or no restart): the plugins are updated **silently**, by a
+   separate Neovim in the background – no report buffer, no progress
+   messages, the editor stays free. One notification at the end names the
+   plugins that changed (restart to use them); the details go to
+   `nvim-pack.log` in `stdpath('log')`. Skipped in the portable one-file
+   build.
+
+Every question defaults to **Yes**: Enter answers it.
 
 It touches nothing, and says why, when this machine has commits that were
 not pushed while upstream has new ones (pull by hand to merge them), or when
