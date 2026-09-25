@@ -242,18 +242,44 @@ function M.fuzzyGrep(path)
   })
 end
 
+--- Neovim's help files, and every section of this config's own docs/ pages
+--- ("pure todoist › Sync on …"): picking a section opens its page in a split
+--- at that heading, drawn by mdview.
 function M.fuzzyHelp()
-  local doc_path = vim.fn.expand("$VIMRUNTIME/doc/")
+  local entries, targets = {}, {}
 
-  M.fuzzyLogic({
-    title = "Fuzzy help",
-    ratio = 0.6,
-    cmd = string.format("ls %s | fzf", vim.fn.shellescape(doc_path)),
-    callback = function (selection)
-      vim.cmd("help " .. vim.fn.fnameescape(selection))
-      vim.cmd("filetype detect")
+  local docs = vim.fn.stdpath("config") .. "/docs"
+  for _, name in ipairs(vim.fn.readdir(docs)) do
+    local file = docs .. "/" .. name
+    if name:match("%.md$") then
+      local page = name == "README.md" and "index" or name:gsub("%.md$", "")
+      local in_code = false
+      for lnum, line in ipairs(vim.fn.readfile(file)) do
+        -- Headings inside code blocks are examples, not sections.
+        if line:match("^%s*```") then in_code = not in_code end
+        local heading = not in_code and line:match("^#+%s+(.+)")
+        if heading then
+          local entry = ("pure %s › %s"):format(page, heading)
+          if not targets[entry] then
+            table.insert(entries, entry)
+            targets[entry] = { file = file, lnum = lnum }
+          end
+        end
+      end
     end
-  })
+  end
+
+  for _, name in ipairs(vim.fn.readdir(vim.fn.expand("$VIMRUNTIME/doc"))) do
+    if name:match("%.txt$") then table.insert(entries, name) end
+  end
+
+  pickList(entries, { title = "Help" }, function(selection)
+    local target = targets[selection]
+    if not target then return vim.cmd("help " .. vim.fn.fnameescape(selection)) end
+    vim.cmd("split " .. vim.fn.fnameescape(target.file))
+    vim.api.nvim_win_set_cursor(0, { target.lnum, 0 })
+    vim.cmd("normal! zt")
+  end)
 end
 
 function M.fuzzyGit()
