@@ -44,7 +44,9 @@
 --
 --  Archive: set vim.g.pure_todoist_archive to a folder to keep tasks.md (the
 --  full list), history.md (each change, with its time) and tasks.json there,
---  written in the background and only when something changed. See "Archive".
+--  written in the background and only when something changed. A relative
+--  folder is taken inside the Obsidian vault (pure/zettelkasten.lua), so it
+--  follows the vault when that moves. See "Archive".
 --
 --  When neither exists, Neovim asks for it on startup, with the option to stop
 --  asking. :TodoistToken sets the token later and turns the question back on.
@@ -370,10 +372,20 @@ local archive = { skip_external = false }
 local uv = vim.uv
 
 --- The archive folder (created on first use), or nil when archiving is off.
+---
+--- A relative path is inside the Obsidian vault. With an absolute one written
+--- into the config, moving the vault left the setting behind, and the mkdir
+--- below quietly recreated the old folder, which lived in iCloud.
 local function archiveDir()
   local dir = vim.g.pure_todoist_archive
   if type(dir) ~= 'string' or dir == '' then return nil end
-  dir = vim.fs.normalize(vim.fn.expand(dir))
+  dir = vim.fn.expand(dir)
+  if vim.fn.isabsolutepath(dir) == 0 then
+    local vault = require('pure.zettelkasten').vaultPath()
+    if not vault then return nil end -- no vault set yet: nowhere to keep it
+    dir = vault .. '/' .. dir
+  end
+  dir = vim.fs.normalize(dir)
   vim.fn.mkdir(dir, 'p')
   return dir
 end
