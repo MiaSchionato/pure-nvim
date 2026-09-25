@@ -114,10 +114,37 @@ filter: "today | overdue"
   tomorrow); recurring tasks keep their phrase ("every monday").
 - **Only the lines between the markers are ever rewritten**, and only when
   they would change. The rest of the note is never touched.
-- **Ticking a box there** (`[x]`, in Neovim with `<leader>tx` or in Obsidian)
-  completes the task in Todoist on the next sync, and it leaves the list.
-- Any other edit between the markers is overwritten on the next sync: edit
-  tasks in Todoist or in the `<CR>` list.
+
+**Editing the list in the note** (in Neovim or in Obsidian) is sent to Todoist
+on the next sync:
+
+| In the note | In Todoist |
+|---|---|
+| tick a box (`[x]`, `<leader>tx` in Neovim) | completed; it leaves the list |
+| change the text | renamed |
+| change or add the date part (`· 2026-09-30`, `· tomorrow`, any Todoist phrase) | new due date; removing it clears the date |
+| change the priority part (`· P2`), or add one | new priority (removing it: normal) |
+| change the project part to another project's name | moved to that project |
+| a new line: `- [ ] Buy milk` | a new task, in the Inbox |
+| … with parts: `- [ ] Buy milk · today · P3 · Home` | with that date, priority and project |
+| … indented under a task | a subtask of it |
+| delete a line | the task is deleted |
+
+The parts after the text are told apart by what they are: `P1`–`P3` is the
+priority, the name of one of your projects is the project, anything else is
+the date. A new task only stays in the list if it matches the block's filter
+(a task with no date leaves a `today` list after the sync: it is in Todoist,
+in the Inbox).
+
+How edits are told from Todoist's own changes: the last sync remembers what it
+wrote (`stdpath('data')/todoist_sync.json`). A line that still reads the same
+takes whatever Todoist now says; a line you changed is sent. A task deleted
+from one note but still listed in another is not deleted.
+
+`vim.g.pure_todoist_confirm` applies here too: `'delete'` asks before a sync
+deletes tasks, `'all'` before it sends anything (Enter = No when something
+would be deleted). Saying no rewrites the list from Todoist, undoing those
+edits in the note.
 
 When it syncs: at startup, every `interval` minutes, when a note with a block
 is opened or saved, and on `:TodoistSync`.
