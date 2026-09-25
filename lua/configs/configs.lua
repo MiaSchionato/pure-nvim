@@ -116,3 +116,8 @@ vim.g.pure_todoist_sync = { interval = 10 }
 -- vim.g.pure_vault = '~/Atlas'
 -- Language of day and month names in template dates: 'en' or 'pt'.
 -- vim.g.pure_templates_locale = 'pt'
+-- Empty the vault's trash (0-Inbox/Trash, where the Delete template sends
+-- notes) each time Neovim starts, as Obsidian's TrashCleaner did. true:
+-- everything; a number: only what was not modified for that many days;
+-- false: never. Deleted for good, not moved to the recycle bin.
+vim.g.pure_trash_cleanup = true

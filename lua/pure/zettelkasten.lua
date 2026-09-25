@@ -42,9 +42,9 @@ local no_prompt_file = vim.fn.stdpath('data') .. '/obsidian_vault_no_prompt'
 --- `name` is an os.date format; %G-W%V is the ISO week, which Windows' strftime
 --- does support (checked: 2026-09-25 gives 2026-W39).
 local periodic = {
-  Daily   = { folder = '9-Archive/Periodic/Daily',   name = '%Y-%m-%d', step = 86400 },
-  Weekly  = { folder = '9-Archive/Periodic/Weekly',  name = '%G-W%V',   step = 604800 },
-  Monthly = { folder = '9-Archive/Periodic/Monthly', name = '%Y-%m',    step = nil },
+  Daily   = { folder = '9-Archive/Periodic/Daily',   name = '%Y-%m-%d', step = 86400,  unit = 'day' },
+  Weekly  = { folder = '9-Archive/Periodic/Weekly',  name = '%G-W%V',   step = 604800, unit = 'week' },
+  Monthly = { folder = '9-Archive/Periodic/Monthly', name = '%Y-%m',    step = nil,    unit = 'month' },
 }
 
 --- Where the quote of the day lives, relative to the vault. The resurfaced
@@ -119,6 +119,56 @@ local function shifted(period, when, n)
   -- os.time() carries month 0 or 13 into the year before or after.
   t.day, t.month, t.hour, t.min, t.sec, t.isdst = 1, t.month + n, 12, 0, 0, nil
   return os.time(t)
+end
+
+--- First and last day of the period holding `when`, both at noon. A week is
+--- the ISO week, Monday to Sunday; with no period, just the day.
+--- @param period table|nil
+--- @param when integer
+--- @return integer first
+--- @return integer last
+local function bounds(period, when)
+  local day = noon(when)
+  local unit = period and period.unit or 'day'
+  if unit == 'week' then
+    -- os.date's wday counts from Sunday = 1, so Monday is 2.
+    local first = day - ((os.date('*t', day).wday + 5) % 7) * 86400
+    return first, noon(first + 6 * 86400)
+  elseif unit == 'month' then
+    local t = os.date('*t', day)
+    local first = os.time({ year = t.year, month = t.month, day = 1, hour = 12 })
+    -- Month 13 carries into January, as in shifted().
+    local next_first = os.time({ year = t.year, month = t.month + 1, day = 1, hour = 12 })
+    return first, noon(next_first - 86400)
+  end
+  return day, day
+end
+
+--- The day a periodic note is dated by. A week is dated by its Thursday: in
+--- ISO 8601 the Thursday decides a week's year and month, so a week running
+--- from September into October is October's when its Thursday is. A month is
+--- dated by its first day. A day keeps its time, for {{time}}.
+--- @param period table
+--- @param when integer
+--- @return integer
+local function anchorOf(period, when)
+  local first = bounds(period, when)
+  if period.unit == 'week' then return noon(first + 3 * 86400) end
+  if period.unit == 'month' then return first end
+  return when
+end
+
+--- Noon of every day from `first` to `last`, both included.
+--- @param first integer
+--- @param last integer
+--- @return integer[]
+local function eachDay(first, last)
+  local list, day, stop = {}, noon(first), os.date('%Y-%m-%d', last)
+  while os.date('%Y-%m-%d', day) <= stop do
+    list[#list + 1] = day
+    day = noon(day + 86400)
+  end
+  return list
 end
 
 --- Moment.js tokens, longest first within each letter so "MMMM" is not eaten
@@ -347,19 +397,35 @@ end
 --- @param content string
 --- @param ctx table
 --- @return string
+--- Placeholders that are dates, and so accept a shift in days: {{date+1}},
+--- {{start-1:MMM D}}. Any other placeholder with a shift is left untouched.
+local DATED = { date = true, time = true, start = true, ['end'] = true }
+
 local function render(content, ctx)
   local when = ctx.when or os.time()
   local period = ctx.periodic
+  local first, last = bounds(period, when)
 
-  return (content:gsub('{{([%a_]+)(:?)([^}]*)}}', function(name, colon, fmt)
+  return (content:gsub('{{([%a_]+)([+-]?%d*)(:?)([^}]*)}}', function(name, shift, colon, fmt)
     local key = name:lower()
+    fmt = colon == ':' and fmt or nil
+
+    local days = tonumber(shift)
+    if shift ~= '' and not (days and DATED[key]) then return nil end
+    local function at(time)
+      return days and noon(time) + days * 86400 or time
+    end
 
     if key == 'title' then
       return ctx.title
     elseif key == 'date' then
-      return formatMoment(colon == ':' and fmt or 'YYYY-MM-DD', when)
+      return formatMoment(fmt or 'YYYY-MM-DD', at(when))
     elseif key == 'time' then
-      return formatMoment(colon == ':' and fmt or 'HH:mm', when)
+      return formatMoment(fmt or 'HH:mm', at(when))
+    elseif key == 'start' then
+      return formatMoment(fmt or 'YYYY-MM-DD', at(first))
+    elseif key == 'end' then
+      return formatMoment(fmt or 'YYYY-MM-DD', at(last))
     elseif key == 'week' then
       return os.date('%G-W%V', when)
     elseif key == 'month' then
@@ -375,6 +441,34 @@ local function render(content, ctx)
       -- Only meaningful inside a periodic note.
       if not period then return '' end
       return os.date(period.name, shifted(period, when, key == 'prev' and -1 or 1))
+    elseif key == 'days' then
+      -- A link to the daily note of each day of the period: "Mon 21/09".
+      local out = {}
+      for _, day in ipairs(eachDay(first, last)) do
+        out[#out + 1] = ('- [[%s/%s|%s]]'):format(periodic.Daily.folder,
+          os.date('%Y-%m-%d', day), formatMoment('ddd DD/MM', day))
+      end
+      return table.concat(out, '\n')
+    elseif key == 'worklogs' then
+      -- Each day's "Work log" section embedded, as lines of a callout.
+      local out = {}
+      for _, day in ipairs(eachDay(first, last)) do
+        out[#out + 1] = ('> **%s**\n> ![[%s/%s#Work log]]'):format(
+          formatMoment('ddd DD/MM', day), periodic.Daily.folder, os.date('%Y-%m-%d', day))
+      end
+      return table.concat(out, '\n>\n')
+    elseif key == 'weeks' then
+      -- A link to the weekly note of each ISO week that touches the period.
+      local out, seen = {}, {}
+      for _, day in ipairs(eachDay(first, last)) do
+        local week = os.date('%G-W%V', day)
+        if not seen[week] then
+          seen[week] = true
+          out[#out + 1] = ('- [[%s/%s|Week %d]]'):format(periodic.Weekly.folder, week,
+            tonumber(os.date('%V', day)))
+        end
+      end
+      return table.concat(out, '\n')
     end
 
     return nil -- unknown placeholder: leave it untouched
@@ -489,6 +583,7 @@ end
 local function openPeriodic(template, period, when)
   local root = vaultPath()
   if not root then return end
+  when = anchorOf(period, when)
 
   local dir = root .. '/' .. period.folder
   local name = os.date(period.name, when) .. '.md'
@@ -592,6 +687,63 @@ function M.insertTemplate()
   end)
 end
 
+--- Empty the vault's trash, the folder the Delete template sends notes to, as
+--- the TrashCleaner script did when Obsidian started.
+---
+--- vim.g.pure_trash_cleanup: true empties it; a number N removes only what has
+--- not been modified for N days; false or unset leaves it alone. What goes is
+--- deleted for good, not moved to the system's recycle bin.
+---
+--- Nothing open in this Neovim is removed, and nothing outside the trash is
+--- ever touched: the folder has to be strictly inside the vault.
+function M.cleanTrash()
+  local setting = vim.g.pure_trash_cleanup
+  if not setting then return end
+
+  local root, folder = vaultPath(), destinations.Delete
+  if not root or type(folder) ~= 'string' or vim.fn.isabsolutepath(folder) == 1 then
+    return
+  end
+  -- Relative, with no '.' or '..' step: 'x/..' or '.' would otherwise name
+  -- the vault itself, and the checks below would let it through.
+  local steps = 0
+  for step in folder:gmatch('[^/\\]+') do
+    if step == '.' or step == '..' then return end
+    steps = steps + 1
+  end
+  if steps == 0 then return end
+  local trash = root .. '/' .. folder
+  if pathKey(trash) == pathKey(root) or not isInside(trash, root)
+      or vim.fn.isdirectory(trash) == 0 then
+    return
+  end
+
+  local max_age = type(setting) == 'number' and setting * 86400 or nil
+  local open = {}
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    local name = vim.api.nvim_buf_get_name(buf)
+    if name ~= '' then open[#open + 1] = name end
+  end
+
+  local removed = 0
+  for name, kind in vim.fs.dir(trash) do
+    local path = trash .. '/' .. name
+    local stat = vim.uv.fs_stat(path)
+    local old_enough = not max_age or (stat ~= nil and os.time() - stat.mtime.sec >= max_age)
+    local in_use = false
+    for _, buf in ipairs(open) do
+      if isInside(buf, path) then in_use = true break end
+    end
+    if old_enough and not in_use
+        and vim.fn.delete(path, kind == 'directory' and 'rf' or '') == 0 then
+      removed = removed + 1
+    end
+  end
+  if removed > 0 then
+    vim.notify(('Trash: deleted %d item%s from %s'):format(removed, removed == 1 and '' or 's', folder))
+  end
+end
+
 -- Also used by plugins/obsidian.lua and configs/keymaps.lua, so the vault is
 -- configured in one place.
 M.vaultPath = vaultPath
@@ -605,10 +757,20 @@ vim.api.nvim_create_autocmd('VimEnter', {
   callback = M.maybeAskVault,
 })
 
+-- Empty the trash once per start, when a UI attaches. --headless runs, such as
+-- scripts and tests, never have one, so they never delete anything.
+vim.api.nvim_create_autocmd('UIEnter', {
+  group = vim.api.nvim_create_augroup('PureTrashCleanup', { clear = true }),
+  once = true,
+  callback = function() vim.schedule(M.cleanTrash) end,
+})
+
 -- Exposed for tests.
 M._render = render
 M._formatMoment = formatMoment
 M._shifted = shifted
+M._bounds = bounds
+M._anchorOf = anchorOf
 M._periodic = periodic
 M._destinations = destinations
 
