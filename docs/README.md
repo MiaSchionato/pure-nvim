@@ -113,5 +113,6 @@ Undo history is in `stdpath('state')/undo`.
 | `:TodoistRefresh` | reload the drawn blocks (when sync is off) |
 | `:TodoistToken` | set the Todoist token (hidden input) |
 | `:ZettelVault` | choose the Obsidian vault folder |
+| `:VaultSync` | save, commit, pull, then push the vault ([zettelkasten](zettelkasten.md)) |
 | `:Notifications` | history of messages |
 | `:Oil [dir]` | file browser |

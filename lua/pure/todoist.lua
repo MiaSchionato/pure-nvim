@@ -1197,7 +1197,11 @@ function M.renderBlocks(buf)
   local width = win ~= -1 and vim.api.nvim_win_get_width(win) or 80
 
   for _, block in ipairs(blocks) do
-    if not token() then
+    if block.filter and block.filter:find('{{', 1, true) then
+      -- A template's block ({{start-1:MMM D}}...): not a filter until the
+      -- template is expanded into a note, and Todoist rejects it as it is.
+      cache[block.filter] = { time = 0, err = 'template placeholders, filled in when a note is made from it' }
+    elseif not token() then
       cache[block.filter or ''] = { time = 0, err = 'no token, run :TodoistToken' }
     else
       load(block.filter, function() M.renderBlocks(buf) end)
@@ -1417,22 +1421,62 @@ local function bufferOf(path)
   end
 end
 
+--- Whether the note at `path` may be synced. Never the templates: their blocks
+--- hold placeholders such as {{start-1:MMM D}} that only become a filter once
+--- the template is expanded, and tasks written into a template are copied
+--- into every note made from it afterwards. Never the trash either. This is
+--- checked for every note, not only the vault search: opening or saving a
+--- template in a window used to sync it too.
+local function syncable(path)
+  local ok_z, zet = pcall(require, 'pure.zettelkasten')
+  local vault = ok_z and zet.vaultPath() or nil
+  if not vault then return true end
+  local function key(p)
+    p = vim.fs.normalize(p)
+    return vim.fn.has('win32') == 1 and p:lower() or p
+  end
+  local note = key(path)
+  local folders = {
+    zet.templatesPath and zet.templatesPath() or (vault .. '/' .. (vim.g.pure_templates or 'Templates')),
+    vault .. '/' .. ((zet._destinations or {}).Delete or '0-Inbox/Trash'),
+  }
+  for _, folder in ipairs(folders) do
+    local f = key(folder)
+    if note:sub(1, #f + 1) == f .. '/' then return false end
+  end
+  return true
+end
+
 --- The note's lines and its buffer, if loaded. nil while it has unsaved
---- changes: those are never overwritten.
+--- changes: those are never overwritten. The third value is true when the
+--- note's lines end in CRLF.
 local function noteLines(path)
   local buf = bufferOf(path)
   if buf then
     if vim.bo[buf].modified then return nil end
     return vim.api.nvim_buf_get_lines(buf, 0, -1, false), buf
   end
-  -- 'b' keeps the file byte for byte, final newline or not.
+  -- 'b' keeps the file byte for byte, final newline or not. In a CRLF note
+  -- every line then ends in '\r': it is taken off here and put back when the
+  -- note is written. Before, the task lines went in without it, the note ended
+  -- up mixing both endings, and Neovim showed ^M on all the other lines.
   local ok, lines = pcall(vim.fn.readfile, path, 'b')
-  return ok and lines or nil
+  if not ok then return nil end
+  local cr = 0
+  for i = 1, #lines - 1 do
+    if lines[i]:sub(-1) == '\r' then cr = cr + 1 end
+  end
+  for i, l in ipairs(lines) do
+    if l:sub(-1) == '\r' then lines[i] = l:sub(1, -2) end
+  end
+  -- The ending most lines use wins, so a note that is already mixed comes out
+  -- consistent the next time it is written.
+  return lines, nil, cr > (#lines - 1) / 2
 end
 
 --- Rewrite the regions of one note that changed.
 local function syncNote(path, fetched, projects)
-  local lines, buf = noteLines(path)
+  local lines, buf, crlf = noteLines(path)
   if not lines then return end
   local edits = {}
   local blocks = blocksIn(lines)
@@ -1460,6 +1504,13 @@ local function syncNote(path, fetched, projects)
     for _, ed in ipairs(edits) do
       for _ = ed[1] + 1, ed[2] do table.remove(lines, ed[1] + 1) end
       for k, l in ipairs(ed[3]) do table.insert(lines, ed[1] + k, l) end
+    end
+    if crlf then
+      -- The last item is empty when the note ends in a newline: that one is
+      -- the newline itself, not a line.
+      for i, l in ipairs(lines) do
+        if not (i == #lines and l == '') then lines[i] = l .. '\r' end
+      end
     end
     vim.fn.writefile(lines, path, 'b')
   end
@@ -1527,12 +1578,15 @@ function M.sync(paths)
   local function run(files)
     local notes, filters, ticked = {}, {}, {}
     for _, path in ipairs(files) do
-      local lines = not frozen(path) and noteLines(path)
+      local lines = not frozen(path) and syncable(path) and noteLines(path)
       if lines then
         local blocks = blocksIn(lines)
         if #blocks > 0 then table.insert(notes, path) end
         for _, b in ipairs(blocks) do
-          filters[b.filter or ''] = b.filter or false
+          -- Placeholders left in a note are not a filter Todoist accepts.
+          if not (b.filter and b.filter:find('{{', 1, true)) then
+            filters[b.filter or ''] = b.filter or false
+          end
           local region = regionOf(lines, b)
           if region then tickedIds(lines, region, ticked) end
         end
