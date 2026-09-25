@@ -124,4 +124,5 @@ Undo history is in `stdpath('state')/undo`.
 | `:ZettelVault` | choose the Obsidian vault folder |
 | `:VaultSync` | save, commit, pull, then push the vault ([zettelkasten](zettelkasten.md)) |
 | `:Notifications` | history of messages |
+| `:PureUpdate` | pull new commits of this configuration, then update the plugins (`u` on the dashboard) |
 | `:Oil [dir]` | file browser |
