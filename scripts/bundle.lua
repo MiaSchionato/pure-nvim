@@ -21,6 +21,11 @@
 --  extra themes) are skipped, so nothing is downloaded. Set
 --  vim.g.pure_portable = false before it runs to get everything.
 --
+--  Vendored plugins: the `vendor` list below is embedded too (their lua/
+--  modules, colors/ and LICENSE), taken from where vim.pack installed them,
+--  so portable mode still has them without downloading. NeoSolarized is the
+--  default theme.
+--
 --  Do not edit the built file: change the modules and build again.
 -- =============================================================================
 
@@ -66,6 +71,26 @@ for _, pattern in ipairs({ 'colors/*.lua', 'snippets/*', 'docs/*.md' }) do
   end
 end
 
+-- Plugins embedded whole (small, and licensed for redistribution).
+local vendor = { 'NeoSolarized' }
+local vendored = {}
+local vendor_rev = {}
+for _, plugin in ipairs(vendor) do
+  local root = vim.fs.normalize(vim.fn.stdpath('data')) .. '/site/pack/core/opt/' .. plugin
+  assert(vim.uv.fs_stat(root), plugin .. ' is not installed; open Neovim once so vim.pack gets it')
+  for _, path in ipairs(vim.fn.glob(root .. '/lua/' .. plugin .. '/**/*.lua', true, true)) do
+    path = vim.fs.normalize(path)
+    local name = path:sub(#root + #'/lua/' + 1):gsub('%.lua$', ''):gsub('/init$', ''):gsub('/', '.')
+    table.insert(vendored, { name = name, path = plugin .. '/' .. path:sub(#root + 2), code = read(path) })
+  end
+  for _, path in ipairs(vim.fn.glob(root .. '/colors/*', true, true)) do
+    table.insert(files, { path = 'colors/' .. vim.fs.basename(path), data = read(path) })
+  end
+  table.insert(files, { path = 'licenses/' .. plugin .. '-LICENSE', data = read(root .. '/LICENSE') })
+  local rev = vim.system({ 'git', '-C', root, 'rev-parse', '--short', 'HEAD' }, { text = true }):wait()
+  vendor_rev[plugin] = vim.trim(rev.stdout or '?')
+end
+
 local init = read('init.lua')
 local s = init:find('%-%- %[bundle:loader%]')
 local _, e = init:find('%-%- %[/bundle:loader%][^\n]*\n')
@@ -88,10 +113,15 @@ add(([[
 --  Portable mode is on: plugins and extra themes are not downloaded. Put
 --    vim.g.pure_portable = false
 --  on the line below to install and load everything.
+--
+--  Embedded third-party code: %s. Each keeps its
+--  license, unpacked with the files below (licenses/).
 -- =============================================================================
 if vim.g.pure_portable == nil then vim.g.pure_portable = true end
 ]]):format(git({ 'rev-parse', '--abbrev-ref', 'HEAD' }), git({ 'rev-parse', '--short', 'HEAD' }),
-  os.date('%Y-%m-%d')))
+  os.date('%Y-%m-%d'), table.concat(vim.tbl_map(function(p)
+    return p .. ' @ ' .. vendor_rev[p] .. ' (Apache-2.0)'
+  end, vendor), ', ')))
 
 -- Unpack the embedded files (only when they changed) and put them on the
 -- runtimepath: :colorscheme needs colors/ there.
@@ -118,6 +148,14 @@ add([[
   vim.g.pure_bundle_dir = dir
 end
 ]])
+
+add('\n-- Embedded plugins\n')
+for _, m in ipairs(vendored) do
+  -- Only when that plugin is not installed: with portable mode off, vim.pack
+  -- puts the real one on the runtimepath and it wins.
+  add(('\n-- %s\nif not package.preload[%q] then package.preload[%q] = function(...)\n%s\nend end\n')
+    :format(m.path, m.name, m.name, m.code))
+end
 
 add('\n-- Modules\n')
 for _, m in ipairs(modules) do
