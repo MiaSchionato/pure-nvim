@@ -14,7 +14,7 @@ Windows) to use it as the configuration.
 
 **Portable by default:** no plugins or extra themes are downloaded. The
 home-made modules (pickers, markdown, key hints, git, Todoist, notes), the
-language servers installed on the machine and the myghtfly theme work. Put
+language servers installed on the machine and the NeoSolarized (default, embedded with its Apache-2.0 license) and myghtfly themes work. Put
 `vim.g.pure_portable = false` near the top of the file to install and load
 everything. The pickers need `fzf`, `fd`, `rg` and `bat`.
 
