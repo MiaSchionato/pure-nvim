@@ -122,9 +122,14 @@ filter: "today | overdue"
 When it syncs: at startup, every `interval` minutes, when a note with a block
 is opened or saved, and on `:TodoistSync`.
 
-Which notes: every note of the vault with a block (found with ripgrep), not
-the templates folder, the trash (`0-Inbox/Trash`) or hidden folders; plus any
-other open note with a block. It never overwrites:
+Which notes: every note of the vault with a block (found with ripgrep), plus
+any other open note with a block – but **never the templates folder or the
+trash** (`0-Inbox/Trash`), however the note comes in (search, open, saved): a
+template's blocks hold placeholders like `{{start-1:MMM D}}` that are not a
+filter until the note is made, and tasks written into a template would be
+copied into every note made from it. A block whose filter still has `{{…}}`
+is never sent to Todoist. The note keeps its line endings (CRLF or LF). It
+never overwrites:
 
 - a note open with **unsaved changes** (it waits until you save);
 - a note named after a date other than today (`2026-09-24.md`): **past
