@@ -916,7 +916,10 @@ local function unlessModified(what, fn)
   end
 end
 
-function M.open(filter)
+--- Open the task list for `filter`. `float` = { win, row, title } shows it
+--- in a floating window over that row of `win` (a ```todoist block) instead
+--- of a split.
+function M.open(filter, float)
   filter = (filter and filter ~= '') and filter or nil
   local key = filter or ''
 
@@ -957,6 +960,11 @@ function M.open(filter)
       if vim.bo[buf].modified then state.loaded = nil end
       vim.bo[buf].modified = false
       if #vim.api.nvim_list_wins() > 1 then vim.cmd('close') else vim.cmd('bprevious') end
+      -- Opened from a block: redraw the blocks with what was just sent.
+      if state.from_block then
+        state.from_block = false
+        M.refreshBlocks()
+      end
     end)
     -- The same toggle as <leader>tx in notes; the change is sent on :w.
     map('<CR>', require('configs.functions').toggleCheckbox, 'Toggle task checkbox')
@@ -971,8 +979,24 @@ function M.open(filter)
   end
 
   local win = vim.fn.bufwinid(state.buf)
+  state.from_block = float ~= nil
   if win ~= -1 then
     vim.api.nvim_set_current_win(win)
+  elseif float then
+    local width = vim.api.nvim_win_get_width(float.win)
+    vim.api.nvim_open_win(state.buf, true, {
+      relative = 'win',
+      win = float.win,
+      bufpos = { float.row, 0 },
+      row = 0,
+      col = 0,
+      width = math.max(20, width - 4),
+      height = math.max(5, math.floor(vim.api.nvim_win_get_height(float.win) * 0.6)),
+      title = ' ' .. float.title .. ' ',
+      title_pos = 'left',
+      footer = ' x done · :w send · q close ',
+      footer_pos = 'right',
+    })
   else
     vim.cmd('botright split')
     vim.api.nvim_win_set_buf(0, state.buf)
@@ -1007,10 +1031,12 @@ end
 --    filter: "today | overdue"
 --    ```
 --
---  The tasks are drawn under the block as virtual lines; the file keeps only
---  the query. They load when the note is shown and are cached for a few
---  minutes; :TodoistRefresh reloads them. :Todoist with the cursor inside a
---  block opens that filter as the interactive list, to complete tasks.
+--  The tasks are drawn in place of the block as virtual lines (mdview hides
+--  the query until the cursor moves into it); the file keeps only the query.
+--  They load when the note is shown and are cached for a few minutes;
+--  :TodoistRefresh reloads them. <CR> (or :Todoist) with the cursor inside
+--  a block opens that filter as the interactive list in a floating window
+--  over it: go through the tasks, x to complete, :w to send, q to close.
 --  The plugin's older JSON form ({"name": ..., "filter": ...}) is read too.
 
 local block_ns = vim.api.nvim_create_namespace('pure_todoist_block')
@@ -1137,7 +1163,7 @@ local function blockLines(block, entry, width)
     if p > 1 then table.insert(chunks, { '  ' .. priorityLabel(p), priority_hl[p] }) end
     add(chunks)
   end
-  add({ { '╰─ ', 'Comment' }, { ':Todoist in the block to complete tasks', 'Comment' } })
+  add({ { '╰─ ', 'Comment' }, { 'move into the block and <CR> to go through the tasks', 'Comment' } })
   return lines
 end
 
@@ -1159,14 +1185,52 @@ function M.renderBlocks(buf)
     else
       load(block.filter, function() M.renderBlocks(buf) end)
     end
-    -- Hung under the last line of the query, not the closing fence: Neovim
-    -- conceals the fence lines of markdown code blocks, and virtual lines
-    -- attached to a concealed line are hidden with it.
-    local row = block.last > block.first + 1 and block.last - 1 or block.last
+    -- pure/mdview.lua hides the block's lines (see M.hiddenBlocks), and
+    -- virtual lines hung on a hidden line are hidden with it: hang them above
+    -- the line after the block, or below the one before it.
+    local count = vim.api.nvim_buf_line_count(buf)
+    local row, above = block.last, false
+    if block.last + 1 < count then
+      row, above = block.last + 1, true
+    elseif block.first > 0 then
+      row = block.first - 1
+    end
     vim.api.nvim_buf_set_extmark(buf, block_ns, row, 0, {
       virt_lines = blockLines(block, cache[block.filter or ''], width),
+      virt_lines_above = above,
     })
   end
+end
+
+--- { first, last } rows of the blocks pure/mdview.lua may hide: those with a
+--- line before or after them to hang the tasks on.
+function M.hiddenBlocks(buf)
+  local ranges = {}
+  local count = vim.api.nvim_buf_line_count(buf)
+  for _, b in ipairs(findBlocks(buf)) do
+    if b.last + 1 < count or b.first > 0 then table.insert(ranges, { b.first, b.last }) end
+  end
+  return ranges
+end
+
+--- With the cursor in a ```todoist block, open its tasks in a floating
+--- window over it, to go through them line by line. False elsewhere.
+function M.openBlock()
+  local buf = vim.api.nvim_get_current_buf()
+  local block = blockAt(buf, vim.fn.line('.') - 1)
+  if not block then return false end
+  M.open(block.filter, {
+    win = vim.api.nvim_get_current_win(),
+    row = block.first,
+    title = block.name or block.filter or 'Todoist',
+  })
+  return true
+end
+
+--- <CR> in notes: the block's tasks inside a block, else `fallback()`.
+function M.enter(fallback)
+  if M.openBlock() then return end
+  fallback()
 end
 
 --- Reload every block in every loaded markdown buffer.
@@ -1180,10 +1244,24 @@ function M.refreshBlocks()
   end
 end
 
+local block_group = vim.api.nvim_create_augroup('PureTodoistBlocks', { clear = true })
 vim.api.nvim_create_autocmd({ 'BufWinEnter', 'InsertLeave', 'TextChanged' }, {
-  group = vim.api.nvim_create_augroup('PureTodoistBlocks', { clear = true }),
+  group = block_group,
   pattern = { '*.md', '*.markdown' },
   callback = function(args) M.renderBlocks(args.buf) end,
+})
+
+-- <CR> inside a block opens its tasks. In vault notes obsidian.nvim maps <CR>
+-- too, later; plugins/obsidian.lua routes it through M.enter as well.
+vim.api.nvim_create_autocmd('FileType', {
+  group = block_group,
+  pattern = 'markdown',
+  callback = function(args)
+    if vim.bo[args.buf].buftype ~= '' then return end -- not the task list itself
+    vim.keymap.set('n', '<CR>', function()
+      M.enter(function() vim.api.nvim_feedkeys(vim.keycode('<CR>'), 'n', false) end)
+    end, { buffer = args.buf, desc = 'Todoist block: open its tasks' })
+  end,
 })
 
 vim.api.nvim_create_user_command('TodoistRefresh', M.refreshBlocks, {
