@@ -211,7 +211,8 @@ function M.fuzzyGrep(path)
   path = asDir(path)
   local rg = "rg --column --line-number --no-heading --color=always --smart-case"
   -- fzf wants input on stdin even with --disabled; give it an empty one.
-  local empty = vim.fn.has("win32") == 1 and "type nul" or "true"
+  -- By shell, not by OS: the windows branch runs these through Git bash.
+  local empty = vim.o.shell:lower():match("cmd%.exe$") and "type nul" or "true"
   local fzf = "fzf --ansi --disabled --delimiter :"
     .. string.format(" --bind %s", vim.fn.shellescape("change:reload:" .. rg .. " -- {q}"))
     .. " --preview 'bat --style=numbers --color=always --highlight-line {2} {1}' --preview-window 'up,60\\%,border-bottom,+{2}+3/3'"
