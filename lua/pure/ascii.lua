@@ -242,7 +242,7 @@ M.sharp = {
     [[  | |\  ||  __|| |_| |  \ V /   | | | |  | |]],
     [[  |_| \_||____| \___/    \_/   |___||_|  |_|]],
     [[]],
-    [[       [n] New File    [q] Quit    [u] Update]],
+    [[       [d] Daily note    [n] New File    [q] Quit    [u] Update]],
     [[]],
   }
    M.saturn = {
@@ -268,7 +268,7 @@ M.sharp = {
       [[                               .. . ."']],
       [[                              .]],
       [[]],
-      [[                                   [n] New File    [q] Quit    [u] Update]],
+      [[                                   [d] Daily note    [n] New File    [q] Quit    [u] Update]],
       [[]],
       [[]],
       [[]],
