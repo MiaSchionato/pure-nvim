@@ -37,12 +37,28 @@ local function plugins()
   if vim.pack and vim.pack.update then vim.pack.update() end
 end
 
+--- Whether :restart can bring the open files back. It saves the session to
+--- the temp folder and sources it on the new Neovim through a Lua string
+--- built from fnameescape(): with a space in that path ("C:/Users/Mia
+--- Schionato/...") the escaped "\ " is an invalid Lua escape, and the new
+--- Neovim starts with "E5107: invalid escape sequence" in UIEnter. Checked
+--- on Neovim 0.12.5; the same folder its runtime (vim/_core/server.lua) uses.
+local function sessionRestartWorks()
+  local dir = vim.fs.abspath(vim.fs.dirname(vim.fs.dirname(vim.fn.tempname())))
+  return vim.fn.fnameescape(dir) == dir
+end
+
 --- After a pull: restart now, or say that the new configuration needs one.
 local function offerRestart(count)
   local msg = ('Configuration updated (%d new commit%s).'):format(count, count == 1 and '' or 's')
-  if vim.fn.exists(':restart') == 2 and #vim.api.nvim_list_uis() > 0
-      and vim.fn.confirm(msg .. '\nRestart Neovim now to load it?', '&Yes\n&No', 1) == 1 then
-    return vim.cmd('restart')
+  if vim.fn.exists(':restart') == 2 and #vim.api.nvim_list_uis() > 0 then
+    local keep = sessionRestartWorks()
+    local question = keep and 'Restart Neovim now to load it?'
+      or 'Restart Neovim now to load it? (open files are not reopened)'
+    if vim.fn.confirm(msg .. '\n' .. question, '&Yes\n&No', 1) == 1 then
+      -- restart! skips the session, and with it the broken path above.
+      return vim.cmd(keep and 'restart' or 'restart!')
+    end
   end
   vim.notify(msg .. ' Restart Neovim to load it, then press u again for the plugins.')
 end
