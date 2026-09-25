@@ -566,6 +566,7 @@ end
 -- Also used by plugins/obsidian.lua and configs/keymaps.lua, so the vault is
 -- configured in one place.
 M.vaultPath = vaultPath
+M.templatesPath = templatesPath
 
 -- Offer to set the vault on the first start with a UI (maybeAskVault itself
 -- returns at once when one is set, declined, or there is no UI).
