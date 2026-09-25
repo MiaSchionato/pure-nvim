@@ -145,8 +145,11 @@ are cached for 5 minutes; `:TodoistRefresh` reloads them.
 ## 3. Archive
 
 ```lua
-vim.g.pure_todoist_archive = '~/…/9-Archive/Todoist/'
+vim.g.pure_todoist_archive = '9-Archive/Todoist/'
 ```
+
+A relative folder is inside the Obsidian vault (see [zettelkasten](zettelkasten.md)),
+so it follows the vault if that moves; an absolute path (`~/…`) is used as is.
 
 Keeps three files there, written in the background and only when something
 changed:
