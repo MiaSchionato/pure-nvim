@@ -22,6 +22,7 @@
 --    [[path/note|Text]]  wikilinks show only their text: Text
 --    [[note#Section]]    ... or the note (and section): note > Section
 --    ![[image.png]]      embeds get an icon: image or file
+--    ```todoist          the query is hidden; pure/todoist.lua draws the tasks
 --
 --  Everything is drawn with 'overlay' virtual text of the same width as what
 --  it covers, so columns never shift and the cursor lands where the real
@@ -30,8 +31,10 @@
 --
 --  The line under the cursor shows the raw markdown in insert and visual mode,
 --  to edit it; in normal mode it stays rendered, like concealcursor=nc.
---  Hidden lines (frontmatter, footnotes) come back while the cursor is on
---  them: gg shows the frontmatter, and moving onto a footnote shows it.
+--  Hidden lines (frontmatter, footnotes, todoist queries) come back while the
+--  cursor is on them: gg shows the frontmatter, and moving onto a footnote
+--  shows it. A wikilink shows raw while the cursor is inside it, as in
+--  Obsidian's live preview, so it can be edited and followed (<CR>).
 --
 --    <leader>om  toggle rendering
 -- =============================================================================
@@ -405,6 +408,8 @@ local function hideLines(buf, top, bottom, mark)
   local ranges = footnotes(buf, top, bottom)
   local fm = frontmatter(buf)
   if fm then table.insert(ranges, 1, fm) end
+  local ok, todoist = pcall(require, 'pure.todoist')
+  if ok and todoist.hiddenBlocks then vim.list_extend(ranges, todoist.hiddenBlocks(buf)) end
 
   for _, r in ipairs(ranges) do
     if cursor < r[1] or cursor > r[2] then
@@ -451,14 +456,36 @@ local function wikilinkText(inner)
   return note ~= '' and (note .. ' > ' .. shown) or shown
 end
 
+--- The [[wikilink]] (with its '!') under byte column `col` of `text`, as
+--- "start:stop" (1-based, stop exclusive), or ''.
+local function linkAt(text, col)
+  for start, stop in text:gmatch('()%[%[[^%[%]]-%]%]()') do
+    if text:sub(start - 1, start - 1) == '!' then start = start - 1 end
+    if col + 1 >= start and col + 1 < stop then return start .. ':' .. stop end
+  end
+  return ''
+end
+
+--- The link under the cursor, as a key that changes when the cursor enters
+--- or leaves one.
+local function cursorLink()
+  local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+  local key = linkAt(vim.api.nvim_get_current_line(), col)
+  return key ~= '' and (row .. ':' .. key) or ''
+end
+
 --- [[target|alias]] drawn as its text. Obsidian's own syntax, which the
 --- markdown parser does not know (it already hides the URL of [text](url)).
+--- The link under the cursor is left raw.
 local function wikilinks(buf, top, bottom, mark)
   local lines = vim.api.nvim_buf_get_lines(buf, top, bottom + 1, false)
+  local cursor_row, cursor_col = unpack(vim.api.nvim_win_get_cursor(0))
   for i, text in ipairs(lines) do
     local row = top + i - 1
+    local raw = row == cursor_row - 1 and linkAt(text, cursor_col) or ''
     for start, inner, stop in text:gmatch('()%[%[([^%[%]]-)%]%]()') do
-      if inner ~= '' and not inCode(buf, row, start - 1) then
+      local key = (text:sub(start - 1, start - 1) == '!' and start - 1 or start) .. ':' .. stop
+      if inner ~= '' and key ~= raw and not inCode(buf, row, start - 1) then
         local shown = wikilinkText(inner)
         -- ![[...]] embeds a note or a file: the '!' becomes an icon.
         if text:sub(start - 1, start - 1) == '!' then
@@ -552,6 +579,7 @@ function M.refresh()
   wikilinks(buf, top, bottom, mark)
   vim.b[buf].pure_md_hidden = ranges
   vim.b[buf].pure_md_revealed = rangeAt(ranges, vim.fn.line('.') - 1)
+  vim.b[buf].pure_md_link = cursorLink()
 end
 
 function M.toggle()
@@ -571,7 +599,8 @@ vim.api.nvim_create_autocmd(
       -- movement needs no redraw -- unless it enters or leaves a hidden block
       -- (frontmatter, footnote). In visual mode the raw line follows it.
       if args.event == 'CursorMoved' and vim.fn.mode() == 'n'
-        and rangeAt(vim.b[args.buf].pure_md_hidden, vim.fn.line('.') - 1) == vim.b[args.buf].pure_md_revealed then
+        and rangeAt(vim.b[args.buf].pure_md_hidden, vim.fn.line('.') - 1) == vim.b[args.buf].pure_md_revealed
+        and cursorLink() == vim.b[args.buf].pure_md_link then
         return
       end
       -- A note opens on its first line, which would reveal the frontmatter:
