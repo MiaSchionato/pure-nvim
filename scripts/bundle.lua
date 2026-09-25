@@ -35,7 +35,20 @@ local function read(path)
   local f = assert(io.open(path, 'rb'))
   local data = f:read('*a')
   f:close()
-  return data
+  -- A Windows checkout (core.autocrlf) has CRLF in every file, and pure.lua
+  -- took them along: Linux and macOS got a file full of '\r'. LF is what the
+  -- repository holds, so the build is the same whatever system runs it.
+  return (data:gsub('\r\n', '\n'))
+end
+
+--- vim.fn.glob(), normalised and sorted by bytes. glob's own order depends on
+--- the system (Windows ignores case, Linux does not), which moved
+--- plugins.Treesitter around from one build to the next. Byte order is the
+--- one a Linux build always had.
+local function glob(pattern)
+  local paths = vim.tbl_map(vim.fs.normalize, vim.fn.glob(pattern, true, true))
+  table.sort(paths)
+  return paths
 end
 
 --- `data` as a Lua long string whose brackets do not occur inside it.
@@ -53,9 +66,9 @@ local function git(args)
   return res.code == 0 and vim.trim(res.stdout) or '?'
 end
 
--- Modules, in the order init.lua loads them (glob order of their paths).
+-- Modules, in the order of their paths (see glob() above).
 local modules = {}
-for _, path in ipairs(vim.fn.glob('lua/**/*.lua', true, true)) do
+for _, path in ipairs(glob('lua/**/*.lua')) do
   path = vim.fs.normalize(path)
   local name = path:sub(#'lua/' + 1):gsub('%.lua$', ''):gsub('/', '.')
   local code = read(path)
@@ -66,7 +79,7 @@ assert(#modules > 0, 'run from the repository root')
 -- Files that are not modules, unpacked at start.
 local files = {}
 for _, pattern in ipairs({ 'colors/*.lua', 'snippets/*', 'docs/*.md' }) do
-  for _, path in ipairs(vim.fn.glob(pattern, true, true)) do
+  for _, path in ipairs(glob(pattern)) do
     table.insert(files, { path = vim.fs.normalize(path), data = read(path) })
   end
 end
@@ -78,12 +91,12 @@ local vendor_rev = {}
 for _, plugin in ipairs(vendor) do
   local root = vim.fs.normalize(vim.fn.stdpath('data')) .. '/site/pack/core/opt/' .. plugin
   assert(vim.uv.fs_stat(root), plugin .. ' is not installed; open Neovim once so vim.pack gets it')
-  for _, path in ipairs(vim.fn.glob(root .. '/lua/' .. plugin .. '/**/*.lua', true, true)) do
+  for _, path in ipairs(glob(root .. '/lua/' .. plugin .. '/**/*.lua')) do
     path = vim.fs.normalize(path)
     local name = path:sub(#root + #'/lua/' + 1):gsub('%.lua$', ''):gsub('/init$', ''):gsub('/', '.')
     table.insert(vendored, { name = name, path = plugin .. '/' .. path:sub(#root + 2), code = read(path) })
   end
-  for _, path in ipairs(vim.fn.glob(root .. '/colors/*', true, true)) do
+  for _, path in ipairs(glob(root .. '/colors/*')) do
     table.insert(files, { path = 'colors/' .. vim.fs.basename(path), data = read(path) })
   end
   table.insert(files, { path = 'licenses/' .. plugin .. '-LICENSE', data = read(root .. '/LICENSE') })
