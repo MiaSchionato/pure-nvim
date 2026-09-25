@@ -2,6 +2,10 @@
 
 This repository contains my personal and highly opinionated Neovim configuration. I believe that in the modern Neovim ecosystem, plugins and configurations are closely intertwined. This has inspired me to create my own set of configurations, tailored to my specific needs and preferences.
 
+**What each part does and how to use it: [docs/](docs/README.md).** Inside
+Neovim, `<leader>fh` lists every section of those pages next to Neovim's own
+help.
+
 This repository is not intended for public use, but rather as a personal project. However, feel free to copy, modify, or use any part of this configuration at your own risk. I am always open to suggestions and ideas for improvement.
 
 ## Goals
