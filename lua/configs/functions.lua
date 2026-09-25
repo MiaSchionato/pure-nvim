@@ -1,5 +1,4 @@
 local M = {}
-local mini = require('plugins.mini')
 
 function M.ConfigHighlightByColorscheme(colorscheme, highlightGroups)
   vim.api.nvim_create_autocmd("ColorScheme", {
@@ -122,35 +121,6 @@ function M.toggleDiagnostics()
   })
 end
 
--- These probed `mini.session`, but `mini` here is require('plugins.mini'),
--- which returns an empty table -- so every call raised "attempt to index a nil
--- value". mini.snippets is currently commented out in plugins/mini.lua, hence
--- the guard rather than a hard reference.
-local function snippetSessionActive()
-  return _G.MiniSnippets ~= nil and MiniSnippets.session.get() ~= nil
-end
-
-function M.snippetJumpNext()
-  if snippetSessionActive() then
-    return '<Cmd>lua MiniSnippets.session.jump("next")<CR>'
-  end
-  return '<Right>'
-end
-
-function M.snippetJumpPrev()
-  if snippetSessionActive() then
-    return '<Cmd>lua MiniSnippets.session.jump("prev")<CR>'
-  end
-  return '<Left>'   -- was '<Right>'
-end
-
-function M.snippetStop()
-  if snippetSessionActive() then
-    MiniSnippets.session.stop()
-  end
-  vim.cmd.stopinsert()
-end
-
 function M.toggleInlayHints()
   -- This used to *assign* a boolean over vim.lsp.inlay_hint.enable, replacing
   -- the function itself. After one press the API was gone, which also broke
@@ -189,12 +159,27 @@ function M.toggleHighlightSearch()
   vim.opt.hlsearch = not is_active
 end
 
+--- Highlight every occurrence of the word under the cursor, or turn the
+--- highlight off when it is already showing that same word. On another word
+--- it switches to that word instead of just turning off.
+---
+--- This used to yank with 'viw"vy ', which clobbered register v and, through
+--- the trailing space, moved the cursor one column right on every use.
 function M.toggleWordHighlight()
-  local is_active = vim.opt.hlsearch:get()
-  vim.opt.hlsearch = not is_active
-  vim.cmd('noautocmd normal! viw"vy ')
-  local text = vim.fn.getreg('v')
-  vim.fn.setreg('/', text)
+  local word = vim.fn.expand('<cword>')
+  -- \V: no regex magic ('.' or '*' in the word match literally);
+  -- \< \>: whole word only, so 'foo' no longer lights up 'foobar'.
+  local pattern = '\\V\\<' .. vim.fn.escape(word, '\\') .. '\\>'
+
+  if vim.o.hlsearch and (word == '' or vim.fn.getreg('/') == pattern) then
+    vim.o.hlsearch = false
+    return
+  end
+  if word == '' then return end
+
+  vim.fn.setreg('/', pattern)
+  vim.fn.histadd('/', pattern) -- so / then <Up> recalls it
+  vim.o.hlsearch = true
 end
 
 -- TODO: Move this func to its own file to extend functionality
@@ -202,11 +187,12 @@ end
 
 -- TODO:Add signcolumn always shown ()
 local namespace_id =vim.api.nvim_create_namespace("git-diff")
-local diff_active = false
+-- Per buffer (b:pure_git_diff): one global flag meant toggling in a second
+-- buffer "deactivated" it there, while the first kept its marks.
 function M.gitDiffToggle()
-  if diff_active then
+  if vim.b.pure_git_diff then
     vim.api.nvim_buf_clear_namespace(0,namespace_id,0,-1)
-    diff_active = false
+    vim.b.pure_git_diff = false
     vim.notify("diff deactivated")
     return
   end
@@ -228,7 +214,7 @@ function M.gitDiffToggle()
     return
   end
 
-  diff_active = true
+  vim.b.pure_git_diff = true
   vim.notify("Git diff activated")
   local current_line = 0
 
@@ -261,17 +247,48 @@ function M.gitDiffToggle()
   end
 end
 
+--- Toggle the checkbox of the list item on the cursor line: [ ] -> [x] -> [ ].
+--- Obsidian's other states ([~] [!] [>] [-]) count as not done, so they go to
+--- [x]. A plain '- item' gets an empty box.
+---
+--- Only the box right after the bullet is touched; this used to change the
+--- first "[ ]" anywhere in the line, so brackets in the task text could flip.
+--- Shared by <leader>tx in notes and <CR> in the Todoist list, so every way of
+--- ticking a box behaves the same.
 function M.toggleCheckbox()
   local line = vim.api.nvim_get_current_line()
-  local new_line = ""
-  if line:find("%[%s?%]") then
-    new_line = line:gsub("%[%s?%]", "[x]", 1)
-  elseif line:find("%[[xX]%]") then
-    new_line = line:gsub("%[[xX]%]", "[ ]", 1)
-  elseif line:find("^%s*-%s") then
-    new_line = line:gsub("(-%s)", "- [ ] ", 1)
+  local prefix, state, rest = line:match('^(%s*[-*+]%s+)%[(.?)%](.*)$')
+  local new_line
+  if prefix then
+    new_line = prefix .. (state:match('[xX]') and '[ ]' or '[x]') .. rest
   else
-    return
+    local bullet, text = line:match('^(%s*[-*+]%s+)(.*)$')
+    if not bullet then return end
+    new_line = bullet .. '[ ] ' .. text
+  end
+  vim.api.nvim_set_current_line(new_line)
+end
+
+--- Cycle the checkbox of the list item on the cursor line through Obsidian's
+--- states: [ ] -> [~] in progress -> [!] important -> [>] deferred ->
+--- [-] cancelled -> [x] done -> [ ]. A plain '- item' gets an empty box.
+--- For notes only: Todoist knows just [ ] and [x].
+function M.cycleCheckbox()
+  local order = { ' ', '~', '!', '>', '-', 'x' }
+  local line = vim.api.nvim_get_current_line()
+  local prefix, state, rest = line:match('^(%s*[-*+]%s+)%[(.?)%](.*)$')
+  local new_line
+  if prefix then
+    state = state == '' and ' ' or state:lower()
+    local next_state = ' '
+    for i, s in ipairs(order) do
+      if s == state then next_state = order[i % #order + 1] end
+    end
+    new_line = prefix .. '[' .. next_state .. ']' .. rest
+  else
+    local bullet, text = line:match('^(%s*[-*+]%s+)(.*)$')
+    if not bullet then return end
+    new_line = bullet .. '[ ] ' .. text
   end
   vim.api.nvim_set_current_line(new_line)
 end
@@ -308,14 +325,13 @@ function M.smartQuote()
   end
 end
 
+--- copilot.vim treats an unset g:copilot_enabled as enabled, so checking for
+--- `== true` made the first press "enable" what was already on: nothing
+--- changed, and it took a second press to turn Copilot off.
 function M.toggleCopilot()
-  if vim.g.copilot_enabled == true then
-    vim.g.copilot_enabled = false
-    vim.notify("Copilot Disabled")
-  else
-    vim.g.copilot_enabled = true
-    vim.notify("Copilot Enabled")
-  end
+  local enabled = vim.g.copilot_enabled ~= false and vim.g.copilot_enabled ~= 0
+  vim.g.copilot_enabled = not enabled
+  vim.notify(enabled and "Copilot Disabled" or "Copilot Enabled")
 end
 
 ---@return boolean verify if it's a blank line or space before the cursor

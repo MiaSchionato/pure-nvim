@@ -1,6 +1,6 @@
 local o = vim.opt
 -- Tab display settings
-o.showtabline = 1  -- Always show tabline (0=never, 1=when multiple tabs, 2=always)
+o.showtabline = 1  -- Tabline only with 2+ tabs (0=never, 1=when multiple tabs, 2=always)
 o.tabline = "%!v:lua.require('configs.functions').MyTabline()"
 o.statusline = "%!v:lua.require('pure.statusline').MyStatusLine()"
 vim.opt.showcmd = true
@@ -37,6 +37,10 @@ o.showmatch = true                           -- Highlight matching brackets
 o.cmdheight = 0                              -- Command line height (essentially none)
 
 o.completeopt = {"menu","menuone","noinsert","noselect"}  -- Completion options
+-- Built-in completion as you type (Neovim 0.12). 'o' asks the omnifunc, which
+-- LSP sets on attach, then words from this and other buffers.
+o.autocomplete = true
+o.complete = "o,.,w,b,u"
 o.showmode = false                           -- Don't show mode in command line
 o.pumheight = 10                             -- Popup menu height
 o.pumborder = "rounded"                      -- Popup menu border style
@@ -49,9 +53,11 @@ o.signcolumn = "auto"                        -- Show signcolumn automatically
 
 -- File handling
 o.undofile = true                            -- Persistent undo
-o.undodir = vim.fn.expand("~/.config/nvim/undodir")  -- Undo directory
+-- Undo history lives in the state folder, outside the config's git repository.
+o.undodir = vim.fn.stdpath("state") .. "/undo"
+vim.fn.mkdir(vim.o.undodir, "p")
 o.swapfile = false
-o.updatetime = 50                           -- Faster completion
+o.updatetime = 250                          -- ms idle before CursorHold (not completion speed)
 o.timeoutlen = 500                           -- Key timeout duration
 o.ttimeoutlen = 0                            -- Key code timeout
 o.autoread = true                            -- Auto reload files changed outside vim
@@ -61,13 +67,10 @@ o.autowrite = false                          -- Don't auto save
 o.hidden = true                              -- Allow hidden buffers
 o.errorbells = false                         -- No error bells
 o.backspace = "indent,eol,start"             -- Better backspace behavior
-o.autochdir = false                          -- Don't auto change directory
 o.iskeyword:append("-")                      -- Treat dash as part of word
 o.path:append("**")                          -- include subdirectories in search
 o.wildignore:append("*/node_modules/*", "*/.git/*", "*/tmp/*", "*/dist/*", "*/build/*") -- ignore folders
-o.selection = "exclusive"                    -- Selection behavior
-o.mouse = ""                                -- Enable mouse support
-o.modifiable = true                          -- Allow buffer modifications
+o.mouse = ""                                -- Mouse disabled
 
 
 -- Split behavior
@@ -91,4 +94,21 @@ o.foldmethod = "indent"
 vim.g.netrw_winsize = 25
 vim.g.netrw_banner = 0
 vim.g.netrw_keepdir = 0
+-- cwd follows the current file. (It was also set to false further up, which
+-- this line silently overrode.)
 o.autochdir = true
+
+-- Todoist (pure/todoist.lua)
+-- When :w in the task list asks before sending: 'all', 'delete' (only when
+-- tasks would be deleted) or 'never'.
+vim.g.pure_todoist_confirm = 'never'
+-- Folder where the task list and a timestamped history of every change are
+-- kept (tasks.md, history.md, tasks.json). Unset or '' turns archiving off.
+vim.g.pure_todoist_archive = '~/iCloudDrive/Documents/Obsidian/Atlas/9-Archive/Todoist/'
+
+-- Obsidian vault (pure/zettelkasten.lua, obsidian.nvim, <leader>em / fa / nm).
+-- Left unset, it is asked for on a fresh install and remembered, like the
+-- Todoist token; :ZettelVault changes it. Setting it here overrides that.
+-- vim.g.pure_vault = '~/iCloudDrive/Documents/Obsidian/Atlas'
+-- Language of day and month names in template dates: 'en' or 'pt'.
+-- vim.g.pure_templates_locale = 'pt'

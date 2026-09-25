@@ -100,6 +100,14 @@ function M.fuzzyLogic(opts)
   -- read by the shell as "> C:/Users/Mia" and every picker failed at once.
   vim.cmd(string.format("terminal %s > %s", opts.cmd, vim.fn.shellescape(temp)))
 
+  -- Arrows reach fzf as an escape sequence (<Esc>[A). On Windows the
+  -- terminal can deliver it split when fzf is busy, fzf then reads a lone
+  -- <Esc> and quits: the grep picker closed on the first arrow key. Its own
+  -- one-byte keys for the same moves cannot be split.
+  local term_opts = { buffer = buf, nowait = true }
+  vim.keymap.set('t', '<Up>', '<C-k>', term_opts)
+  vim.keymap.set('t', '<Down>', '<C-j>', term_opts)
+
   vim.api.nvim_create_autocmd("TermClose", {
     buffer = buf,
     callback = function()
@@ -116,17 +124,37 @@ function M.fuzzyLogic(opts)
           os.remove(temp)
           data = last_line:gsub("%s+$", "")
         end
-          os.remove(temp)
       end
 
       vim.schedule(function()
         if vim.api.nvim_win_is_valid(win) then vim.api.nvim_win_close(win, true) end
         if vim.api.nvim_buf_is_valid(buf) then vim.api.nvim_buf_delete(buf, { force = true }) end
 
-        if data ~= "" or opts.isChooser then
-          opts.callback(data)
+        local function finish()
+          if data ~= "" then
+            opts.callback(data)
+          elseif opts.on_cancel then
+            -- Esc / Ctrl-C in fzf, or nothing matched.
+            opts.on_cancel()
+          end
+        end
+
+        -- Leave terminal mode before handing over. Closing the window does not,
+        -- and neither does :stopinsert: Neovim stays in terminal mode until the
+        -- next key arrives, so the callback ran with mode() still 't' and the
+        -- first key typed afterwards was spent leaving that mode (an input()
+        -- prompt opened from the callback could lose it, or be cancelled).
+        -- Feed the key that leaves terminal mode, and run the callback once
+        -- Neovim reports the mode change.
+        if vim.api.nvim_get_mode().mode == "t" then
+          vim.api.nvim_create_autocmd("ModeChanged", {
+            pattern = "t:*",
+            once = true,
+            callback = function() vim.schedule(finish) end,
+          })
+          vim.api.nvim_feedkeys(vim.keycode("<C-\\><C-n>"), "n", false)
         else
-            vim.cmd("stopinsert")
+          finish()
         end
       end)
     end
@@ -144,6 +172,34 @@ function M.fuzzyLogic(opts)
       vim.cmd("startinsert")
     end
   end, 50)
+end
+
+--- Pick one line of `lines` with fzf; `on_pick(line)` gets the choice and
+--- `on_cancel()`, when given, runs if nothing was picked.
+---
+--- Five pickers (jumps, buffers, oldfiles, colorschemes, vim.ui.select) each
+--- wrote their list to a fixed temp file and piped it into fzf by hand. The
+--- file is now unique per call and always removed, picked or cancelled.
+--- @param lines string[]
+--- @param opts { title: string, ratio: number?, fzf: string? }  fzf: extra flags
+local pick_count = 0
+local function pickList(lines, opts, on_pick, on_cancel)
+  pick_count = pick_count + 1
+  local temp = vim.fn.stdpath("cache") .. "/pick_" .. pick_count
+  vim.fn.writefile(lines, temp)
+  M.fuzzyLogic({
+    title = opts.title,
+    ratio = opts.ratio or 0.7,
+    cmd = string.format("cat %s | fzf %s", vim.fn.shellescape(temp), opts.fzf or ""),
+    callback = function(selection)
+      os.remove(temp)
+      on_pick(selection)
+    end,
+    on_cancel = function()
+      os.remove(temp)
+      if on_cancel then on_cancel() end
+    end,
+  })
 end
 
 function M.fuzzySearch(path)
@@ -165,10 +221,19 @@ function M.fuzzySearch(path)
 end
 
 
+--- Live grep: ripgrep runs again on every change of the query, and fzf only
+--- shows its results. It used to pipe `rg .` into fzf -- every line of every
+--- file under `path`, twice (the "." was given two times), all loaded before
+--- the first key. Nothing is listed until something is typed.
 function M.fuzzyGrep(path)
   path = asDir(path)
-  local rg = "rg --column --line-number --no-heading --color=always --smart-case -- ."
-  local fzf = "fzf --ansi --delimiter : --preview 'bat --style=numbers --color=always --highlight-line {2} {1}' --preview-window 'up,60\\%,border-bottom,+{2}+3/3'"
+  local rg = "rg --column --line-number --no-heading --color=always --smart-case"
+  -- fzf wants input on stdin even with --disabled; give it an empty one.
+  -- By shell, not by OS: the windows branch runs these through Git bash.
+  local empty = vim.o.shell:lower():match("cmd%.exe$") and "type nul" or "true"
+  local fzf = "fzf --ansi --disabled --delimiter :"
+    .. string.format(" --bind %s", vim.fn.shellescape("change:reload:" .. rg .. " -- {q}"))
+    .. " --preview 'bat --style=numbers --color=always --highlight-line {2} {1}' --preview-window 'up,60\\%,border-bottom,+{2}+3/3'"
 
   M.fuzzyLogic({
     title = "Fuzzy Grep",
@@ -178,14 +243,16 @@ function M.fuzzyGrep(path)
     -- on ":" then made {1} the bare "C" and {2} the path, so bat was handed a
     -- path where it wanted a line number. Counting fields from the end is not
     -- an option here, unlike fuzzyJump: the matched text can contain colons.
-    cmd = string.format("cd %s && %s . | %s", vim.fn.shellescape(path), rg, fzf),
+    cmd = string.format("cd %s && %s | %s", vim.fn.shellescape(path), empty, fzf),
     callback = function(selection)
       local rel, line, col = selection:match("^(.-):(%d+):(%d+)")
       if not (rel and line and col) then return end
       -- Those names are relative to the cd above, so rebuild the full one.
       local full_path = path .. (rel:gsub("^%.[/\\]", ""))
       vim.cmd("edit! " .. vim.fn.fnameescape(full_path))
-      vim.api.nvim_win_set_cursor(0, {tonumber(line),tonumber(col)})
+      -- ripgrep's column is 1-based, the cursor's 0-based: without the -1
+      -- the cursor landed one character right of the match.
+      vim.api.nvim_win_set_cursor(0, {tonumber(line), tonumber(col) - 1})
       vim.cmd("filetype detect")
     end
   })
@@ -215,8 +282,21 @@ function M.fuzzyGit()
     title = "Fuzzy Git log",
     ratio = 0.8,
     cmd = string.format("cd %s && %s | %s", vim.fn.shellescape(path), git, fzf),
+    -- The selection is "abc1234 commit message"; it used to be passed to
+    -- :edit, which opened an empty file named after the commit. Show the
+    -- commit instead, in a scratch split (q closes it).
     callback = function (selection)
-      vim.cmd(string.format("edit %s", vim.fn.fnameescape(selection)))
+      local sha = selection:match("^(%x+)")
+      if not sha then return end
+      local out = vim.fn.systemlist({ "git", "-C", path, "show", "--stat", "--patch", sha })
+      vim.cmd("botright new")
+      local buf = vim.api.nvim_get_current_buf()
+      vim.bo[buf].buftype = "nofile"
+      vim.bo[buf].bufhidden = "wipe"
+      vim.api.nvim_buf_set_lines(buf, 0, -1, false, out)
+      vim.bo[buf].filetype = "git"
+      vim.bo[buf].modifiable = false
+      vim.keymap.set("n", "q", "<cmd>close<cr>", { buffer = buf })
     end
   })
 end
@@ -242,7 +322,7 @@ function M.fuzzyGitGrep()
 
       vim.cmd("edit! " .. vim.fn.fnameescape(full_path))
       if line and col then
-        vim.api.nvim_win_set_cursor(0, {tonumber(line), col})
+        vim.api.nvim_win_set_cursor(0, {tonumber(line), col - 1}) -- git grep's column is 1-based
       end
       vim.cmd("filetype detect")
     end
@@ -250,22 +330,12 @@ function M.fuzzyGitGrep()
 end
 
 function M.fuzzyJump()
-  -- Get table content
-  local jumplist = vim.fn.getjumplist()
   local jumps = {}
-    for _, jump in ipairs(jumplist[1]) do
-      local path = vim.api.nvim_buf_get_name(jump.bufnr)
-      if path ~= "" then
-        table.insert(jumps,string.format("%s:%d:%d", path, jump.lnum, jump.col))
-      end
+  for _, jump in ipairs(vim.fn.getjumplist()[1]) do
+    local path = vim.api.nvim_buf_get_name(jump.bufnr)
+    if path ~= "" then
+      table.insert(jumps, string.format("%s:%d:%d", path, jump.lnum, jump.col))
     end
-
-  -- Write to temp file
-  local temp = vim.fn.stdpath("cache") .. "/Jump_list"
-  local f = io.open(temp, "w")
-  if f then
-    f:write(table.concat(jumps, "\n"))
-    f:close()
   end
 
   -- Fields are counted from the END. These lines are "path:line:col", and on
@@ -273,114 +343,54 @@ function M.fuzzyJump()
   -- the bare letter "C" and {2} the path -- which bat received where it wanted
   -- a line number, hence "[bat error]: invalid digit found in string".
   -- {-2} is the line and {1..-3} rejoins the whole path, drive letter included.
-  local fzf = "fzf --ansi --delimiter : --preview 'bat --style=numbers --color=always --highlight-line {-2} {1..-3}' --preview-window 'up,60\\%,border-bottom,+{-2}+3/3'"
-  M.fuzzyLogic({
+  pickList(jumps, {
     title = "fuzzy jumps",
     ratio = 0.8,
-    cmd = string.format("cat %s | %s", vim.fn.shellescape(temp), fzf),
-    callback = function (selection)
-      os.remove(temp)
-      -- Windows paths start with a drive letter, so the old '^([^:]+):'
-      -- pattern stopped at the 'C:' colon and returned nil. A lazy '.-'
-      -- matches up to the first ':line:col' pair instead.
-      local full_path, line, col = selection:match("^(.-):(%d+):(%d+)")
-      -- fnameescape(full_path) ran before this guard, so a non-matching line
-      -- crashed with "expected string, got nil".
-      if not full_path then return end
-      vim.cmd("edit! " .. vim.fn.fnameescape(full_path))
-      if line and col then
-        vim.api.nvim_win_set_cursor(0, {tonumber(line),tonumber(col)})
-        vim.cmd("filetype detect")
-      end
-    end
-  })
+    fzf = "--ansi --delimiter : --preview 'bat --style=numbers --color=always --highlight-line {-2} {1..-3}' --preview-window 'up,60\\%,border-bottom,+{-2}+3/3'",
+  }, function(selection)
+    -- Windows paths start with a drive letter, so a '^([^:]+):' pattern would
+    -- stop at the 'C:' colon; the lazy '.-' matches up to ':line:col'.
+    local full_path, line, col = selection:match("^(.-):(%d+):(%d+)")
+    if not full_path then return end
+    vim.cmd("edit! " .. vim.fn.fnameescape(full_path))
+    vim.api.nvim_win_set_cursor(0, { tonumber(line), tonumber(col) })
+    vim.cmd("filetype detect")
+  end)
 end
 
 
 function M.fuzzyBuffers()
-  -- Get table contet
-  local buffer_list = vim.api.nvim_list_bufs()
   local buffers = {}
-  for _, bufnr in ipairs(buffer_list) do
-    if vim.api.nvim_buf_is_loaded(bufnr) and vim.bo[bufnr].buflisted then
-      local full_path = vim.api.nvim_buf_get_name(bufnr)
-      local short_path = vim.fn.fnamemodify(full_path, ":.")
-      table.insert(buffers, short_path)
+  for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+    local name = vim.api.nvim_buf_get_name(bufnr)
+    if vim.api.nvim_buf_is_loaded(bufnr) and vim.bo[bufnr].buflisted and name ~= "" then
+      table.insert(buffers, vim.fn.fnamemodify(name, ":."))
     end
   end
-
-  -- Write to temp file
-  local temp = vim.fn.stdpath("cache") .. "/buffer_list"
-  local f = io.open(temp, "w")
-  if f then
-    f:write(table.concat(buffers, "\n"))
-    f:close()
-  end
-
-  M.fuzzyLogic({
-    title = "Fuzzy buffers",
-    ratio = 0.7,
-    cmd = string.format("cat %s | fzf --keep-right --tiebreak=end", vim.fn.shellescape(temp)),
-    callback = function (selection)
-        os.remove(temp)
-        vim.cmd("edit " .. vim.fn.fnameescape(selection))
-        vim.cmd("filetype detect")
-    end
-  })
-
+  pickList(buffers, { title = "Fuzzy buffers", fzf = "--keep-right --tiebreak=end" }, function(selection)
+    vim.cmd("edit " .. vim.fn.fnameescape(selection))
+    vim.cmd("filetype detect")
+  end)
 end
 
 function M.fuzzyOldfiles()
-  -- Get table content
-  local oldfiles = vim.tbl_filter(function (f)
+  local oldfiles = vim.tbl_filter(function(f)
     return vim.fn.filereadable(f) == 1
   end, vim.v.oldfiles)
-
-  -- Write table content on temp file
-  local temp = vim.fn.stdpath("cache") .. "/oldfiles_list"
-  local f = io.open(temp, "w")
-  if f then
-    f:write(table.concat(oldfiles, "\n"))
-    f:close()
-  end
-
-  -- Handle to the logic function
-  M.fuzzyLogic({
-      title = "Oldfiles",
-      ratio = 0.7,
-      cmd = string.format("cat %s | fzf", vim.fn.shellescape(temp)),
-      callback = function(selection)
-        os.remove(temp)
-        vim.cmd("edit " .. vim.fn.fnameescape(selection))
-        vim.cmd("filetype detect")
-      end
-    })
-
+  pickList(oldfiles, { title = "Oldfiles" }, function(selection)
+    vim.cmd("edit " .. vim.fn.fnameescape(selection))
+    vim.cmd("filetype detect")
+  end)
 end
 
 function M.fuzzyColorscheme()
-  local schemes = vim.fn.getcompletion("", "color")
-  local temp = vim.fn.stdpath("cache") .. "/colorscheme_list"
-  local f = io.open(temp, "w")
-  if f then
-    f:write(table.concat(schemes, "\n"))
-    f:close()
-  end
-
-  -- Handle to the logic function
-  M.fuzzyLogic({
-      title = "Fuzzy Search",
-      ratio = 0.7,
-      cmd = string.format("cat %s | fzf", vim.fn.shellescape(temp)),
-      callback = function(theme)
-        os.remove(temp)
-        vim.cmd("colorscheme "  .. vim.fn.fnameescape(theme))
-        vim.g.MY_THEME = theme
-        if vim.g.neovide then
-          vim.api.nvim_set_hl(0,'Normal', { bg = "#060b1e" })
-        end
-      end
-    })
+  pickList(vim.fn.getcompletion("", "color"), { title = "Colorschemes" }, function(theme)
+    vim.cmd("colorscheme " .. vim.fn.fnameescape(theme))
+    vim.g.MY_THEME = theme
+    if vim.g.neovide then
+      vim.api.nvim_set_hl(0, 'Normal', { bg = "#060b1e" })
+    end
+  end)
 end
 
 function M.setup()
@@ -400,39 +410,13 @@ function M.setup()
       end
     end
 
-    local temp = vim.fn.stdpath("cache") .. "/ui_select"
-    local f = io.open(temp, "w")
-    if not f then
-      vim.notify('Error creating temp file', 4)
-      return
-    end
-    f:write(table.concat(choices, "\n"))
-    f:close()
-
-    M.fuzzyLogic({
-      title = opts.prompt or "Select",
-      ratio = 0.7,
-      cmd = string.format("cat %s | fzf", vim.fn.shellescape(temp)),
-      callback = function(selection)
-        os.remove(temp)
-        if selection and selection ~= "" then
-          local selected_idx
-          for i, choice in ipairs(choices) do
-            if choice == selection then
-              selected_idx = i
-              break
-            end
-          end
-          if selected_idx then
-            selected(items[selected_idx], selected_idx)
-          else
-            selected(nil, nil)
-          end
-        else
-          selected(nil, nil)
-        end
+    -- on_choice(nil, nil) on cancel, as vim.ui.select promises.
+    pickList(choices, { title = opts.prompt or "Select" }, function(selection)
+      for i, choice in ipairs(choices) do
+        if choice == selection then return selected(items[i], i) end
       end
-    })
+      selected(nil, nil)
+    end, function() selected(nil, nil) end)
   end
 
   vim.ui.input = function(opts, callback)
@@ -458,7 +442,9 @@ function M.setup()
     end
 
     local function cancel()
-      confirmed = false
+      -- Marked as handled before the buffer goes: deleting it fires the
+      -- BufWipeout below, which called back with nil a second time.
+      confirmed = true
       vim.api.nvim_win_close(win, true)
       vim.api.nvim_buf_delete(buf, { force = true })
       callback(nil)
@@ -568,40 +554,6 @@ function M.fuzzyExplorer(path)
               end
             end
           end  })
-end
-
-function M.yaziExplorer(path)
-  if path == nil then path = vim.fn.getcwd() end
-  local temp = vim.fn.stdpath("cache") .. "/yazi_explorer"
-  -- `path` was accepted and then dropped, so yazi always opened in the cwd and
-  -- <leader>E / <leader>e never landed where the mapping asked for.
-  local yazi = "yazi " .. vim.fn.shellescape(path)
-    .. " --chooser-file " .. vim.fn.shellescape(temp)
-
-  M.fuzzyLogic({
-    title = "Yazi: " .. path,
-    ratio = 0.8,
-    cmd = string.format("%s", yazi),
-    isChooser = true,
-    callback = function()
-        local f = io.open(temp, "r")
-        if f then
-          local content = f:read("*a")
-          f:close()
-          -- yazi writes a trailing newline; without trimming it became part of
-          -- the filename passed to :edit.
-          content = content:gsub("%s+$", "")
-          os.remove(temp)
-          if content == "" then
-            vim.notify("No file selected", vim.log.levels.WARN)
-            return
-          end
-          vim.cmd("edit! " .. vim.fn.fnameescape(content))
-        else
-          vim.notify("No file selected", vim.log.levels.WARN)
-        end
-      end
-    })
 end
 
 return M

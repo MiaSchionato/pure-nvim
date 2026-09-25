@@ -26,9 +26,9 @@ Plugins are installed by the built-in `vim.pack`, so **Neovim 0.12 or newer** is
 | `fd` | file and directory pickers |
 | `rg` (ripgrep) | live grep picker |
 | `bat` | previews in the grep and explorer pickers |
-| `yazi` | file explorer; falls back to the built-in fzf explorer when absent |
 | `tree-sitter` CLI + a C compiler | compiling Treesitter parsers (`npm install -g tree-sitter-cli`) |
 | `node` | GitHub Copilot (`copilot.vim`) |
+| `curl` | Todoist task list (`:Todoist`) |
 
 On Debian/Ubuntu the `fd` and `bat` packages install the binaries as `fdfind` and `batcat`; link them to `fd` and `bat` so the pickers can find them.
 
@@ -42,7 +42,6 @@ A server is enabled only when its executable is found on `PATH` (`lua/configs/ls
 | `gopls` | Go | `go install golang.org/x/tools/gopls@latest` |
 | `clangd` | C / C++ | LLVM / distro package |
 | `csharp-ls` | C# | `dotnet tool install --global csharp-ls` (needs the .NET SDK) |
-| `marksman` | Markdown | [release binaries](https://github.com/artempyanykh/marksman/releases) |
 | `markdown-oxide` | Markdown (notes) | [release binaries](https://github.com/Feel-ix-343/markdown-oxide/releases) |
 | `simple-completion-language-server` | buffer words and snippets | `cargo install --git https://github.com/estin/simple-completion-language-server` |
 
@@ -57,3 +56,20 @@ The `windows` branch adds the Windows-only setup on top of `main`. The pickers b
 ### Obsidian
 
 `lua/plugins/obsidian.lua` expects the vault at `~/iCloudDrive/Documents/Obsidian/Atlas` and skips its setup when that folder does not exist. Change the path to match your own vault.
+
+### Todoist
+
+`:Todoist` (`<leader>td`; `<leader>tD` for today and overdue) opens your active tasks as an editable markdown list, one `## Project` section each, like oil.nvim does for files: edit the text and `:w` sends the difference to Todoist. A new line creates a task, a deleted line deletes it, `[x]` completes it, indenting makes a subtask of the line above, moving a line under another heading moves it to that project, and `due:<date>` / `p1`–`p3` after the text set the due date and priority (`- [ ] Send report due:next monday 10:00 p1`). `:Todoist today`, `:Todoist overdue` or any other Todoist filter narrows the list. Saving asks for confirmation; `vim.g.pure_todoist_confirm = 'delete'` asks only when tasks would be deleted, `'never'` not at all. `<CR>` toggles a checkbox, `r` reloads, `q` / `<Esc>` close. It needs an API token from Todoist (Settings → Integrations → Developer). When none is found Neovim asks for it on startup (with a "don't ask again" option); `:TodoistToken` sets or replaces it any time, with hidden input, and checks it against the API. It is stored in `stdpath('data')/todoist_token`, outside this repository; a `TODOIST_API_TOKEN` environment variable takes precedence. Avoid typing the token into a shell, whose history may be versioned.
+
+With `vim.g.pure_todoist_archive` set to a folder (see `lua/configs/configs.lua`), the full list is archived there in the background: `tasks.md` (the list as shown), `history.md` (one timestamped line per change, whether made here or in the Todoist app) and `tasks.json`. Files are rewritten only when something changed.
+
+Tasks can also live in a note, as in Obsidian's Todoist plugin (same syntax, so the note works in both):
+
+````markdown
+```todoist
+name: Today
+filter: "today | overdue"
+```
+````
+
+The tasks are drawn under the block without being written to the file. `:TodoistRefresh` reloads them, and `:Todoist` with the cursor inside the block opens that filter as the interactive list.

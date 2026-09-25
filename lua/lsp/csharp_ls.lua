@@ -8,8 +8,6 @@
 ---
 --- The preferred way to install csharp-ls is with `dotnet tool install --global csharp-ls`.
 
-local util = require 'lsp.util'
-
 ---@type vim.lsp.Config
 return {
   cmd = function(dispatchers, config)
@@ -21,9 +19,13 @@ return {
       detached = config.detached,
     })
   end,
+  -- The nearest folder with a solution, else with a project file: each kind
+  -- is searched on its own so a .sln further up still wins over a .csproj.
   root_dir = function(bufnr, on_dir)
-    local fname = vim.api.nvim_buf_get_name(bufnr)
-    on_dir(util.root_pattern '*.sln'(fname) or util.root_pattern '*.slnx'(fname) or util.root_pattern '*.csproj'(fname))
+    for _, ext in ipairs({ '%.sln$', '%.slnx$', '%.csproj$' }) do
+      local root = vim.fs.root(bufnr, function(name) return name:match(ext) ~= nil end)
+      if root then return on_dir(root) end
+    end
   end,
   filetypes = { 'cs' },
   init_options = {
