@@ -91,6 +91,8 @@ before use).
 | `vim.g.pure_todoist_sync` | off (`{ interval = 10 }` in configs.lua) | [todoist](todoist.md) |
 | `vim.g.pure_calendar_cell_width` | `25` (grid 197 columns) | [calendar](calendar.md) |
 | `vim.g.pure_calendar_duration` | `60` minutes | [calendar](calendar.md) |
+| `vim.g.pure_calendar_confirm` | `'delete'` | [calendar](calendar.md) |
+| `vim.g.pure_calendar_sync` | `{ interval = 15 }` | [calendar](calendar.md) |
 | `vim.g.pure_keyhint_delay` | `1000` ms | [keyhint](keyhint.md) |
 | `vim.g.pure_keyhint_groups` | set in keymaps.lua | [keyhint](keyhint.md) |
 | `vim.g.pure_keyhint_triggers` | `<leader>` in normal and visual | [keyhint](keyhint.md) |
@@ -111,6 +113,10 @@ folder (`:echo stdpath('data')`: `~/.local/share/nvim`, or
 | `todoist_token` | the Todoist API token (`:TodoistToken` writes it) |
 | `todoist_no_prompt` | "never ask for the token" |
 | `todoist_states.json` | Obsidian checkbox states ([~] [!] [>] [-]) kept for Todoist tasks |
+| `google_calendar.json` | Google Calendar client ID, secret and refresh token (`:CalendarAuth`) |
+| `google_calendar_no_prompt` | "never ask to connect Google Calendar" |
+| `calendar_sync.json` | what the last calendar sync wrote, to tell grid edits |
+| `todoist_sync.json` | the same for the Todoist sync |
 | `obsidian_vault` | the vault folder (`:ZettelVault` writes it) |
 | `obsidian_vault_no_prompt` | "never ask for the vault" |
 
@@ -124,6 +130,8 @@ Undo history is in `stdpath('state')/undo`.
 | `:TodoistSync` | write the tasks of every ```` ```todoist ```` block into its note now |
 | `:TodoistRefresh` | reload the drawn blocks (when sync is off) |
 | `:CalendarRefresh` | draw and tidy the ```` ```calendar ```` grids of the note |
+| `:CalendarSync` | sync the calendar grids with Google now |
+| `:CalendarAuth` | connect Google Calendar (OAuth, once) |
 | `:TodoistToken` | set the Todoist token (hidden input) |
 | `:ZettelVault` | choose the Obsidian vault folder |
 | `:VaultSync` | save, commit, pull, then push the vault ([zettelkasten](zettelkasten.md)) |

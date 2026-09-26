@@ -69,11 +69,73 @@ the **day under the cursor**; outside they are the usual ones:
 | Command | What |
 |---|---|
 | `:CalendarRefresh` | draw the grid of blocks that have none, and tidy all |
+| `:CalendarSync` | sync every grid with Google now |
+| `:CalendarAuth` | connect Google Calendar (again) |
 
-## Where the appointments come from
+## Google Calendar (two-way)
 
-For now from a built-in sample month, to try the grid. Next: two-way sync
-with Google Calendar (edits in the grid create, change, move and delete
-events), with the same rules as the Todoist sync: asked for on start,
-`vim.g.pure_calendar_confirm` for when to ask before sending, past months
-frozen, templates never filled.
+### Connecting (once)
+
+Google has no personal token like Todoist: reading and writing your
+calendars takes OAuth. One time, about 10 minutes:
+
+1. [console.cloud.google.com](https://console.cloud.google.com): create a
+   project and enable **Google Calendar API**.
+2. **OAuth consent screen**: External; add your own address as a test user.
+   Then **Publish app** ("In production"): while it stays in "Testing", the
+   authorization expires every 7 days. Google warns the app is not
+   verified; for your own use, continue anyway.
+3. **Credentials → Create credentials → OAuth client ID → Desktop app**.
+   Keep the client ID and the client secret.
+4. In Neovim: on start it asks, like the Todoist token (Yes / Later / Never
+   ask), or `:CalendarAuth` any time. Paste the client ID and secret; the
+   browser opens, you allow access, done.
+
+Kept in `stdpath('data')`, never in the repository: `google_calendar.json`
+(client ID, secret and the refresh token), `google_calendar_no_prompt`
+("never ask"), `calendar_sync.json` (what the last sync wrote). Secrets reach
+curl on stdin, never on its command line.
+
+Not connected, a block gets an empty month: a manual calendar, tidied on
+save, that syncs nothing.
+
+### What syncs
+
+The grid is rewritten from Google, and what was **edited in the grid** since
+the last sync is sent first:
+
+| In the grid | In Google Calendar |
+|---|---|
+| a new line in a day | a new event, in the block's first calendar (the main one by default) |
+| changed text, time, end or `@ place` | the event is changed |
+| the same appointment moved to another day | the event moves (not deleted and made again) |
+| a line deleted | the event is deleted |
+
+Events that repeat stay out (`exclude: recurring`), and several-day events
+are read only. An event changed in Google and not in the grid just takes
+Google's version.
+
+`calendars: primary, Trabalho` names calendars by their name as Google shows
+it (or their id); an unknown name is reported, and that grid is not
+rewritten. Times are local, daylight saving included.
+
+**When:** at start, every 15 minutes (`vim.g.pure_calendar_sync = {
+interval = 15 }`; `false`: never on a timer), when a note with a block is
+opened or saved, and on `:CalendarSync`.
+
+**Never:** past months (they keep what they showed), templates, the trash, a
+note with unsaved changes. A failed fetch leaves the grid as it was.
+
+**Asking first:** `vim.g.pure_calendar_confirm` = `'delete'` (default: asks
+before deleting), `'all'` (before sending anything), `'never'`. Enter is No
+when something would be deleted; saying no redraws the grid from Google,
+undoing those edits.
+
+The first sync of a grid only reads: it has nothing to compare with yet.
+
+### For tests
+
+`vim.g.pure_calendar_auth_url`, `vim.g.pure_calendar_token_url` and
+`vim.g.pure_calendar_api_url` replace Google's addresses (a local fake);
+`vim.g.pure_calendar_source = 'mock'` fills unconnected grids with a sample
+month.
