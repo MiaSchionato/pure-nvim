@@ -181,6 +181,10 @@ end
 
 function render.code(buf, node, mark)
   local first, last = node:start(), lastRow(node)
+  -- A calendar grid (pure/calendar.lua) is a code block only to keep it
+  -- monospaced in Obsidian: no shading, no label.
+  local ok, calendar = pcall(require, 'pure.calendar')
+  if ok and calendar.isGrid(buf, first) then return end
   for row = first, last do
     mark(row, 0, { line_hl_group = 'PureMdCode' })
   end
@@ -408,8 +412,10 @@ local function hideLines(buf, top, bottom, mark, place)
   local ranges = footnotes(buf, top, bottom)
   local fm = frontmatter(buf)
   if fm then table.insert(ranges, 1, fm) end
-  local ok, todoist = pcall(require, 'pure.todoist')
-  if ok and todoist.hiddenBlocks then vim.list_extend(ranges, todoist.hiddenBlocks(buf)) end
+  for _, name in ipairs({ 'pure.todoist', 'pure.calendar' }) do
+    local ok, mod = pcall(require, name)
+    if ok and mod.hiddenBlocks then vim.list_extend(ranges, mod.hiddenBlocks(buf)) end
+  end
 
   for _, r in ipairs(ranges) do
     if cursor < r[1] or cursor > r[2] then
