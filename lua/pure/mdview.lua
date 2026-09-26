@@ -556,10 +556,15 @@ local last_state = {}
 --- what differs from what is drawn. Clearing and redrawing every mark made
 --- Neovim redraw the whole window on every key typed, several times: the
 --- render flickered while typing, most of all on Windows terminals.
-local function reconcile(buf, want)
+---
+--- With `rows` ({ first, last }), only the marks on those rows are looked at;
+--- the others stay as they are.
+local function reconcile(buf, want, rows)
   local have = drawn[buf] or {}
   local keep = {}
-  for _, m in ipairs(vim.api.nvim_buf_get_extmarks(buf, ns, 0, -1, {})) do
+  local from, to = 0, -1
+  if rows then from, to = { rows[1], 0 }, { rows[2], -1 } end
+  for _, m in ipairs(vim.api.nvim_buf_get_extmarks(buf, ns, from, to, {})) do
     local id = m[1]
     -- Keyed by where the mark is now: edits move marks with the text.
     local key = have[id] and (m[2] .. ':' .. m[3] .. ':' .. have[id])
@@ -567,9 +572,15 @@ local function reconcile(buf, want)
       keep[key] = id
     else
       vim.api.nvim_buf_del_extmark(buf, ns, id)
+      have[id] = nil
     end
   end
+  -- A partial pass keeps what is drawn elsewhere.
   local now = {}
+  if rows then
+    now = have
+    for _, id in pairs(keep) do now[id] = nil end
+  end
   for _, w in ipairs(want) do
     local key = w.row .. ':' .. w.col .. ':' .. w.key
     local id = keep[key]
@@ -585,6 +596,79 @@ local function reconcile(buf, want)
   drawn[buf] = now
 end
 
+-- -----------------------------------------------------------------------------
+--  What changed
+-- -----------------------------------------------------------------------------
+--  Typing changes one line. Redrawing the whole screen for it (even when
+--  reconcile() ends up touching nothing) cost a parse, a scan of every
+--  block and a pass over each visible line per key, and the screen showed
+--  it. So each buffer's edits are followed as they happen: the rows edited
+--  (nvim_buf_attach) and the rows where the syntax tree changed (the
+--  parser's on_changedtree). When both stay on one line, only that line
+--  is drawn again; while typing on the cursor line in insert mode, which is
+--  shown raw anyway, nothing is.
+
+-- buf -> { first, last (0-based rows), shifted (lines added or removed),
+--          tree_first, tree_last (rows where the syntax tree changed) }
+local dirty = {}
+local attached = {}  -- buf -> the parser the tree callback is on
+
+local function note(buf, first, last)
+  local d = dirty[buf]
+  if not d then
+    dirty[buf] = { first = first, last = last }
+  else
+    d.first, d.last = math.min(d.first, first), math.max(d.last, last)
+  end
+  return dirty[buf]
+end
+
+local function follow(buf, parser)
+  if attached[buf] == parser then return end
+  if attached[buf] == nil then
+    vim.api.nvim_buf_attach(buf, false, {
+      on_lines = function(_, b, _, first, last_old, last_new)
+        local d = note(b, first, math.max(first, math.max(last_old, last_new) - 1))
+        if last_old ~= last_new then d.shifted = true end
+      end,
+      on_reload = function(_, b) note(b, 0, 0).shifted = true end,
+      on_detach = function(_, b) attached[b], dirty[b] = nil, nil end,
+    })
+  end
+  attached[buf] = parser
+  parser:register_cbs({
+    on_changedtree = function(ranges)
+      if attached[buf] ~= parser then return end
+      local d = dirty[buf] or note(buf, math.huge, -1)
+      for _, r in ipairs(ranges) do
+        local sr, er = r[1], (#r == 6 and r[4] or r[3])
+        d.tree_first = math.min(d.tree_first or sr, sr)
+        d.tree_last = math.max(d.tree_last or er, er)
+      end
+    end,
+  }, true)
+end
+
+-- A line that can change how other lines read: a code fence, a thematic
+-- break or frontmatter fence, an HTML comment (the markers of the Todoist,
+-- calendar and Claude blocks), a footnote definition.
+local function structural(text)
+  return text:match('^%s*```') or text:match('^%s*~~~') or text:match('^%-%-%-')
+    or text:find('<!--', 1, true) or text:match('^ ? ? ?%[%^')
+end
+
+--- The one row the last edits touched, when they can be drawn alone; nil
+--- when the screen has to be drawn again.
+local function editedRow(buf, prev, now)
+  local d = dirty[buf]
+  if not (d and prev and now) or d.shifted or d.first ~= d.last then return nil end
+  -- Anything but the text and the cursor column changed: view, mode, size.
+  if prev.row ~= now.row or prev.view ~= now.view then return nil end
+  if d.tree_first and (d.tree_first < d.first or d.tree_last > d.last) then return nil end
+  if structural(lineText(buf, d.first)) then return nil end
+  return d.first
+end
+
 --- Redraw the visible part of the current window's buffer. Skipped when
 --- nothing it depends on changed since the last time (text, cursor, view,
 --- mode): typing one key fires three or four events. `force` redraws anyway.
@@ -592,17 +676,21 @@ function M.refresh(force)
   local buf = vim.api.nvim_get_current_buf()
   if not active(buf) then
     vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
-    drawn[buf], last_state[buf] = nil, nil
+    drawn[buf], last_state[buf], dirty[buf] = nil, nil, nil
     return
   end
   local cursor = vim.api.nvim_win_get_cursor(0)
-  local state = table.concat({ vim.b[buf].changedtick, cursor[1], cursor[2], vim.fn.line('w0'),
-    vim.fn.line('w$'), vim.api.nvim_win_get_width(0), vim.fn.mode() }, ':')
-  if not force and last_state[buf] == state then return end
+  local mode = vim.fn.mode()
+  local view = table.concat({ vim.fn.line('w0'), vim.fn.line('w$'), vim.api.nvim_win_get_width(0), mode }, ':')
+  local state = { key = table.concat({ vim.b[buf].changedtick, cursor[1], cursor[2], view }, ':'),
+    row = cursor[1], view = view }
+  local prev = last_state[buf]
+  if not force and prev and prev.key == state.key then return end
   last_state[buf] = state
 
   local ok, parser = pcall(vim.treesitter.get_parser, buf, 'markdown')
   if not ok or not parser then return end
+  follow(buf, parser)
 
   -- Only the rows on screen, plus a margin so short scrolls look finished.
   local top = math.max(vim.fn.line('w0') - 1 - 20, 0)
@@ -610,14 +698,23 @@ function M.refresh(force)
   parser:parse({ top, bottom })
 
   -- The cursor line is left raw while editing it.
-  local mode = vim.fn.mode()
-  local raw_row = (mode:match('^[iRvV\22]')) and (vim.fn.line('.') - 1) or -1
+  local raw_row = (mode:match('^[iRvV\22]')) and (cursor[1] - 1) or -1
+
+  -- One line edited: draw that line only (nothing, if it is the raw one).
+  local row = not force and editedRow(buf, prev, state)
+  dirty[buf] = nil
+  local partial = row ~= nil and row ~= false
+  if partial then
+    if row == raw_row then return end
+    top, bottom = row, row
+  end
 
   local want = {}
   -- Every mark goes through here; reconcile() below applies them.
-  local function place(row, col, opts)
+  local function place(row_, col, opts)
+    if partial and (row_ < top or row_ > bottom) then return end
     opts.priority = opts.priority or 200
-    table.insert(want, { row = row, col = col, opts = opts, key = vim.inspect(opts, { newline = '', indent = '' }) })
+    table.insert(want, { row = row_, col = col, opts = opts, key = vim.inspect(opts, { newline = '', indent = '' }) })
   end
   local function mark(row, col, opts)
     if row == raw_row or row < top or row > bottom then return end
@@ -636,7 +733,8 @@ function M.refresh(force)
 
   local ranges = hideLines(buf, top, bottom, mark, place)
   wikilinks(buf, top, bottom, mark)
-  reconcile(buf, want)
+  reconcile(buf, want, partial and { top, bottom } or nil)
+  if partial then return end
   vim.b[buf].pure_md_hidden = ranges
   vim.b[buf].pure_md_revealed = rangeAt(ranges, vim.fn.line('.') - 1)
   vim.b[buf].pure_md_link = cursorLink()
