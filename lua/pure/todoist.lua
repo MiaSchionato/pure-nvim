@@ -979,7 +979,10 @@ function M.open(filter, float)
       end
     end)
     -- The same toggle as <leader>tx in notes; the change is sent on :w.
-    map('<CR>', require('configs.functions').toggleCheckbox, 'Toggle task checkbox')
+    -- On a [[link]] (in a task's text) follow it; else toggle the task.
+    map('<CR>', function()
+      if not require('pure.notes').follow() then require('configs.functions').toggleCheckbox() end
+    end, 'Follow link / toggle task checkbox')
     -- In this buffer only, x ticks the box instead of deleting a character.
     map('x', require('configs.functions').toggleCheckbox, 'Toggle task checkbox')
     -- Obsidian's states, as in notes; only [x] reaches Todoist, the others
@@ -1286,16 +1289,8 @@ vim.api.nvim_create_autocmd({ 'BufWinEnter', 'InsertLeave', 'TextChanged' }, {
   callback = function(args) M.renderBlocks(args.buf) end,
 })
 
--- <CR> inside a block opens its tasks. In vault notes obsidian.nvim maps <CR>
--- too, later; plugins/obsidian.lua routes it through M.enter as well.
-vim.api.nvim_create_autocmd('FileType', {
-  group = block_group,
-  pattern = 'markdown',
-  callback = function(args)
-    if vim.bo[args.buf].buftype ~= '' then return end -- not the task list itself
-    vim.keymap.set('n', '<CR>', function()
-      M.enter(function() vim.api.nvim_feedkeys(vim.keycode('<CR>'), 'n', false) end)
-    end, { buffer = args.buf, desc = 'Todoist block: open its tasks' })
+-- <CR> inside a block opens its tasks: pure/notes.lua maps <CR> in markdown
+-- and asks M.openBlock first.
   end,
 })
 
