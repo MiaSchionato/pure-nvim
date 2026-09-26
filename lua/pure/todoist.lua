@@ -1186,7 +1186,10 @@ end
 function M.renderBlocks(buf)
   buf = (buf and buf ~= 0) and buf or vim.api.nvim_get_current_buf()
   if not vim.api.nvim_buf_is_valid(buf) then return end
-  vim.api.nvim_buf_clear_namespace(buf, block_ns, 0, -1)
+  -- Only when there is something to clear: this runs on every edit.
+  if #vim.api.nvim_buf_get_extmarks(buf, block_ns, 0, -1, { limit = 1 }) > 0 then
+    vim.api.nvim_buf_clear_namespace(buf, block_ns, 0, -1)
+  end
   -- Written into the note as text instead (see "Sync into notes").
   if vim.g.pure_todoist_sync then return end
 

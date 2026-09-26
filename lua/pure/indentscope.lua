@@ -96,14 +96,14 @@ end
 -- -----------------------------------------------------------------------------
 --  Drawing
 -- -----------------------------------------------------------------------------
--- What is drawn now, to skip redrawing the same line (see draw()).
-local drawn_key
+-- What is drawn now: the buffer, and the column the marks are drawn at.
+local drawn_buf, drawn_col
 
 local function clear()
   if drawn_buf and vim.api.nvim_buf_is_valid(drawn_buf) then
     vim.api.nvim_buf_clear_namespace(drawn_buf, ns, 0, -1)
   end
-  drawn_buf, drawn_key = nil, nil
+  drawn_buf, drawn_col = nil, nil
 end
 
 local function enabled(buf)
@@ -120,30 +120,35 @@ local function draw()
   -- screenful. Horizontal scroll moves the column the line has to be drawn at.
   local leftcol = vim.fn.winsaveview().leftcol
   local win_col = scope and (scope.col - leftcol) or -1
-  local first = scope and math.max(scope.top, vim.fn.line('w0'))
-  local last = scope and math.min(scope.bottom, vim.fn.line('w$'))
+  if not scope or win_col < 0 then return clear() end
+  if drawn_buf ~= buf or drawn_col ~= win_col then clear() end
 
-  -- The same line as already drawn (typing inside a block, moving within
-  -- it): leave it. Clearing and drawing it again redrew every one of its
-  -- lines each time the cursor rested.
-  local key = scope and table.concat({ buf, vim.b[buf].changedtick, first, last, win_col }, ':')
-  if key and key == drawn_key and drawn_buf == buf then return end
-
-  clear()
-  if not scope or win_col < 0 then return end
-  for lnum = first, last do
+  -- The rows that should have the line.
+  local want = {}
+  for lnum = math.max(scope.top, vim.fn.line('w0')), math.min(scope.bottom, vim.fn.line('w$')) do
     -- Skip lines whose text starts at or before that column (a line inside a
     -- string, for instance); drawing there would cover real characters.
-    if isBlank(lnum) or vim.fn.indent(lnum) > scope.col then
-      vim.api.nvim_buf_set_extmark(buf, ns, lnum - 1, 0, {
-        virt_text = { { symbol, 'PureIndentscopeSymbol' } },
-        virt_text_win_col = win_col,
-        hl_mode = 'combine',
-        priority = 2,
-      })
+    if isBlank(lnum) or vim.fn.indent(lnum) > scope.col then want[lnum - 1] = true end
+  end
+
+  -- Only the rows that differ are touched. Clearing and drawing it all again
+  -- on every pause while typing made the whole line blink.
+  for _, m in ipairs(vim.api.nvim_buf_get_extmarks(buf, ns, 0, -1, {})) do
+    if want[m[2]] then
+      want[m[2]] = nil
+    else
+      vim.api.nvim_buf_del_extmark(buf, ns, m[1])
     end
   end
-  drawn_buf, drawn_key = buf, key
+  for row in pairs(want) do
+    vim.api.nvim_buf_set_extmark(buf, ns, row, 0, {
+      virt_text = { { symbol, 'PureIndentscopeSymbol' } },
+      virt_text_win_col = win_col,
+      hl_mode = 'combine',
+      priority = 2,
+    })
+  end
+  drawn_buf, drawn_col = buf, win_col
 end
 
 --- Redraw after `delay` ms without movement, so holding j does not redraw on

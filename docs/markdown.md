@@ -38,6 +38,11 @@ so a `-` inside a code block is never taken for a bullet.
   - **hidden lines** (frontmatter, footnotes, todoist queries) come back while
     the cursor is on them: `gg` shows the frontmatter.
 - A note opens just below its frontmatter.
+- Typing redraws as little as it can: an edit that stays on one line redraws
+  only that line, and while typing in insert mode (that line is raw) nothing
+  is redrawn. A line that can change others (a ```` ``` ```` fence, `---`,
+  `<!--`, a footnote definition), adding or removing lines, scrolling or
+  changing mode redraws the screen.
 
 ## Other markdown settings (`render-md.lua`)
 
