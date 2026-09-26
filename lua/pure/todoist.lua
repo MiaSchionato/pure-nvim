@@ -1291,8 +1291,6 @@ vim.api.nvim_create_autocmd({ 'BufWinEnter', 'InsertLeave', 'TextChanged' }, {
 
 -- <CR> inside a block opens its tasks: pure/notes.lua maps <CR> in markdown
 -- and asks M.openBlock first.
-  end,
-})
 
 vim.api.nvim_create_user_command('TodoistRefresh', M.refreshBlocks, {
   desc = 'Reload the ```todoist blocks in open notes',
