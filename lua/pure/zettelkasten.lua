@@ -693,65 +693,95 @@ function M.openDaily(offset)
   openPeriodic('Daily.md', periodic.Daily, when)
 end
 
---- Pick a template, expand it at the cursor, and move the note if the template
---- has a destination. Periodic templates open their own note instead.
-function M.insertTemplate()
+--- The templates of the vault ("Name.md"), or nil after saying why there are
+--- none. `notes_only` leaves out the periodic ones (Daily, Weekly, Monthly):
+--- they name a note of their own and cannot become some other note.
+--- @param notes_only boolean|nil
+--- @return string[]|nil
+local function templateNames(notes_only)
   local dir = templatesPath()
   if not dir then
     vim.notify('No Obsidian vault configured yet', vim.log.levels.WARN)
-    return M.setVault()
+    M.setVault()
+    return nil
   end
   if vim.fn.isdirectory(dir) == 0 then
-    return vim.notify('Templates folder not found: ' .. dir
+    vim.notify('Templates folder not found: ' .. dir
       .. '\nRun :ZettelVault to point at another vault.', vim.log.levels.ERROR)
+    return nil
   end
 
   local files = vim.tbl_filter(function(name)
-    return name:match('%.md$') ~= nil
+    return name:match('%.md$') ~= nil and not (notes_only and periodic[(name:gsub('%.md$', ''))])
   end, vim.fn.readdir(dir))
 
   if #files == 0 then
-    return vim.notify('No templates in ' .. dir, vim.log.levels.WARN)
+    vim.notify('No templates in ' .. dir, vim.log.levels.WARN)
+    return nil
+  end
+  return files
+end
+
+--- Expand the template `selected` ("Project.md") into the current note and
+--- move the note if the template has a destination. A periodic template opens
+--- its own note instead. <leader>nz and a note made from a [[link]] with a
+--- template (pure/notes.lua) both come through here.
+--- @param selected string
+function M.applyTemplate(selected)
+  local dir = templatesPath()
+  local name = selected:gsub('%.md$', '')
+
+  -- A periodic template addresses a note of its own, so it opens that note
+  -- rather than expanding into whatever buffer happens to be focused.
+  local period = periodic[name]
+  if period then
+    return openPeriodic(selected, period, os.time())
   end
 
-  vim.ui.select(files, { prompt = 'Template' }, function(selected)
-    if not selected then return end
+  local file = io.open(dir .. '/' .. selected, 'r')
+  if not file then
+    return vim.notify('Could not read ' .. selected, vim.log.levels.ERROR)
+  end
+  local content = file:read('*a')
+  file:close()
 
-    local name = selected:gsub('%.md$', '')
-
-    -- A periodic template addresses a note of its own, so it opens that note
-    -- rather than expanding into whatever buffer happens to be focused.
-    local period = periodic[name]
-    if period then
-      return openPeriodic(selected, period, os.time())
+  -- The title is asked for first, so {{title}} in the template, the folder
+  -- and the file name all agree.
+  withTitle(function(title)
+    local lines = vim.split(render(content, { title = title }), '\n')
+    -- An empty note becomes the template; otherwise it goes in above the
+    -- cursor line. (Inserting into an empty note left a stray blank line.)
+    if vim.api.nvim_buf_line_count(0) == 1 and vim.api.nvim_get_current_line() == '' then
+      vim.api.nvim_buf_set_lines(0, 0, -1, false, lines)
+    else
+      local row = vim.api.nvim_win_get_cursor(0)[1]
+      vim.api.nvim_buf_set_lines(0, row - 1, row - 1, false, lines)
     end
 
-    local file = io.open(dir .. '/' .. selected, 'r')
-    if not file then
-      return vim.notify('Could not read ' .. selected, vim.log.levels.ERROR)
+    local folder = destinations[name]
+    if folder then
+      moveCurrentFile(folder, title)
     end
-    local content = file:read('*a')
-    file:close()
-
-    -- The title is asked for first, so {{title}} in the template, the folder
-    -- and the file name all agree.
-    withTitle(function(title)
-      local lines = vim.split(render(content, { title = title }), '\n')
-      -- An empty note becomes the template; otherwise it goes in above the
-      -- cursor line. (Inserting into an empty note left a stray blank line.)
-      if vim.api.nvim_buf_line_count(0) == 1 and vim.api.nvim_get_current_line() == '' then
-        vim.api.nvim_buf_set_lines(0, 0, -1, false, lines)
-      else
-        local row = vim.api.nvim_win_get_cursor(0)[1]
-        vim.api.nvim_buf_set_lines(0, row - 1, row - 1, false, lines)
-      end
-
-      local folder = destinations[name]
-      if folder then
-        moveCurrentFile(folder, title)
-      end
-    end)
   end)
+end
+
+--- Pick a template, expand it at the cursor, and move the note if the template
+--- has a destination. Periodic templates open their own note instead.
+function M.insertTemplate()
+  local files = templateNames(false)
+  if not files then return end
+  vim.ui.select(files, { prompt = 'Template' }, function(selected)
+    if selected then M.applyTemplate(selected) end
+  end)
+end
+
+--- Pick a template for a note about to be made; `callback(selected)`, with nil
+--- when there is none or the pick is cancelled.
+--- @param callback fun(selected: string|nil)
+function M.pickTemplate(callback)
+  local files = templateNames(true)
+  if not files then return callback(nil) end
+  vim.ui.select(files, { prompt = 'Template' }, callback)
 end
 
 --- Empty the vault's trash, the folder the Delete template sends notes to, as

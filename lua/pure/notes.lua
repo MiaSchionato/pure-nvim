@@ -301,22 +301,89 @@ local function openFile(path)
   end
 end
 
+--- Folders of the vault under `arglead`, for the "In another folder" prompt.
+--- Hidden ones (.obsidian, .trash, .git) are left out.
+function M._folders(arglead)
+  local root = vault()
+  if not root then return {} end
+  arglead = (arglead or ''):gsub('\\', '/'):lower()
+  local out = {}
+  for name, kind in vim.fs.dir(root, {
+    depth = 8,
+    skip = function(dir) return not vim.fs.basename(dir):match('^%.') end,
+  }) do
+    if kind == 'directory' and not vim.fs.basename(name):match('^%.')
+        and name:lower():sub(1, #arglead) == arglead then
+      table.insert(out, name .. '/')
+    end
+  end
+  table.sort(out)
+  return out
+end
+
+--- Ask for a folder of the vault, starting from the current note's own.
+--- nil when cancelled, empty, or pointing outside the vault.
+local function askFolder(from)
+  local here = from and dirOf(from) or ''
+  local ok, input = pcall(vim.fn.input, {
+    prompt = 'Folder: ',
+    default = here ~= '' and (here .. '/') or '',
+    completion = "customlist,v:lua.require'pure.notes'._folders",
+  })
+  input = ok and vim.trim((input or ''):gsub('\\', '/')) or ''
+  input = input:gsub('^/+', ''):gsub('/+$', '')
+  if input == '' then return nil end
+  for step in input:gmatch('[^/]+') do
+    if step == '.' or step == '..' then
+      vim.notify('Not a folder inside the vault: ' .. input, vim.log.levels.WARN)
+      return nil
+    end
+  end
+  return input
+end
+
 --- Create the note a link names, after asking; then open it.
+---
+---   Yes                in the folder for new notes (Obsidian's setting), or
+---                      the one the link names ([[Projects/New]])
+---   With a template    the same, then the template is applied as <leader>nz
+---                      applies it, moves included: the Project template
+---                      sends the note to 1-Projects/<title>/
+---   In another folder  asks which (made if missing)
+---   Cancel             nothing
+---
+--- With a template the note is made only once one is picked, so cancelling
+--- the pick leaves no empty note behind.
 local function create(root, link, from)
   local target = link.target
   local folder, title = target:match('^(.*)/([^/]*)$')
   if not folder then folder, title = newNoteFolder(root, from), target end
   title = title:gsub('%.md$', '')
-  local choice = vim.fn.confirm(('Create the note "%s"%s?'):format(title,
-    folder ~= '' and (' in ' .. folder) or ''), '&Yes\n&No', 1)
-  if choice ~= 1 then return end
-  local dir = root .. (folder ~= '' and ('/' .. folder) or '')
-  vim.fn.mkdir(dir, 'p')
-  local name = zet().noteId(title, dir)
-  local path = dir .. '/' .. name .. '.md'
-  vim.fn.writefile({}, path)
-  invalidate()
-  vim.cmd('edit ' .. vim.fn.fnameescape(path))
+  local choice = vim.fn.confirm(('Create the note "%s"?'):format(title),
+    '&Yes\nWith a &template\nIn another &folder\n&Cancel', 1)
+
+  local function make(rel)
+    local dir = root .. (rel ~= '' and ('/' .. rel) or '')
+    vim.fn.mkdir(dir, 'p')
+    local path = dir .. '/' .. zet().noteId(title, dir) .. '.md'
+    vim.fn.writefile({}, path)
+    invalidate()
+    vim.cmd('edit ' .. vim.fn.fnameescape(path))
+  end
+
+  if choice == 1 then
+    make(folder)
+  elseif choice == 2 then
+    zet().pickTemplate(function(selected)
+      if not selected then return end
+      make(folder)
+      zet().applyTemplate(selected)
+      invalidate() -- the template may have moved it
+    end)
+  elseif choice == 3 then
+    local chosen = askFolder(from)
+    if chosen then make(chosen) end
+  end
 end
 
 --- Follow the link under the cursor. False when there is none.
