@@ -365,6 +365,34 @@ local function safeName(name)
   return vim.trim(name)
 end
 
+--- obsidian.nvim's `note_id_func`: the name written in a link is the note's name.
+---
+--- The plugin's default (zettel_id) ignores the title and returns
+--- "<timestamp>-<4 letters>", so following [[NovaNota]] created
+--- "1790444711-VABT.md" and the name typed in the link survived only as an
+--- alias. Here the title, made safe for Windows, is the file name; an existing
+--- note is never reused ("NovaNota 2"); only with no title at all does it fall
+--- back to a generated ID. Notes made as "Unique Note" ask for their own
+--- timestamp name (verbatim = true) and do not pass through here.
+--- @param title string|nil
+--- @param dir table|nil  obsidian.Path of the folder the note is created in
+--- @return string
+function M.noteId(title, dir)
+  local name = safeName(title or '')
+  if name == '' then
+    return require('obsidian.builtin').zettel_id()
+  end
+  if dir then
+    local candidate, n = name, 2
+    while vim.uv.fs_stat(tostring(dir) .. '/' .. candidate .. '.md') do
+      candidate = name .. ' ' .. n
+      n = n + 1
+    end
+    name = candidate
+  end
+  return name
+end
+
 --- The title of the note being templated: its file name, or, when that is a
 --- generated one, whatever the user types. Cancelling keeps the current name.
 --- @param callback fun(title: string)
