@@ -32,6 +32,9 @@ not end a block.
 | `ii` / `ai` | text object: the block / the block plus its borders (`if … end`) |
 | `[i` / `]i` | jump to the line above / below the block |
 
+When the block changes only the lines that differ are redrawn, so the line
+does not blink while typing.
+
 Colour `PureIndentscopeSymbol`. Off in one buffer:
 `vim.b.pure_indentscope_disable = true`.
 
