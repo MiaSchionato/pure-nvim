@@ -136,5 +136,11 @@ frontmatter is never rewritten). In notes of the vault:
 | `<CR>` | inside a ```` ```todoist ```` block: open its tasks; else obsidian's smart action (follow the link under the cursor, toggle a checkbox…) |
 | `K` | on a link, tag, checkbox or heading: smart action; elsewhere LSP hover |
 
-`markdown_oxide` is the language server for notes (link completion,
-backlinks, references).
+**Links.** Typing `[[` lists the vault's notes (obsidian.nvim's own language
+server); pick one and the link is written whole. For a **new note**, write
+`[[Title]]` and press `<CR>` on it: it is created as `Title.md` and the link
+stays as written (`zettelkasten.noteId`). The list has no "create" entry on
+purpose: it was built from the text typed when the list was asked for, and
+made notes with cut names.
+
+`markdown_oxide`, when installed, adds backlinks and references.

@@ -339,10 +339,70 @@ end
 vim.api.nvim_create_user_command('ZettelVault', M.setVault,
   { desc = 'Set the Obsidian vault folder used for templates' })
 
---- Title of the current note: the file name without extension.
+--- Title of the current note: the file name without ".md". Only that extension
+--- is dropped, so "v1.2 plan" typed without one keeps its ".2 plan".
 local function currentTitle()
-  local name = vim.fn.expand('%:t:r')
+  local name = (vim.fn.expand('%:t'):gsub('%.md$', ''))
   return name ~= '' and name or 'Untitled'
+end
+
+--- Names that are not a title: the ID obsidian.nvim generates when it is given
+--- none ("1790444711-VABT"), and the fallback of a new file created with no name.
+--- @param stem string
+--- @return boolean
+local function isGeneratedName(stem)
+  return stem == 'Untitled' or stem:match('^%d+%-%a+$') ~= nil
+end
+
+--- A title made safe as a file or folder name: Windows rejects \ / : * ? " < > |
+--- and a trailing dot or space.
+--- @param name string
+--- @return string
+local function safeName(name)
+  name = (name:gsub('[\\/:*?"<>|]', ''))
+  name = (name:gsub('%s+', ' '))
+  name = (name:gsub('[%s%.]+$', ''))
+  return vim.trim(name)
+end
+
+--- obsidian.nvim's `note_id_func`: the name written in a link is the note's name.
+---
+--- The plugin's default (zettel_id) ignores the title and returns
+--- "<timestamp>-<4 letters>", so following [[NovaNota]] created
+--- "1790444711-VABT.md" and the name typed in the link survived only as an
+--- alias. Here the title, made safe for Windows, is the file name; an existing
+--- note is never reused ("NovaNota 2"); only with no title at all does it fall
+--- back to a generated ID. Notes made as "Unique Note" ask for their own
+--- timestamp name (verbatim = true) and do not pass through here.
+--- @param title string|nil
+--- @param dir table|nil  obsidian.Path of the folder the note is created in
+--- @return string
+function M.noteId(title, dir)
+  local name = safeName(title or '')
+  if name == '' then
+    return require('obsidian.builtin').zettel_id()
+  end
+  if dir then
+    local candidate, n = name, 2
+    while vim.uv.fs_stat(tostring(dir) .. '/' .. candidate .. '.md') do
+      candidate = name .. ' ' .. n
+      n = n + 1
+    end
+    name = candidate
+  end
+  return name
+end
+
+--- The title of the note being templated: its file name, or, when that is a
+--- generated one, whatever the user types. Cancelling keeps the current name.
+--- @param callback fun(title: string)
+local function withTitle(callback)
+  local stem = currentTitle()
+  if not isGeneratedName(stem) then return callback(stem) end
+  vim.ui.input({ prompt = 'Note title: ' }, function(input)
+    input = safeName(input or '')
+    callback(input ~= '' and input or stem)
+  end)
 end
 
 --- One line of Quotes.md, picked by the day of the year so it is stable for a
@@ -497,8 +557,13 @@ end
 ---
 --- Writes first, renames, then reopens at the new path and drops the stale
 --- buffer, otherwise Neovim keeps editing a name that no longer exists.
+---
+--- The file is named after the title and always ends in ".md": a note created
+--- without an extension, or with a generated name, would otherwise land in its
+--- folder as something Obsidian does not treat as a note.
 --- @param folder string
-local function moveCurrentFile(folder)
+--- @param title string|nil  defaults to the current file name
+local function moveCurrentFile(folder, title)
   local path = vim.api.nvim_buf_get_name(0)
   if path == '' then
     return vim.notify('Save the note before applying a template that moves it',
@@ -508,12 +573,13 @@ local function moveCurrentFile(folder)
   local root = vaultPath()
   if not root then return end -- insertTemplate checks first; this is a guard
 
-  local title = currentTitle()
+  title = safeName(title or currentTitle())
+  if title == '' then title = 'Untitled' end
   -- Replaced through a function: as a plain replacement string, a '%' in the
   -- title is gsub syntax, and "100% focus" became the folder "100 focus".
   local folder_name = folder:gsub('{{title}}', function() return title end)
   local target_dir = root .. '/' .. folder_name
-  local target = target_dir .. '/' .. vim.fn.fnamemodify(path, ':t')
+  local target = target_dir .. '/' .. title .. '.md'
 
   if pathKey(target) == pathKey(path) then
     return -- already there
@@ -670,20 +736,24 @@ function M.insertTemplate()
     local content = file:read('*a')
     file:close()
 
-    local lines = vim.split(render(content, { title = currentTitle() }), '\n')
-    -- An empty note becomes the template; otherwise it goes in above the
-    -- cursor line. (Inserting into an empty note left a stray blank line.)
-    if vim.api.nvim_buf_line_count(0) == 1 and vim.api.nvim_get_current_line() == '' then
-      vim.api.nvim_buf_set_lines(0, 0, -1, false, lines)
-    else
-      local row = vim.api.nvim_win_get_cursor(0)[1]
-      vim.api.nvim_buf_set_lines(0, row - 1, row - 1, false, lines)
-    end
+    -- The title is asked for first, so {{title}} in the template, the folder
+    -- and the file name all agree.
+    withTitle(function(title)
+      local lines = vim.split(render(content, { title = title }), '\n')
+      -- An empty note becomes the template; otherwise it goes in above the
+      -- cursor line. (Inserting into an empty note left a stray blank line.)
+      if vim.api.nvim_buf_line_count(0) == 1 and vim.api.nvim_get_current_line() == '' then
+        vim.api.nvim_buf_set_lines(0, 0, -1, false, lines)
+      else
+        local row = vim.api.nvim_win_get_cursor(0)[1]
+        vim.api.nvim_buf_set_lines(0, row - 1, row - 1, false, lines)
+      end
 
-    local folder = destinations[name]
-    if folder then
-      moveCurrentFile(folder)
-    end
+      local folder = destinations[name]
+      if folder then
+        moveCurrentFile(folder, title)
+      end
+    end)
   end)
 end
 

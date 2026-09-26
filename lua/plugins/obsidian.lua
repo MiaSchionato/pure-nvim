@@ -41,6 +41,15 @@ local function setup(vault)
     -- Same folder pure/zettelkasten.lua expands templates from, so
     -- :Obsidian template finds them too.
     templates = { folder = vim.g.pure_templates or "Templates" },
+    -- The name typed in [[NovaNota]] is the file name. The default id function
+    -- replaced it with "<timestamp>-<letters>" (see zettelkasten.noteId).
+    note_id_func = require("pure.zettelkasten").noteId,
+    -- [[ completion lists the vault's notes but offers no "create" entry. That
+    -- entry was built from the text typed when the menu was last asked for, so
+    -- with "[[how th" typed it offered "[[how ]]" and made a note with a cut
+    -- name. A new note: type [[Title]] and <CR> on it, which goes through
+    -- noteId above.
+    completion = { create_new = false },
     workspaces = {
       {
         name = vim.fs.basename(vault),
