@@ -30,6 +30,20 @@ Generated from the running config; the source is `lua/configs/keymaps.lua`.
 | `<leader>y` | n | Yank to clipboard |
 | `<leader>y` | x | Yank to clipboard |
 
+## `<leader>a` – Claude
+
+See [claude.md](claude.md).
+
+| Key | Mode | What |
+|---|---|---|
+| `<leader>aa` | n, x | Ask (answer in a window) |
+| `<leader>ab` | n | Run the ```` ```claude ```` block |
+| `<leader>ac` | n, x | Review the code |
+| `<leader>ah` | n | Past answers |
+| `<leader>ai` | n, x | Write here (visual: rewrite) |
+| `<leader>ar` | n, x | Repeat the last request |
+| `<leader>as` | n | Stop |
+
 ## `<leader>b` – Buffers
 
 | Key | Mode | What |

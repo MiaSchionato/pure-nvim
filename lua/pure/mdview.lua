@@ -412,7 +412,7 @@ local function hideLines(buf, top, bottom, mark, place)
   local ranges = footnotes(buf, top, bottom)
   local fm = frontmatter(buf)
   if fm then table.insert(ranges, 1, fm) end
-  for _, name in ipairs({ 'pure.todoist', 'pure.calendar' }) do
+  for _, name in ipairs({ 'pure.todoist', 'pure.calendar', 'pure.claude' }) do
     local ok, mod = pcall(require, name)
     if ok and mod.hiddenBlocks then vim.list_extend(ranges, mod.hiddenBlocks(buf)) end
   end

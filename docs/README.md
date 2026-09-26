@@ -15,6 +15,7 @@ When a module changes, update its page here in the same commit.
 | [keymaps.md](keymaps.md) | Every mapping, by group (also shown live: press `<Space>` and wait) |
 | [todoist.md](todoist.md) | Todoist: the editable task list, blocks in notes, sync into notes, archive |
 | [calendar.md](calendar.md) | The month as a grid in a note: one box per day, edited in place |
+| [claude.md](claude.md) | Claude Code from keys: write into the buffer, ask in a window, requests in notes |
 | [zettelkasten.md](zettelkasten.md) | Obsidian vault, note templates, daily / weekly / monthly notes |
 | [markdown.md](markdown.md) | How markdown is drawn: headings, tasks, tables, wikilinks, frontmatter, footnotes |
 | [keyhint.md](keyhint.md) | The window that lists the keys after `<leader>` |
@@ -94,6 +95,9 @@ before use).
 | `vim.g.pure_calendar_duration` | `60` minutes | [calendar](calendar.md) |
 | `vim.g.pure_calendar_confirm` | `'delete'` | [calendar](calendar.md) |
 | `vim.g.pure_calendar_sync` | `{ interval = 15 }` | [calendar](calendar.md) |
+| `vim.g.pure_claude_model` | the `claude` command's default | [claude](claude.md) |
+| `vim.g.pure_claude_cmd` | `'claude'` | [claude](claude.md) |
+| `vim.g.pure_claude_blocks` | on | [claude](claude.md) |
 | `vim.g.pure_keyhint_delay` | `1000` ms | [keyhint](keyhint.md) |
 | `vim.g.pure_keyhint_groups` | set in keymaps.lua | [keyhint](keyhint.md) |
 | `vim.g.pure_keyhint_triggers` | `<leader>` in normal and visual | [keyhint](keyhint.md) |
@@ -133,6 +137,7 @@ Undo history is in `stdpath('state')/undo`.
 | `:CalendarRefresh` | draw and tidy the ```` ```calendar ```` grids of the note |
 | `:CalendarSync` | sync the calendar grids with Google now |
 | `:CalendarAuth` | connect Google Calendar (OAuth, once) |
+| `:ClaudeBlock` | run the ```` ```claude ```` block under the cursor (again) |
 | `:TodoistToken` | set the Todoist token (hidden input) |
 | `:ZettelVault` | choose the Obsidian vault folder |
 | `:VaultSync` | save, commit, pull, then push the vault ([zettelkasten](zettelkasten.md)) |
