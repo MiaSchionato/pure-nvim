@@ -165,6 +165,18 @@ never overwrites:
 If a begin marker has no end marker, that block is left alone (so a broken
 marker can never swallow the rest of the note).
 
+**Folded on open.** When a note with a synced list opens in a window, each
+task with subtasks starts folded to its own line (the fold shows just the
+task, without the link, date or project). `<leader>zz` opens one,
+`<leader>za` opens all. It happens once per window, so a fold you opened
+stays open when a sync rewrites the list.
+
+```lua
+vim.g.pure_todoist_fold = 'subtasks'  -- default
+vim.g.pure_todoist_fold = 'list'      -- the whole list folded to one line
+vim.g.pure_todoist_fold = false       -- nothing folded
+```
+
 ### Sync off: tasks drawn, not written
 
 ```lua

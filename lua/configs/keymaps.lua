@@ -3,6 +3,7 @@
 -- =============================================================================
 --  Leader is <Space>. The second key groups the action:
 --
+--    a  claude
 --    b  buffers        e  explore (pickers)   l  lsp             u  undotree
 --    c  code           f  find (pickers)      n  new file        v  window focus
 --    d  diagnostics    g  git                 o  toggles         w  tabs
@@ -32,6 +33,7 @@ vim.g.mapleader = ' '
 
 -- Group names shown by the key hint window (pure/keyhint.lua) after <leader>.
 vim.g.pure_keyhint_groups = {
+  ['<leader>a'] = 'Claude',
   ['<leader>b'] = 'Buffers',
   ['<leader>c'] = 'Code',
   ['<leader>d'] = 'Diagnostics',
@@ -316,6 +318,20 @@ map("n", "<leader>n.", inDir(fzf.NewFile, dirs['.']), func.getOpts(opts, "New fi
 map("n", "<leader>nn", inDir(fzf.NewFile, dirs.n), func.getOpts(opts, "New file in nvim config"))
 map("n", "<leader>nm", inDir(fzf.NewFile, dirs.m), func.getOpts(opts, "New file in Obsidian vault"))
 map('n', '<leader>nz', zet.insertTemplate, func.getOpts(opts, "Insert zettel template"))
+
+-- =============================================================================
+--  Claude  (<leader>a, pure/claude.lua)
+-- =============================================================================
+local function claude(fn)
+  return function() require('pure.claude')[fn]() end
+end
+map({ 'n', 'x' }, '<leader>ai', claude('write'), func.getOpts(opts, "Write here (visual: rewrite)"))
+map({ 'n', 'x' }, '<leader>aa', claude('ask'), func.getOpts(opts, "Ask (answer in a window)"))
+map({ 'n', 'x' }, '<leader>ac', claude('review'), func.getOpts(opts, "Review the code"))
+map({ 'n', 'x' }, '<leader>ar', claude('repeatLast'), func.getOpts(opts, "Repeat the last request"))
+map('n', '<leader>ah', claude('history'), func.getOpts(opts, "Past answers"))
+map('n', '<leader>as', claude('stop'), func.getOpts(opts, "Stop"))
+map('n', '<leader>ab', claude('runBlockAtCursor'), func.getOpts(opts, "Run the ```claude block"))
 
 -- =============================================================================
 --  Git
