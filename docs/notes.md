@@ -23,6 +23,10 @@ in the vault set with `:ZettelVault`.
 | a checkbox line | toggle it |
 | a heading | fold / unfold it |
 
+**`K`** follows the link under the cursor too, and is LSP hover everywhere
+else. In other files (code) it follows only web links (`https://…`), since
+`[[x]]` there is not a note.
+
 In the `:Todoist` list, `<CR>` on a `[[link]]` in a task's text opens the
 note; anywhere else on the line it toggles the task.
 

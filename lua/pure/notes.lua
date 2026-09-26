@@ -4,7 +4,7 @@
 --  The part of obsidian.nvim this configuration used, in the vault of
 --  pure/zettelkasten.lua, with links Obsidian reads the same way:
 --
---    <CR>         on a link: follow it ([[Note]], [[Note#Heading]],
+--    <CR>, K      on a link: follow it ([[Note]], [[Note#Heading]],
 --                 [[Note#^block]], [[Note|alias]], ![[embed]],
 --                 [text](Note.md), https://...). A note that does not exist
 --                 yet is created (asked first), where Obsidian would put it.
@@ -320,9 +320,10 @@ local function create(root, link, from)
 end
 
 --- Follow the link under the cursor. False when there is none.
-function M.follow()
+--- `urls_only`: only web links (for code, where [[x]] is not a note).
+function M.follow(urls_only)
   local link = linkAtCursor()
-  if not link then return false end
+  if not link or (urls_only and link.kind ~= 'url') then return false end
   if link.kind == 'url' then
     vim.ui.open(link.inner)
     return true
