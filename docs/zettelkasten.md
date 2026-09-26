@@ -1,4 +1,4 @@
-# Notes and templates (`lua/pure/zettelkasten.lua`, `lua/plugins/obsidian.lua`)
+# Notes and templates (`lua/pure/zettelkasten.lua`)
 
 Obsidian-compatible notes: the vault is set once, templates use the syntax of
 Obsidian's **core** Templates plugin (no Templater), and daily / weekly /
@@ -16,7 +16,8 @@ precedence:
 
 `:ZettelVault` asks again at any time. The vault is used by `<leader>em`
 (explore), `<leader>fa` (find), `<leader>nm` (new note), the templates, the
-Todoist sync and obsidian.nvim, which all follow a change at once.
+Todoist sync and the links between notes ([notes.md](notes.md)), which all
+follow a change at once.
 
 ## Templates: `<leader>nz`
 
@@ -125,22 +126,8 @@ off. Files are deleted for good, not moved to the recycle bin.
 It never touches a note open in that Neovim, never runs in `--headless`
 (scripts, tests), and only acts on a folder strictly inside the vault.
 
-## obsidian.nvim
+## Links
 
-Set up for the vault in `lua/plugins/obsidian.lua`, with its own drawing and
-frontmatter handling off (markdown is drawn by `pure/mdview.lua`, and
-frontmatter is never rewritten). In notes of the vault:
-
-| Key | What |
-|---|---|
-| `<CR>` | inside a ```` ```todoist ```` block: open its tasks; else obsidian's smart action (follow the link under the cursor, toggle a checkbox…) |
-| `K` | on a link, tag, checkbox or heading: smart action; elsewhere LSP hover |
-
-**Links.** Typing `[[` lists the vault's notes (obsidian.nvim's own language
-server); pick one and the link is written whole. For a **new note**, write
-`[[Title]]` and press `<CR>` on it: it is created as `Title.md` and the link
-stays as written (`zettelkasten.noteId`). The list has no "create" entry on
-purpose: it was built from the text typed when the list was asked for, and
-made notes with cut names.
-
-`markdown_oxide`, when installed, adds backlinks and references.
+Following, completing and renaming links, and backlinks, are in
+[notes.md](notes.md) (`pure/notes.lua`). A new note made from `[[Title]]`
+is named `Title.md` (`zettelkasten.noteId`).

@@ -94,6 +94,7 @@ See [claude.md](claude.md).
 | `<leader>fg` | n | Grep |
 | `<leader>fh` | n | Help tags |
 | `<leader>fj` | n | Jump list |
+| `<leader>fl` | n | Notes linking here (backlinks) |
 | `<leader>fn` | n | Find in nvim config |
 | `<leader>f~` | n | Find in home |
 
@@ -140,6 +141,7 @@ See [claude.md](claude.md).
 | `<leader>nh` | n | New file in home |
 | `<leader>nm` | n | New file in Obsidian vault |
 | `<leader>nn` | n | New file in nvim config |
+| `<leader>nr` | n | Rename note, fix links to it |
 | `<leader>nz` | n | Insert zettel template |
 
 ## `<leader>o` – Toggles

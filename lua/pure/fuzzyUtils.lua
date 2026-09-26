@@ -234,6 +234,8 @@ local function pickList(lines, opts, on_pick, on_cancel)
   })
 end
 
+M.pickList = pickList
+
 function M.fuzzySearch(path)
   if path == nil then path = vim.uv.os_homedir():gsub("\\", "/") .. "/" end
   path = asDir(path)

@@ -306,6 +306,7 @@ map('n', "<leader>f/", fzf.fuzzyOldfiles, func.getOpts(opts, "Recent files"))
 map('n', "<leader>fh", fzf.fuzzyHelp, func.getOpts(opts, "Help tags"))
 map('n', "<leader>fb", fzf.fuzzyBuffers, func.getOpts(opts, "Buffers"))
 map('n', "<leader>fj", fzf.fuzzyJump, func.getOpts(opts, "Jump list"))
+map('n', '<leader>fl', function() require('pure.notes').backlinks() end, func.getOpts(opts, "Notes linking here (backlinks)"))
 map('n', '<leader>fc', fzf.fuzzyColorscheme, func.getOpts(opts, "Colorschemes"))
 
 -- =============================================================================
@@ -318,6 +319,7 @@ map("n", "<leader>n.", inDir(fzf.NewFile, dirs['.']), func.getOpts(opts, "New fi
 map("n", "<leader>nn", inDir(fzf.NewFile, dirs.n), func.getOpts(opts, "New file in nvim config"))
 map("n", "<leader>nm", inDir(fzf.NewFile, dirs.m), func.getOpts(opts, "New file in Obsidian vault"))
 map('n', '<leader>nz', zet.insertTemplate, func.getOpts(opts, "Insert zettel template"))
+map('n', '<leader>nr', function() require('pure.notes').rename() end, func.getOpts(opts, "Rename note, fix links to it"))
 
 -- =============================================================================
 --  Claude  (<leader>a, pure/claude.lua)
