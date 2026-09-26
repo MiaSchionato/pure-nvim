@@ -299,7 +299,7 @@ function M.setVault()
   if vim.g.pure_vault and vim.g.pure_vault ~= '' then
     vim.notify('Saved, but vim.g.pure_vault is set and takes precedence', vim.log.levels.WARN)
   end
-  -- plugins/obsidian.lua and the <leader>em / fa / nm keys follow the vault.
+  -- pure/notes.lua and the <leader>em / fa / nm keys follow the vault.
   vim.api.nvim_exec_autocmds('User', { pattern = 'PureVaultChanged', data = { vault = vaultPath() } })
 
   local templates = path .. '/' .. (vim.g.pure_templates or 'Templates')
@@ -346,7 +346,7 @@ local function currentTitle()
   return name ~= '' and name or 'Untitled'
 end
 
---- Names that are not a title: the ID obsidian.nvim generates when it is given
+--- Names that are not a title: the ID obsidian.nvim used to generate when given
 --- none ("1790444711-VABT"), and the fallback of a new file created with no name.
 --- @param stem string
 --- @return boolean
@@ -365,22 +365,19 @@ local function safeName(name)
   return vim.trim(name)
 end
 
---- obsidian.nvim's `note_id_func`: the name written in a link is the note's name.
+--- The name of a note made from a [[link]] (pure/notes.lua): the name written
+--- in the link.
 ---
---- The plugin's default (zettel_id) ignores the title and returns
---- "<timestamp>-<4 letters>", so following [[NovaNota]] created
---- "1790444711-VABT.md" and the name typed in the link survived only as an
---- alias. Here the title, made safe for Windows, is the file name; an existing
---- note is never reused ("NovaNota 2"); only with no title at all does it fall
---- back to a generated ID. Notes made as "Unique Note" ask for their own
---- timestamp name (verbatim = true) and do not pass through here.
+--- The title, made safe for Windows, is the file name; an existing note is
+--- never reused ("NovaNota 2"); only with no title at all does it fall back
+--- to a timestamp.
 --- @param title string|nil
---- @param dir table|nil  obsidian.Path of the folder the note is created in
+--- @param dir string|nil  the folder the note is created in
 --- @return string
 function M.noteId(title, dir)
   local name = safeName(title or '')
   if name == '' then
-    return require('obsidian.builtin').zettel_id()
+    return os.date('%Y%m%d%H%M%S')
   end
   if dir then
     local candidate, n = name, 2
@@ -814,7 +811,7 @@ function M.cleanTrash()
   end
 end
 
--- Also used by plugins/obsidian.lua and configs/keymaps.lua, so the vault is
+-- Also used by pure/notes.lua and configs/keymaps.lua, so the vault is
 -- configured in one place.
 M.vaultPath = vaultPath
 M.templatesPath = templatesPath

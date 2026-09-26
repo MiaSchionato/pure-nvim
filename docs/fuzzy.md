@@ -32,7 +32,7 @@ only if you type a capital letter). The preview shows the match in its file;
 `Enter` opens it at that line and column.
 
 **`vim.ui.select`** – any plugin asking to pick from a list (code actions,
-obsidian.nvim, the template picker…) gets this same fzf window.
+the template picker…) gets this same fzf window.
 **`vim.ui.input`** – questions get a small floating window (`Enter` answers,
 `Esc` / `q` cancels).
 
