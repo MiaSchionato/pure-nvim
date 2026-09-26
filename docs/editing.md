@@ -22,6 +22,11 @@ Typing the closer when it is already next to the cursor steps over it, and
 `<BS>` between an empty pair deletes both. In normal mode, `dl` deletes the
 character under the cursor and its pair.
 
+When a completion already ends in closers, the ones added with the opener are
+dropped: accepting a note after `[[` gives `[[Note]]`, not `[[Note]]]]`. Closers
+that belong to something opened before the completion stay, so completing
+`getcwd()` inside `print()` still ends in `print(getcwd())`.
+
 ## Indent scope (`lua/pure/indentscope.lua`)
 
 A vertical line beside the indented block the cursor is in. Blank lines do
