@@ -89,6 +89,7 @@ before use).
 | `vim.g.pure_todoist_confirm` | `'all'` | [todoist](todoist.md) |
 | `vim.g.pure_todoist_archive` | off | [todoist](todoist.md) |
 | `vim.g.pure_todoist_sync` | off (`{ interval = 10 }` in configs.lua) | [todoist](todoist.md) |
+| `vim.g.pure_todoist_fold` | `'subtasks'` | [todoist](todoist.md) |
 | `vim.g.pure_calendar_cell_width` | `25` (grid 197 columns) | [calendar](calendar.md) |
 | `vim.g.pure_calendar_duration` | `60` minutes | [calendar](calendar.md) |
 | `vim.g.pure_calendar_confirm` | `'delete'` | [calendar](calendar.md) |
