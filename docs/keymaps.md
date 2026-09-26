@@ -218,7 +218,7 @@ See [claude.md](claude.md).
 | `<Down>` | Move line down |
 | `<Up>` | Move line up |
 | `J` | Join lines, keep cursor |
-| `K` | LSP hover |
+| `K` | Follow link under cursor, else LSP hover |
 | `S` | Surround with function |
 | `U` | Redo |
 | `Y` | Yank to end of line |
