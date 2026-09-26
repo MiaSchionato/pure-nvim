@@ -497,6 +497,9 @@ function M.setup()
       local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
       confirmed = true
       local input = table.concat(lines, "\n")
+      -- <CR> in insert mode submits: leave insert mode, or the window
+      -- underneath is left in it.
+      vim.cmd("stopinsert")
       vim.api.nvim_win_close(win, true)
       vim.api.nvim_buf_delete(buf, { force = true })
       callback(input)

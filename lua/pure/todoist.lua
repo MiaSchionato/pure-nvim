@@ -1843,6 +1843,85 @@ do
 end
 
 -- -----------------------------------------------------------------------------
+--  Folds in the synced lists
+-- -----------------------------------------------------------------------------
+--  When a note with a synced list is shown in a window, the list starts
+--  folded (the markdown folds of treesitter: a task with subtasks, and the
+--  whole list):
+--
+--    vim.g.pure_todoist_fold = 'subtasks'  (default) each task with subtasks
+--                                          shows as one line
+--    vim.g.pure_todoist_fold = 'list'      the whole list shows as one line
+--    vim.g.pure_todoist_fold = false       nothing is folded
+--
+--  Only once per window and note: folds opened by hand stay open, also
+--  after a sync rewrites the list.
+
+--- Close the folds of the synced lists of `buf` in `win`.
+local function closeListFolds(win, buf)
+  local mode = vim.g.pure_todoist_fold
+  if mode == nil then mode = 'subtasks' end
+  if not mode then return end
+  local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+  local indent = function(l) return #(l:match('^%s*')) end
+  vim.api.nvim_win_call(win, function()
+    for _, b in ipairs(blocksIn(lines)) do
+      local region = regionOf(lines, b)
+      if region and region.last - region.first > 1 then
+        -- 1-based rows of the tasks; bottom up so the deepest close first.
+        for row = region.last - 1, region.first + 2, -1 do
+          local here, next_line = lines[row], lines[row + 1]
+          if row + 1 < region.last + 1 and indent(next_line) > indent(here)
+            and vim.fn.foldlevel(row) > 0 and vim.fn.foldclosed(row) == -1 then
+            vim.cmd(row .. 'foldclose')
+          end
+        end
+        local top = region.first + 2
+        if mode == 'list' and vim.fn.foldlevel(top) > 0 then
+          -- Closing inside a closed fold closes the one around it: the list.
+          vim.cmd(top .. 'foldclose')
+          if vim.fn.foldclosedend(top) < region.last then vim.cmd(top .. 'foldclose') end
+        end
+      end
+    end
+  end)
+end
+
+vim.api.nvim_create_autocmd('BufWinEnter', {
+  group = vim.api.nvim_create_augroup('PureTodoistFolds', { clear = true }),
+  pattern = { '*.md', '*.markdown' },
+  callback = function(args)
+    local win, buf = vim.api.nvim_get_current_win(), args.buf
+    local seen = vim.w[win].pure_todoist_folded or {}
+    if seen[tostring(buf)] then return end
+    -- The treesitter folds are computed after the window shows the buffer:
+    -- wait for them (a few tries) before closing.
+    local tries = 0
+    local function attempt()
+      if not (vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_buf(win) == buf) then return end
+      local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+      local has, ready = false, false
+      for _, b in ipairs(blocksIn(lines)) do
+        local region = regionOf(lines, b)
+        if region and region.last - region.first > 1 then
+          has = true
+          ready = ready or vim.api.nvim_win_call(win, function()
+            return vim.fn.foldlevel(region.first + 2) > 0
+          end)
+        end
+      end
+      if not has then return end
+      tries = tries + 1
+      if not ready and tries < 10 then return vim.defer_fn(attempt, 50) end
+      closeListFolds(win, buf)
+      seen[tostring(buf)] = true
+      vim.w[win].pure_todoist_folded = seen
+    end
+    vim.schedule(attempt)
+  end,
+})
+
+-- -----------------------------------------------------------------------------
 --  Token setup
 -- -----------------------------------------------------------------------------
 
