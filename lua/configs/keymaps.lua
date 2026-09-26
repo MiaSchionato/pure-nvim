@@ -357,7 +357,12 @@ map('n', "<leader>gB", git('switchBranch'), func.getOpts(opts, "Git switch branc
 -- =============================================================================
 --  LSP
 -- =============================================================================
-map('n', 'K', lsp.hover, func.getOpts(opts, "LSP hover"))
+-- On a link, K follows it (pure/notes.lua): in markdown any link, elsewhere
+-- only web links, since [[x]] in code is not a note. Else LSP hover.
+map('n', 'K', function()
+  if require('pure.notes').follow(vim.bo.filetype ~= 'markdown') then return end
+  lsp.hover()
+end, func.getOpts(opts, "Follow link, else LSP hover"))
 map('n', 'gd', lsp.definition, func.getOpts(opts, "LSP definition"))
 -- No 'gr' here: it made the builtin grr/grn/gra/gri/grt/grx wait 500 ms, and
 -- grr already lists references.
