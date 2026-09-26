@@ -1,0 +1,751 @@
+-- =============================================================================
+--  Calendar
+-- =============================================================================
+--  A month as a grid in a note, one box per day, like a wall calendar:
+--
+--    ```calendar
+--    month: 2026-10          (default: the note's name if it is YYYY-MM,
+--                             else the current month)
+--    calendars: primary      (which calendars; primary by default)
+--    exclude: recurring      (leave out what repeats: work, dailies...)
+--    ```
+--    <!-- calendar -->
+--    ```
+--    ┌──────────┬──────────┬ ... ┐
+--    │   Seg    │   Ter    │     │
+--    ╞══════════╪══════════╪ ... ╡
+--    │ 05       │ 06       │     │   <- the day numbers of a week
+--    │          │ 14:30    │     │   <- appointments, as many lines as needed
+--    │          │ Dentista │     │
+--    ├──────────┼──────────┼ ... ┤
+--    ```
+--    <!-- /calendar -->
+--
+--  The grid sits in a code block (so Obsidian keeps it monospaced and
+--  aligned, and spelling and markdown syntax leave it alone); in Neovim
+--  pure/mdview.lua hides the query, the markers and the ``` lines and draws
+--  no code background, so only the grid shows.
+--
+--  In a day's box:
+--    14:30 Dentista           an appointment (1 hour: vim.g.pure_calendar_duration)
+--    14:30–16:00 Dentista     with its end
+--    Feriado                  all day
+--    @ Rua X, 10              the place of the appointment above
+--      (two spaces)           continues the line above, when it is too long
+--    Viagem →  /  ← Viagem    an event of several days (read only)
+--
+--  Editing: write anywhere in a box, as crooked as it comes out; :w reads
+--  the grid back and redraws it aligned, wrapping long text onto the next
+--  line of the same box. Rows are understood by their borders, and still
+--  when one was deleted or a week separator is gone; a line it cannot place
+--  is never dropped: it is kept under the grid, with a warning.
+--
+--  Inside the grid, keys work on the day under the cursor, not the line
+--  (a line of the file crosses the whole week):
+--    dd   delete the appointment under the cursor (only that day's)
+--    o    a new line for the day under the cursor
+--    cc   replace the appointment under the cursor (text, place and all)
+--  Outside the grid they are the usual ones.
+--
+--  :CalendarRefresh  draws the grid of every block in the note that has none
+--
+--  For now the events come from a built-in sample (vim.g.pure_calendar_source
+--  = 'mock'): the sync with Google Calendar comes next.
+-- =============================================================================
+
+local M = {}
+
+local api = vim.api
+local dw = vim.fn.strdisplaywidth
+
+local BEGIN, END = '<!-- calendar -->', '<!-- /calendar -->'
+local ORPHANS = '<!-- calendar: lines that could not be placed; move them into a day -->'
+
+local function width() return tonumber(vim.g.pure_calendar_cell_width) or 25 end
+local function duration() return tonumber(vim.g.pure_calendar_duration) or 60 end
+
+local names = {
+  pt = { days = { 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom' }, today = '◀ hoje' },
+  en = { days = { 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun' }, today = '◀ today' },
+}
+local function locale() return names[vim.g.pure_calendar_locale or 'pt'] or names.pt end
+
+-- -----------------------------------------------------------------------------
+--  Text helpers (display width, not bytes: accents, box characters)
+-- -----------------------------------------------------------------------------
+
+local function chars(s) return vim.fn.split(s, [[\zs]]) end
+local function pad(s, w) return s .. string.rep(' ', math.max(0, w - dw(s))) end
+local function center(s, w)
+  local left = math.floor((w - dw(s)) / 2)
+  return string.rep(' ', left) .. s .. string.rep(' ', math.max(0, w - dw(s) - left))
+end
+
+--- The longest start of `s` at most `w` columns wide.
+local function takeWidth(s, w)
+  local out = ''
+  for _, ch in ipairs(chars(s)) do
+    if dw(out .. ch) > w then break end
+    out = out .. ch
+  end
+  return out
+end
+
+--- Word-wrap `text` into lines of `w` columns; lines after the first start
+--- with `prefix`. A word longer than a line is cut.
+local function wrap(text, w, prefix)
+  local lines, cur = {}, ''
+  local function flush() table.insert(lines, cur); cur = prefix end
+  for word in text:gmatch('%S+') do
+    local sep = (cur == '' or cur == prefix) and '' or ' '
+    if dw(cur .. sep .. word) <= w then
+      cur = cur .. sep .. word
+    else
+      if cur ~= '' and cur ~= prefix then flush() end
+      while dw(cur .. word) > w do
+        local take = takeWidth(word, w - dw(cur))
+        cur = cur .. take
+        word = word:sub(#take + 1)
+        flush()
+      end
+      cur = cur .. word
+    end
+  end
+  if cur ~= '' and cur ~= prefix then table.insert(lines, cur) end
+  return lines
+end
+
+-- -----------------------------------------------------------------------------
+--  Dates
+-- -----------------------------------------------------------------------------
+
+--- The weeks of a month, Monday first: { { [1..7] = day or nil }, ... }.
+local function monthWeeks(y, m)
+  local t = os.date('*t', os.time({ year = y, month = m, day = 1, hour = 12 }))
+  local ndays = os.date('*t', os.time({ year = y, month = m + 1, day = 0, hour = 12 })).day
+  local col = (t.wday + 5) % 7 + 1 -- 1 = Monday
+  local weeks, week = {}, {}
+  for d = 1, ndays do
+    week[col] = d
+    if col == 7 then
+      table.insert(weeks, week)
+      week, col = {}, 1
+    else
+      col = col + 1
+    end
+  end
+  if next(week) then table.insert(weeks, week) end
+  return weeks
+end
+
+local function addMinutes(hhmm, minutes)
+  local h, m = hhmm:match('(%d+):(%d+)')
+  local total = tonumber(h) * 60 + tonumber(m) + minutes
+  return ('%02d:%02d'):format(math.floor(total / 60) % 24, total % 60)
+end
+
+local function normTime(t)
+  local h, m = t:match('^(%d%d?):(%d%d)$')
+  return h and ('%02d:%s'):format(tonumber(h), m) or nil
+end
+
+-- -----------------------------------------------------------------------------
+--  Appointments <-> lines of a box
+-- -----------------------------------------------------------------------------
+
+--- An appointment from the first line of its text.
+local function newEntry(text)
+  if text:match('^←') or text:match('→$') then return { ro = true, text = text } end
+  -- The en dash is several bytes: it cannot go in a [set], so each dash is
+  -- tried on its own.
+  local s, e, rest = text:match('^(%d%d?:%d%d)%s*–%s*(%d%d?:%d%d)%s+(.+)$')
+  if not s then s, e, rest = text:match('^(%d%d?:%d%d)%s*%-%s*(%d%d?:%d%d)%s+(.+)$') end
+  if not s then s, rest = text:match('^(%d%d?:%d%d)%s+(.+)$') end
+  if s and normTime(s) then
+    s = normTime(s)
+    return { start = s, stop = e and normTime(e) or addMinutes(s, duration()), title = rest }
+  end
+  return { title = text }
+end
+
+--- The lines an appointment takes in a box `w` columns wide.
+local function entryLines(e, w)
+  local text
+  if e.ro then
+    text = e.text
+  elseif e.start then
+    local range = e.stop ~= addMinutes(e.start, duration()) and ('–' .. e.stop) or ''
+    text = e.start .. range .. ' ' .. e.title
+  else
+    text = e.title
+  end
+  local out = wrap(text, w, '  ')
+  if e.loc and e.loc ~= '' then vim.list_extend(out, wrap('@ ' .. e.loc, w, '  ')) end
+  return out
+end
+
+--- All day first (several-day ones first of all), then by time.
+local function sortDay(list)
+  table.sort(list, function(a, b)
+    local ka = a.ro and '0' or (a.start and ('2' .. a.start) or '1')
+    local kb = b.ro and '0' or (b.start and ('2' .. b.start) or '1')
+    return ka < kb
+  end)
+end
+
+-- -----------------------------------------------------------------------------
+--  Drawing the grid
+-- -----------------------------------------------------------------------------
+
+--- The grid lines of month y-m, with `byDay[day] = { entries }`.
+local function render(y, m, byDay)
+  local w = width()
+  local L = locale()
+  local now = os.date('*t')
+  local today = (now.year == y and now.month == m) and now.day or nil
+  local function rule(l, mid, r, fill)
+    local seg = fill:rep(w + 2)
+    return l .. table.concat({ seg, seg, seg, seg, seg, seg, seg }, mid) .. r
+  end
+  local function row(cells)
+    local out = {}
+    for c = 1, 7 do out[c] = ' ' .. pad(cells[c] or '', w) .. ' ' end
+    return '│' .. table.concat(out, '│') .. '│'
+  end
+
+  local out = { rule('┌', '┬', '┐', '─') }
+  local header = {}
+  for c = 1, 7 do header[c] = center(L.days[c], w) end
+  table.insert(out, row(header))
+  table.insert(out, rule('╞', '╪', '╡', '═'))
+
+  local weeks = monthWeeks(y, m)
+  for wi, week in ipairs(weeks) do
+    local numbers, boxes, height = {}, {}, 0
+    for c = 1, 7 do
+      local d = week[c]
+      if d then
+        numbers[c] = ('%02d'):format(d) .. (d == today and ('  ' .. L.today) or '')
+        local list = byDay[d] or {}
+        sortDay(list)
+        local lines = {}
+        for _, e in ipairs(list) do vim.list_extend(lines, entryLines(e, w)) end
+        boxes[c] = lines
+        height = math.max(height, #lines)
+      else
+        boxes[c] = {}
+      end
+    end
+    table.insert(out, row(numbers))
+    -- One blank line more than the fullest day: room to write a new one.
+    for i = 1, height + 1 do
+      local cells = {}
+      for c = 1, 7 do cells[c] = boxes[c][i] end
+      table.insert(out, row(cells))
+    end
+    table.insert(out, wi < #weeks and rule('├', '┼', '┤', '─') or rule('└', '┴', '┘', '─'))
+  end
+  return out
+end
+
+-- -----------------------------------------------------------------------------
+--  Reading the grid back
+-- -----------------------------------------------------------------------------
+
+local BORDERS = { '─', '═', '┼', '┬', '┴', '├', '┤', '┌', '┐', '└', '┘', '╞', '╪', '╡' }
+local function isBorder(line)
+  for _, b in ipairs(BORDERS) do line = line:gsub(b, '') end
+  return line:match('^%s*$') ~= nil
+end
+
+--- The 7 boxes of a grid line, each without its padding space; nil when the
+--- line has too few borders to tell. Borders are found by the '│' character,
+--- so crooked text is fine; a deleted border is made up for by cutting the
+--- merged text at a box's width, and a '│' typed inside a text is told from
+--- a border by its distance to where one should be.
+local function splitRow(line, w)
+  local chs = chars(line)
+  local seps, col, cols = {}, 0, {}
+  for i, ch in ipairs(chs) do
+    cols[i] = col
+    if ch == '│' then table.insert(seps, i) end
+    col = col + dw(ch)
+  end
+  if #seps < 1 then return nil end
+  -- A line whose first or last border was deleted.
+  if seps[1] ~= 1 and table.concat(chs, '', 1, seps[1] - 1):match('%S') then table.insert(seps, 1, 0) end
+  if seps[#seps] ~= #chs and table.concat(chs, '', seps[#seps] + 1):match('%S') then table.insert(seps, #chs + 1) end
+  if #seps < 2 then return nil end
+  local function colOf(i) return i == 0 and -1 or (cols[i] or col) end
+  local function seg(a, b) return table.concat(chs, '', a + 1, b - 1) end
+
+  local cells = {}
+  if #seps > 8 then
+    -- Keep the borders nearest to where they belong, one box width apart.
+    local chosen, from = { seps[1] }, 2
+    for k = 1, 7 do
+      local target = colOf(chosen[#chosen]) + w + 3
+      local best, bi
+      for j = from, #seps - (7 - k) do
+        local d = math.abs(colOf(seps[j]) - target)
+        if not best or d < best then best, bi = d, j end
+      end
+      table.insert(chosen, seps[bi])
+      from = bi + 1
+    end
+    seps = chosen
+  end
+  for k = 1, #seps - 1 do
+    local s = seg(seps[k], seps[k + 1])
+    local n = #seps == 8 and 1 or math.max(1, math.floor((dw(s) + 1) / (w + 3) + 0.5))
+    for j = 1, n do
+      if j < n then
+        local take = takeWidth(s, w + 2)
+        table.insert(cells, take)
+        s = s:sub(#take + 1)
+      else
+        table.insert(cells, s)
+      end
+    end
+  end
+  if #cells ~= 7 then return nil end
+  for c = 1, 7 do cells[c] = cells[c]:gsub('^ ', ''):gsub('%s+$', '') end
+  return cells
+end
+
+--- Whether `cells` is the row of the day numbers of `week`.
+local function isNumberRow(cells, week)
+  local seen = 0
+  for c = 1, 7 do
+    if week[c] then
+      if tonumber(vim.trim(cells[c]):match('^(%d%d?)')) ~= week[c] then return false end
+      seen = seen + 1
+    end
+  end
+  return seen > 0
+end
+
+--- Read grid `lines` (month y-m) into { byDay, orphans, entries }. Each
+--- entry remembers its day column and the lines (indexes into `lines`) it
+--- spans, for the keys that act on the appointment under the cursor.
+local function parse(lines, y, m)
+  local w = width()
+  local L = locale()
+  local weeks = monthWeeks(y, m)
+  local byDay, orphans, all = {}, {}, {}
+  local wk, cur = 0, {}
+
+  local function add(c, text, i)
+    if text:match('^%s*$') then return end
+    local d = weeks[wk][c]
+    if not d then return table.insert(orphans, vim.trim(text)) end
+    local e = cur[c]
+    if text:match('^%s%s') and e then
+      -- Continues the line above: the place, or the text.
+      local more = vim.trim(text)
+      if e.last == 'loc' then e.loc = e.loc .. ' ' .. more
+      elseif e.ro then e.text = e.text .. ' ' .. more
+      else e.title = e.title .. ' ' .. more end
+      table.insert(e.rows, i)
+    elseif text:match('^@') and e then
+      e.loc, e.last = vim.trim(text:sub(2)), 'loc'
+      table.insert(e.rows, i)
+    else
+      e = newEntry(vim.trim(text))
+      e.day, e.col, e.rows, e.last = d, c, { i }, 'title'
+      byDay[d] = byDay[d] or {}
+      table.insert(byDay[d], e)
+      table.insert(all, e)
+      cur[c] = e
+    end
+  end
+
+  for i, line in ipairs(lines) do
+    if not isBorder(line) then
+      local cells = splitRow(line, w)
+      local is_header = cells and vim.trim(cells[1]) == L.days[1] and vim.trim(cells[7]) == L.days[7]
+      if not cells then
+        table.insert(orphans, vim.trim(line))
+      elseif is_header then
+        -- the weekday names
+      elseif weeks[wk + 1] and isNumberRow(cells, weeks[wk + 1]) then
+        -- A week starts here, separator line or not.
+        wk, cur = wk + 1, {}
+        for c = 1, 7 do
+          if weeks[wk][c] then
+            -- Text written after the number is an appointment of that day.
+            local rest = vim.trim(cells[c]):gsub('^%d%d?', '', 1)
+            rest = vim.trim((rest:gsub(vim.pesc(L.today), '', 1)))
+            if rest ~= '' then add(c, rest, i) end
+          end
+        end
+      elseif wk == 0 then
+        for c = 1, 7 do
+          if cells[c]:match('%S') then table.insert(orphans, vim.trim(cells[c])) end
+        end
+      else
+        for c = 1, 7 do add(c, cells[c], i) end
+      end
+    end
+  end
+  return { byDay = byDay, orphans = orphans, entries = all }
+end
+
+-- -----------------------------------------------------------------------------
+--  Blocks and regions in a note
+-- -----------------------------------------------------------------------------
+
+--- Every ```calendar block in `lines`: { first, last (0-based fence rows),
+--- month = { y, m } or nil, region = { first, last, open, close } or nil }.
+--- The region is the part the plugin writes: its markers, and the rows of
+--- the grid's own ``` lines.
+local function blocksIn(lines, name)
+  local blocks, i = {}, 1
+  while i <= #lines do
+    if lines[i]:match('^%s*```%s*calendar%s*$') then
+      local j = i + 1
+      local conf = {}
+      while j <= #lines and not lines[j]:match('^%s*```%s*$') do
+        local k, v = lines[j]:match('^%s*([%w_]+)%s*:%s*(.-)%s*$')
+        if k then conf[k:lower()] = v:gsub('^"(.*)"$', '%1') end
+        j = j + 1
+      end
+      local b = { first = i - 1, last = j - 1, conf = conf }
+      local month = conf.month or (name and name:match('^(%d%d%d%d%-%d%d)$')) or os.date('%Y-%m')
+      if not month:find('{{', 1, true) then
+        local y, m = month:match('^(%d%d%d%d)%-(%d%d)$')
+        if y then b.month = { tonumber(y), tonumber(m) } end
+      end
+      -- The region right under the block.
+      if vim.trim(lines[j + 1] or '') == BEGIN then
+        local open, close, stop
+        for r = j + 2, #lines do
+          local t = vim.trim(lines[r])
+          if t == END then stop = r break end
+          if t == BEGIN or t:match('^```%s*calendar') then break end
+          if t:match('^```') then
+            if not open then open = r elseif not close then close = r end
+          end
+        end
+        if stop and open and close then
+          b.region = { first = j, last = stop - 1, open = open - 1, close = close - 1 }
+        end
+      end
+      table.insert(blocks, b)
+      i = j + 1
+    else
+      i = i + 1
+    end
+  end
+  return blocks
+end
+
+local function noteName(buf)
+  return vim.fn.fnamemodify(api.nvim_buf_get_name(buf), ':t:r')
+end
+
+local function bufBlocks(buf)
+  return blocksIn(api.nvim_buf_get_lines(buf, 0, -1, false), noteName(buf))
+end
+
+--- The lines of a whole region for these appointments and leftovers.
+local function regionLines(b, byDay, orphans)
+  local out = { BEGIN, '```' }
+  vim.list_extend(out, render(b.month[1], b.month[2], byDay))
+  table.insert(out, '```')
+  if orphans and #orphans > 0 then
+    table.insert(out, ORPHANS)
+    vim.list_extend(out, orphans)
+  end
+  table.insert(out, END)
+  return out
+end
+
+--- Read a block's region: its appointments and leftovers.
+local function readRegion(buf, b)
+  local lines = api.nvim_buf_get_lines(buf, b.region.open + 1, b.region.close, false)
+  local parsed = parse(lines, b.month[1], b.month[2])
+  -- Lines kept from before, under the grid, stay until moved into a day.
+  for _, l in ipairs(api.nvim_buf_get_lines(buf, b.region.close + 1, b.region.last, false)) do
+    if vim.trim(l) ~= ORPHANS and l:match('%S') then table.insert(parsed.orphans, l) end
+  end
+  return parsed
+end
+
+--- Redraw every grid in `buf` from what is written in it. Returns true when
+--- something changed.
+function M.format(buf)
+  buf = buf or api.nvim_get_current_buf()
+  local changed = false
+  local blocks = bufBlocks(buf)
+  for i = #blocks, 1, -1 do
+    local b = blocks[i]
+    if b.region and b.month then
+      local parsed = readRegion(buf, b)
+      local new = regionLines(b, parsed.byDay, parsed.orphans)
+      local old = api.nvim_buf_get_lines(buf, b.region.first, b.region.last + 1, false)
+      if not vim.deep_equal(old, new) then
+        api.nvim_buf_set_lines(buf, b.region.first, b.region.last + 1, false, new)
+        changed = true
+      end
+      if #parsed.orphans > 0 then
+        vim.notify(('Calendar: %d line(s) could not be placed in a day; they are under the grid')
+          :format(#parsed.orphans), vim.log.levels.WARN)
+      end
+    end
+  end
+  return changed
+end
+
+-- -----------------------------------------------------------------------------
+--  Source of the appointments
+-- -----------------------------------------------------------------------------
+
+--- A made-up month, to try the grid before the Google sync exists.
+local function mockMonth(y, m)
+  local last = os.date('*t', os.time({ year = y, month = m + 1, day = 0, hour = 12 })).day
+  local sample = {
+    [2] = { { start = '19:00', stop = '20:00', title = 'Aniversário do João', loc = 'Bar do Zé' } },
+    [6] = { { start = '14:30', stop = '15:30', title = 'Dentista' } },
+    [12] = { { title = 'Feriado — N. Sra. Aparecida' } },
+    [15] = { { start = '10:00', stop = '11:00', title = 'Entrega do projeto X' } },
+    [17] = { { start = '20:00', stop = '23:00', title = 'Show — Tame Impala', loc = 'Allianz Parque' } },
+    [22] = { { start = '09:00', stop = '09:30', title = 'Médico (check-up)' },
+             { start = '18:30', stop = '19:30', title = 'Jantar com Ana' } },
+    [24] = { { ro = true, text = 'Viagem a Ubatuba →' } },
+    [25] = { { ro = true, text = '← Viagem a Ubatuba' } },
+    [28] = { { start = '08:00', stop = '09:00', title = 'Voo SP → Rio' },
+             { start = '19:00', stop = '20:00', title = 'Reunião do condomínio' } },
+  }
+  local byDay = {}
+  for d, list in pairs(sample) do
+    if d <= last then byDay[d] = vim.deepcopy(list) end
+  end
+  return byDay
+end
+
+--- Draw the grid of every block of `buf` that has none yet.
+function M.refresh(buf)
+  buf = (buf and buf ~= 0) and buf or api.nvim_get_current_buf()
+  if not api.nvim_buf_is_valid(buf) or vim.bo[buf].buftype ~= '' then return end
+  local blocks = bufBlocks(buf)
+  for i = #blocks, 1, -1 do
+    local b = blocks[i]
+    if b.month and not b.region then
+      local new = regionLines(b, mockMonth(b.month[1], b.month[2]))
+      api.nvim_buf_set_lines(buf, b.last + 1, b.last + 1, false, new)
+    end
+  end
+end
+
+-- -----------------------------------------------------------------------------
+--  For pure/mdview.lua
+-- -----------------------------------------------------------------------------
+
+--- Rows mdview hides: the query and the markers and the grid's ``` lines
+--- (shown again while the cursor is on them).
+function M.hiddenBlocks(buf)
+  local ranges = {}
+  for _, b in ipairs(bufBlocks(buf)) do
+    local r = b.region
+    if r then
+      table.insert(ranges, { b.first, r.open })
+      table.insert(ranges, { r.close, r.close })
+      if r.last > r.close then
+        -- The end marker; leftover lines stay visible.
+        local lines = api.nvim_buf_get_lines(buf, r.close + 1, r.last + 1, false)
+        local has_orphans = #lines > 1
+        if has_orphans then
+          table.insert(ranges, { r.close + 1, r.close + 1 })
+        end
+        table.insert(ranges, { r.last, r.last })
+      end
+    end
+  end
+  return ranges
+end
+
+--- Whether a fenced code block starting at `row` is a calendar grid (drawn
+--- without the code background).
+function M.isGrid(buf, row)
+  return row > 0 and vim.trim(api.nvim_buf_get_lines(buf, row - 1, row, false)[1] or '') == BEGIN
+end
+
+-- -----------------------------------------------------------------------------
+--  Keys that work on the day under the cursor
+-- -----------------------------------------------------------------------------
+
+--- The block whose grid holds 0-based `row`, and that row's index in it.
+local function gridAt(buf, row)
+  for _, b in ipairs(bufBlocks(buf)) do
+    local r = b.region
+    if r and b.month and row > r.open and row < r.close then return b, row - r.open end
+  end
+end
+
+--- The day column (1..7) under the cursor.
+local function columnAt()
+  local col = vim.fn.virtcol('.') - 1
+  return math.max(1, math.min(7, math.floor(col / (width() + 3)) + 1))
+end
+
+--- The usual `keys`, with the count and register that were typed.
+local function feed(keys)
+  local cb = vim.o.clipboard
+  local default = cb:find('unnamedplus') and '+' or cb:find('unnamed') and '*' or '"'
+  local reg = vim.v.register ~= default and ('"' .. vim.v.register) or ''
+  api.nvim_feedkeys(reg .. vim.v.count1 .. keys, 'n', false)
+end
+
+local function redraw(buf, b, byDay, orphans)
+  local new = regionLines(b, byDay, orphans)
+  api.nvim_buf_set_lines(buf, b.region.first, b.region.last + 1, false, new)
+end
+
+--- dd: delete only the appointment of the day under the cursor.
+local function deleteEntry()
+  local buf = api.nvim_get_current_buf()
+  local row = api.nvim_win_get_cursor(0)[1] - 1
+  local b, idx = gridAt(buf, row)
+  if not b then return feed('dd') end
+  local parsed = readRegion(buf, b)
+  local c = columnAt()
+  for _, e in ipairs(parsed.entries) do
+    if e.col == c and vim.tbl_contains(e.rows, idx) then
+      local list = parsed.byDay[e.day]
+      for k, x in ipairs(list) do
+        if x == e then table.remove(list, k) break end
+      end
+      local cursor = api.nvim_win_get_cursor(0)
+      redraw(buf, b, parsed.byDay, parsed.orphans)
+      pcall(api.nvim_win_set_cursor, 0, cursor)
+      return
+    end
+  end
+end
+
+--- A blank grid line inserted at 0-based `at`, with the cursor in box `c`,
+--- in insert mode. Insert, not replace: text longer than the box pushes the
+--- borders right instead of writing over them into the next days, and :w
+--- wraps it back inside the box.
+local function blankLineAt(buf, at, c)
+  local w = width()
+  api.nvim_buf_set_lines(buf, at, at, false, { '│' .. string.rep(string.rep(' ', w + 2) .. '│', 7) })
+  api.nvim_win_set_cursor(0, { at + 1, (c - 1) * (w + 2 + #'│') + #'│' + 1 })
+  vim.cmd('startinsert')
+end
+
+--- o: a new line for the day under the cursor.
+local function openLine()
+  local buf = api.nvim_get_current_buf()
+  local row = api.nvim_win_get_cursor(0)[1] - 1
+  local b = gridAt(buf, row)
+  if not b then return feed('o') end
+  -- On a week's bottom border the new line belongs to the week above it.
+  local at = isBorder(api.nvim_get_current_line()) and row or row + 1
+  blankLineAt(buf, at, columnAt())
+end
+
+--- cc: replace the appointment under the cursor (with the lines it wraps
+--- onto and its place) by a new line for the same day.
+local function changeEntry()
+  local buf = api.nvim_get_current_buf()
+  local row = api.nvim_win_get_cursor(0)[1] - 1
+  local b, idx = gridAt(buf, row)
+  if not b then return feed('cc') end
+  local parsed = readRegion(buf, b)
+  local c = columnAt()
+  local found
+  for _, e in ipairs(parsed.entries) do
+    if e.col == c and vim.tbl_contains(e.rows, idx) then found = e break end
+  end
+  if found then
+    local list = parsed.byDay[found.day]
+    for k, x in ipairs(list) do
+      if x == found then table.remove(list, k) break end
+    end
+    redraw(buf, b, parsed.byDay, parsed.orphans)
+  end
+  -- The new line goes right under the day numbers of that week.
+  local blocks = bufBlocks(buf)
+  for _, nb in ipairs(blocks) do
+    if nb.region and nb.first == b.first then b = nb end
+  end
+  local lines = api.nvim_buf_get_lines(buf, b.region.open + 1, b.region.close, false)
+  local weeks = monthWeeks(b.month[1], b.month[2])
+  local target = found and found.day
+  local at = row + 1
+  if target then
+    for i, line in ipairs(lines) do
+      local cells = splitRow(line, width())
+      for _, week in ipairs(weeks) do
+        -- lines[i] is buffer row open + i: the new line goes under it.
+        if week[c] == target and cells and isNumberRow(cells, week) then at = b.region.open + i + 1 end
+      end
+    end
+  end
+  blankLineAt(buf, at, c)
+end
+
+-- -----------------------------------------------------------------------------
+--  Setup
+-- -----------------------------------------------------------------------------
+
+local group = api.nvim_create_augroup('PureCalendar', { clear = true })
+
+api.nvim_create_autocmd('BufWritePre', {
+  group = group,
+  pattern = { '*.md', '*.markdown' },
+  callback = function(args)
+    local view = vim.fn.winsaveview()
+    if M.format(args.buf) then vim.fn.winrestview(view) end
+  end,
+})
+
+api.nvim_create_autocmd('BufWinEnter', {
+  group = group,
+  pattern = { '*.md', '*.markdown' },
+  callback = function(args) M.refresh(args.buf) end,
+})
+
+-- Typing in the grid: no automatic line breaks. Notes have a 'textwidth'
+-- (110) and a grid line is ~200 columns, so typing there split the line in
+-- two, and the halves could no longer be placed in a day.
+api.nvim_create_autocmd('InsertEnter', {
+  group = group,
+  pattern = { '*.md', '*.markdown' },
+  callback = function(args)
+    local row = api.nvim_win_get_cursor(0)[1] - 1
+    if not gridAt(args.buf, row) then return end
+    local tw = vim.bo[args.buf].textwidth
+    vim.bo[args.buf].textwidth = 0
+    api.nvim_create_autocmd('InsertLeave', {
+      group = group,
+      buffer = args.buf,
+      once = true,
+      callback = function() vim.bo[args.buf].textwidth = tw end,
+    })
+  end,
+})
+
+api.nvim_create_autocmd('FileType', {
+  group = group,
+  pattern = 'markdown',
+  callback = function(args)
+    if vim.bo[args.buf].buftype ~= '' then return end
+    local opts = { buffer = args.buf }
+    vim.keymap.set('n', 'dd', deleteEntry, vim.tbl_extend('force', opts, { desc = 'Calendar: delete the day\'s appointment (else dd)' }))
+    vim.keymap.set('n', 'o', openLine, vim.tbl_extend('force', opts, { desc = 'Calendar: new line for the day (else o)' }))
+    vim.keymap.set('n', 'cc', changeEntry, vim.tbl_extend('force', opts, { desc = 'Calendar: replace the day\'s appointment (else cc)' }))
+  end,
+})
+
+api.nvim_create_user_command('CalendarRefresh', function()
+  M.refresh()
+  M.format()
+end, { desc = 'Draw and tidy the ```calendar grids of this note' })
+
+-- For tests.
+M._render, M._parse, M._splitRow, M._monthWeeks = render, parse, splitRow, monthWeeks
+
+return M

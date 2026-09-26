@@ -14,6 +14,7 @@ When a module changes, update its page here in the same commit.
 |---|---|
 | [keymaps.md](keymaps.md) | Every mapping, by group (also shown live: press `<Space>` and wait) |
 | [todoist.md](todoist.md) | Todoist: the editable task list, blocks in notes, sync into notes, archive |
+| [calendar.md](calendar.md) | The month as a grid in a note: one box per day, edited in place |
 | [zettelkasten.md](zettelkasten.md) | Obsidian vault, note templates, daily / weekly / monthly notes |
 | [markdown.md](markdown.md) | How markdown is drawn: headings, tasks, tables, wikilinks, frontmatter, footnotes |
 | [keyhint.md](keyhint.md) | The window that lists the keys after `<leader>` |
@@ -88,6 +89,8 @@ before use).
 | `vim.g.pure_todoist_confirm` | `'all'` | [todoist](todoist.md) |
 | `vim.g.pure_todoist_archive` | off | [todoist](todoist.md) |
 | `vim.g.pure_todoist_sync` | off (`{ interval = 10 }` in configs.lua) | [todoist](todoist.md) |
+| `vim.g.pure_calendar_cell_width` | `25` (grid 197 columns) | [calendar](calendar.md) |
+| `vim.g.pure_calendar_duration` | `60` minutes | [calendar](calendar.md) |
 | `vim.g.pure_keyhint_delay` | `1000` ms | [keyhint](keyhint.md) |
 | `vim.g.pure_keyhint_groups` | set in keymaps.lua | [keyhint](keyhint.md) |
 | `vim.g.pure_keyhint_triggers` | `<leader>` in normal and visual | [keyhint](keyhint.md) |
@@ -120,6 +123,7 @@ Undo history is in `stdpath('state')/undo`.
 | `:Todoist [filter]` | the editable task list ([todoist](todoist.md)) |
 | `:TodoistSync` | write the tasks of every ```` ```todoist ```` block into its note now |
 | `:TodoistRefresh` | reload the drawn blocks (when sync is off) |
+| `:CalendarRefresh` | draw and tidy the ```` ```calendar ```` grids of the note |
 | `:TodoistToken` | set the Todoist token (hidden input) |
 | `:ZettelVault` | choose the Obsidian vault folder |
 | `:VaultSync` | save, commit, pull, then push the vault ([zettelkasten](zettelkasten.md)) |
