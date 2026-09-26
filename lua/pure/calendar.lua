@@ -1009,8 +1009,11 @@ end
 function M.refresh(buf)
   buf = (buf and buf ~= 0) and buf or api.nvim_get_current_buf()
   if not api.nvim_buf_is_valid(buf) or vim.bo[buf].buftype ~= '' then return end
+  -- Never a template (a grid drawn there would be copied into every note
+  -- made from it) or the trash, connected or not.
+  local name = api.nvim_buf_get_name(buf)
+  if name ~= '' and not syncable(name) then return end
   if connected() then
-    local name = api.nvim_buf_get_name(buf)
     if name ~= '' and #bufBlocks(buf) > 0 then M.sync({ name }) end
     return
   end
