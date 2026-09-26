@@ -231,8 +231,19 @@ function M.auth(done)
     client_id = id, redirect_uri = redirect, response_type = 'code', scope = SCOPES,
     access_type = 'offline', prompt = 'consent',
   })
-  pcall(vim.ui.open, url)
-  vim.notify('Allow access in the browser that just opened. If none did, open:\n' .. url)
+  -- On Windows vim.ui.open runs `cmd.exe /c start <url>`, and cmd.exe cuts
+  -- the URL at its first '&' (a command separator there): the browser got
+  -- a broken link, or did not open. rundll32 hands it to the default
+  -- browser untouched.
+  if vim.fn.has('win32') == 1 then
+    pcall(vim.ui.open, url, { cmd = { 'rundll32.exe', 'url.dll,FileProtocolHandler' } })
+  else
+    pcall(vim.ui.open, url)
+  end
+  -- Also on the clipboard, to paste into a browser by hand if none opened.
+  pcall(vim.fn.setreg, '+', url)
+  vim.notify('Allow access in the browser that just opened. If none did, paste the link'
+    .. ' (it is on the clipboard) into a browser:\n' .. url)
 end
 
 --- On the first start with a UI and no connection, offer to connect, with
