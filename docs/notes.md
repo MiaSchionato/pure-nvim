@@ -46,7 +46,7 @@ the vault root, the current note's folder, or the chosen folder. A path in
 the link (`[[Projects/New]]`) puts it there.
 
 **With a template**, a template is picked (the periodic ones are left out)
-and applied as `<leader>nz` applies it, moves included: the Project template
+and applied as `<leader>nt` applies it, moves included: the Project template
 sends the note to `1-Projects/<title>/`. The note is made only once a template
 is picked, so cancelling leaves nothing behind. **In another folder** asks
 for a folder of the vault, with completion, starting from the current

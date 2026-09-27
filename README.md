@@ -59,7 +59,7 @@ The `windows` branch adds the Windows-only setup on top of `main`. The pickers b
 
 ### Obsidian
 
-The vault is asked for on the first start and remembered; `:ZettelVault` changes it and `vim.g.pure_vault` in `lua/configs/configs.lua` overrides it. The links between notes (`pure/notes.lua`: `<CR>` follows, `[[` completes, `<leader>nr` renames and fixes the links), the templates (`<leader>nz`) and the Todoist archive all follow it.
+The vault is asked for on the first start and remembered; `:ZettelVault` changes it and `vim.g.pure_vault` in `lua/configs/configs.lua` overrides it. The links between notes (`pure/notes.lua`: `<CR>` follows, `[[` completes, `<leader>nr` renames and fixes the links), the templates (`<leader>nt`) and the Todoist archive all follow it.
 
 ### Todoist
 

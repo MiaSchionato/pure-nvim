@@ -78,7 +78,7 @@ See [claude.md](claude.md).
 |---|---|---|
 | `<leader>e.` | n | Explore ~/.config |
 | `<leader>ee` | n | Explore current directory |
-| `<leader>em` | n | Explore Obsidian vault |
+| `<leader>ev` | n | Explore Obsidian vault |
 | `<leader>en` | n | Explore nvim config |
 | `<leader>eo` | n | Oil Float |
 
@@ -88,7 +88,7 @@ See [claude.md](claude.md).
 |---|---|---|
 | `<leader>f.` | n | Find in ~/.config |
 | `<leader>f/` | n | Recent files |
-| `<leader>fa` | n | Find in Atlas, the Obsidian vault |
+| `<leader>fv` | n | Find in Atlas, the Obsidian vault |
 | `<leader>fb` | n | Buffers |
 | `<leader>fc` | n | Colorschemes |
 | `<leader>fe` | n | fzf explorer, current directory |
@@ -141,10 +141,10 @@ See [claude.md](claude.md).
 | `<leader>n.` | n | New file in ~/.config |
 | `<leader>nf` | n | New file, two levels up |
 | `<leader>nh` | n | New file in home |
-| `<leader>nm` | n | New file in Obsidian vault |
+| `<leader>nv` | n | New file in Obsidian vault |
 | `<leader>nn` | n | New file in nvim config |
 | `<leader>nr` | n | Rename note, fix links to it |
-| `<leader>nz` | n | Insert zettel template |
+| `<leader>nt` | n | Insert zettel template |
 
 ## `<leader>o` – Toggles
 
