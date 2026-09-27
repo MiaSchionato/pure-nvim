@@ -39,6 +39,7 @@ See [claude.md](claude.md).
 | `<leader>aa` | n, x | Ask (answer in a window) |
 | `<leader>ab` | n | Run the ```` ```claude ```` block |
 | `<leader>ac` | n, x | Review the code |
+| `<leader>ad` | n | Daily note: next step and the measured day (the vault action `Nota do dia`) |
 | `<leader>ah` | n | Past answers |
 | `<leader>ai` | n, x | Write here (visual: rewrite) |
 | `<leader>ar` | n, x | Repeat the last request |

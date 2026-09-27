@@ -16,7 +16,6 @@ When a module changes, update its page here in the same commit.
 | [todoist.md](todoist.md) | Todoist: the editable task list, blocks in notes, sync into notes, archive |
 | [calendar.md](calendar.md) | The month as a grid in a note: one box per day, edited in place |
 | [claude.md](claude.md) | Claude Code from keys: write into the buffer, ask in a window, requests in notes |
-| [daystats.md](daystats.md) | The measured day (focus, screen time, sleep window) given to Claude actions |
 | [notes.md](notes.md) | Links between notes: follow, complete `[[`, rename without breaking links, backlinks |
 | [zettelkasten.md](zettelkasten.md) | Obsidian vault, note templates, daily / weekly / monthly notes |
 | [markdown.md](markdown.md) | How markdown is drawn: headings, tasks, tables, wikilinks, frontmatter, footnotes |
@@ -102,11 +101,6 @@ before use).
 | `vim.g.pure_claude_cmd` | `'claude'` | [claude](claude.md) |
 | `vim.g.pure_claude_actions` | `'claude'` (folder of the vault) | [claude](claude.md) |
 | `vim.g.pure_claude_blocks` | on | [claude](claude.md) |
-| `vim.g.pure_daystats_focus_log` | off (set in configs.lua) | [daystats](daystats.md) |
-| `vim.g.pure_daystats_sleep` | off (set in configs.lua) | [daystats](daystats.md) |
-| `vim.g.pure_daystats_day_start` | `5` | [daystats](daystats.md) |
-| `vim.g.pure_daystats_aw` | `'http://127.0.0.1:5600'` | [daystats](daystats.md) |
-| `vim.g.pure_daystats_work_apps` | the editing apps | [daystats](daystats.md) |
 | `vim.g.pure_keyhint_delay` | `1000` ms | [keyhint](keyhint.md) |
 | `vim.g.pure_keyhint_groups` | set in keymaps.lua | [keyhint](keyhint.md) |
 | `vim.g.pure_keyhint_triggers` | `<leader>` in normal and visual | [keyhint](keyhint.md) |
