@@ -78,6 +78,24 @@ Mantenha o estilo e a formatação markdown.
 The text is the request. `$ARGUMENTS` in it is asked for when the action
 runs ("Traduzir para $ARGUMENTS").
 
+`context` brings what the buffer does not have. Each name is a module of
+`lua/pure/` with a `text()` function; its text is added at the end of the
+request, between `<name>` tags, so the action works from real data without
+needing `Bash`. A module that fails puts one line saying so in its place,
+and the action still runs. For example, an action that prepares the daily
+note from the [measured day](daystats.md):
+
+```markdown
+---
+description: Preparar a nota do dia
+output: notify
+tools: Read, Glob, Grep, Edit
+context: daystats
+---
+Escreva na nota de hoje um próximo passo pequeno e o dia medido, que vem
+no fim deste pedido, em <daystats>.
+```
+
 | Key | What | Default |
 |---|---|---|
 | `description` | the name in the list (required) | |
@@ -87,6 +105,7 @@ runs ("Traduzir para $ARGUMENTS").
 | `confirm` | `auto`: ask before running only when one of the `dirs` is not in a git repository · `always` · `never` | `auto` |
 | `model` | the model for this action (`haiku`, `sonnet`, `opus`) | the usual one |
 | `key` | its own key, in normal and visual mode (`<leader>a1`) | none |
+| `context` | more context for the request: the `text()` of each module `lua/pure/<name>`, added at its end between `<name>` tags (`context: daystats`, the [measured day](daystats.md)) | none |
 
 Inside the vault nothing needs asking: it is a git repository (`:VaultSync`),
 so a change is undone from its history. Open notes an action changed on disk
