@@ -2,7 +2,9 @@
 
 ## Dashboard (`lua/pure/dashboard.lua`, `ascii.lua`)
 
-Shown when Neovim starts without a file. The planet (`ascii.lua`,
+Shown when Neovim starts without a file, and in every new tab (`:tabnew`,
+`<leader>wn`) instead of an empty buffer; a tab opened on something
+(`:tabnew file`, `:tab help`) is left alone. The planet (`ascii.lua`,
 `M.saturn`) is centred and scaled up by the largest whole factor that fits
 the window, and redrawn when the window changes size. Blank lines fill the
 window to the bottom, so no `~` shows under the drawing.
@@ -11,7 +13,7 @@ window to the bottom, so no `~` shows under the drawing.
 |---|---|
 | `d` | today's daily note, created from the template if it is not there yet ([zettelkasten](zettelkasten.md)) |
 | `n` | new empty buffer |
-| `q` | quit |
+| `q` | quit; in a tab while others are open, close just that tab |
 | `u` | update: the configuration's repository, then the plugins (below) |
 
 ### Updating (`u`, or `:PureUpdate` anywhere – `lua/pure/update.lua`)
@@ -39,8 +41,9 @@ not pushed while upstream has new ones (pull by hand to merge them), or when
 a local change to a file would be overwritten by the pull.
 
 `vim.g.pure_dashboard_scale = 1` keeps the drawing at its original size (any
-number fixes the scale; `'auto'` is the default). The statusline, tabline and
-line numbers are hidden while it is shown and come back after.
+number fixes the scale; `'auto'` is the default). The statusline and line
+numbers are hidden while it is shown and come back after, tab by tab: another
+tab keeps its own. The tabline is hidden too, unless other tabs are open.
 
 ## Statusline (`lua/pure/statusline.lua`)
 
@@ -55,7 +58,7 @@ shows the mode. Colours come from the theme when it defines them
 
 ## Tabline (`configs/functions.lua`, `MyTabline`)
 
-Shown only with two or more tabs. Tabs: `<leader>wn` new, `wh` / `wl`
+Shown only with two or more tabs. Tabs: `<leader>wn` new (on the dashboard), `wh` / `wl`
 previous / next, `wq` close, `wo` close the others.
 
 ## Notifications (`lua/pure/notify.lua`)
