@@ -14,12 +14,12 @@ precedence:
 2. the `OBSIDIAN_VAULT` environment variable;
 3. the saved answer.
 
-`:ZettelVault` asks again at any time. The vault is used by `<leader>em`
-(explore), `<leader>fa` (find), `<leader>nm` (new note), the templates, the
+`:ZettelVault` asks again at any time. The vault is used by `<leader>ev`
+(explore), `<leader>fv` (find), `<leader>nv` (new note), the templates, the
 Todoist sync and the links between notes ([notes.md](notes.md)), which all
 follow a change at once.
 
-## Templates: `<leader>nz`
+## Templates: `<leader>nt`
 
 Picks a file from `<vault>/Templates` (`vim.g.pure_templates` renames the
 folder) and expands it:
@@ -71,8 +71,11 @@ themselves stay clean):
 | Tester | `2-Areas/Audiovisual/YouTube/Tester channel` |
 | VideoIdeas | `2-Areas/Audiovisual/Ideas` |
 
-The note must be saved (have a name) to be moved; it is never moved over an
-existing note.
+The note must have a name to be moved (it need not be saved yet); it is
+never moved over an existing note. A note that is **already inside the
+template's folder** – anywhere under `1-Projects` for Project – was put there
+on purpose before the template, so it **stays where it is**; it is only named
+after the title, with `.md`.
 
 ## Periodic notes
 
