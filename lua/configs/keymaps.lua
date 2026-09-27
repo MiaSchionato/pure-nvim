@@ -1,4 +1,4 @@
--- =============================================================================
+-- =================================================================
 --  Keymaps
 -- =============================================================================
 --  Leader is <Space>. The second key groups the action:
@@ -67,7 +67,7 @@ local dirs = {
   -- The Obsidian vault, as set up in pure/zettelkasten.lua (asked for on a
   -- fresh install, or vim.g.pure_vault). A function: it may be chosen only
   -- after this file has run.
-  m     = function()
+  v     = function()
     local vault = zet.vaultPath()
     return vault and (vault .. '/') or nil
   end,
@@ -285,7 +285,7 @@ map('n', '<leader>ee', explore(here), func.getOpts(opts, "Explore current direct
 map('n', '<leader>E', explore(dirs['~']), func.getOpts(opts, "Explore home"))
 map('n', '<leader>e.', explore(dirs['.']), func.getOpts(opts, "Explore ~/.config"))
 map('n', '<leader>en', explore(dirs.n), func.getOpts(opts, "Explore nvim config"))
-map('n', '<leader>em', explore(dirs.m), func.getOpts(opts, "Explore Obsidian vault"))
+map('n', '<leader>ev', explore(dirs.v), func.getOpts(opts, "Explore Obsidian vault"))
 
 -- =============================================================================
 --  Find  (<leader>f)
@@ -297,7 +297,7 @@ map('n', '<leader>ff', function() fzf.fuzzySearch(file.pp()) end,
 map('n', '<leader>f~', inDir(fzf.fuzzySearch, dirs['~']), func.getOpts(opts, "Find in home"))
 map('n', '<leader>f.', inDir(fzf.fuzzySearch, dirs['.']), func.getOpts(opts, "Find in ~/.config"))
 map('n', '<leader>fn', inDir(fzf.fuzzySearch, dirs.n), func.getOpts(opts, "Find in nvim config"))
-map('n', '<leader>fa', inDir(fzf.fuzzySearch, dirs.m), func.getOpts(opts, "Find in Atlas, the Obsidian vault"))
+map('n', '<leader>fv', inDir(fzf.fuzzySearch, dirs.v), func.getOpts(opts, "Find in Atlas, the Obsidian vault"))
 
 map('n', "<leader>fe", function() inDir(fzf.fuzzyExplorer, here())() end,
   func.getOpts(opts, "fzf explorer, current directory"))
@@ -317,8 +317,8 @@ map("n", "<leader>nf", function() fzf.NewFile(vim.fn.expand('%:p:h:h') .. '/') e
 map("n", "<leader>nh", inDir(fzf.NewFile, dirs['~']), func.getOpts(opts, "New file in home"))
 map("n", "<leader>n.", inDir(fzf.NewFile, dirs['.']), func.getOpts(opts, "New file in ~/.config"))
 map("n", "<leader>nn", inDir(fzf.NewFile, dirs.n), func.getOpts(opts, "New file in nvim config"))
-map("n", "<leader>nm", inDir(fzf.NewFile, dirs.m), func.getOpts(opts, "New file in Obsidian vault"))
-map('n', '<leader>nz', zet.insertTemplate, func.getOpts(opts, "Insert zettel template"))
+map("n", "<leader>nv", inDir(fzf.NewFile, dirs.v), func.getOpts(opts, "New file in Obsidian vault"))
+map('n', '<leader>nt', zet.insertTemplate, func.getOpts(opts, "Insert zettel template"))
 map('n', '<leader>nr', function() require('pure.notes').rename() end, func.getOpts(opts, "Rename note, fix links to it"))
 
 -- =============================================================================
