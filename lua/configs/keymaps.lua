@@ -333,6 +333,7 @@ map({ 'n', 'x' }, '<leader>ac', claude('review'), func.getOpts(opts, "Review the
 map({ 'n', 'x' }, '<leader>ar', claude('repeatLast'), func.getOpts(opts, "Repeat the last request"))
 map('n', '<leader>ah', claude('history'), func.getOpts(opts, "Past answers"))
 map('n', '<leader>as', claude('stop'), func.getOpts(opts, "Stop"))
+map({ 'n', 'x' }, '<leader>ax', claude('pickAction'), func.getOpts(opts, "Actions (claude/ folder of the vault)"))
 map('n', '<leader>ab', claude('runBlockAtCursor'), func.getOpts(opts, "Run the ```claude block"))
 
 -- =============================================================================
