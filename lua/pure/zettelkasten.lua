@@ -632,6 +632,27 @@ local function findPeriodic(root, period, name)
   return found[1]
 end
 
+--- The note for a period, as lines, rendered from `template`; nil after
+--- saying why when the template cannot be read.
+--- @param template string  template file name, e.g. "Daily.md"
+--- @param period table     entry from `periodic`
+--- @param when integer     the period's anchor (anchorOf)
+--- @return string[]|nil
+local function periodicLines(template, period, when)
+  local file = io.open(templatesPath() .. '/' .. template, 'r')
+  if not file then
+    vim.notify('Could not read ' .. template, vim.log.levels.ERROR)
+    return nil
+  end
+  local content = file:read('*a')
+  file:close()
+  return vim.split(render(content, {
+    title = os.date(period.name, when),
+    when = when,
+    periodic = period,
+  }), '\n')
+end
+
 --- Open the note for a period, creating it from `template` when missing.
 ---
 --- Unlike the other templates this does not touch the current buffer: the note
@@ -669,20 +690,49 @@ local function openPeriodic(template, period, when)
     return
   end
 
-  local file = io.open(templatesPath() .. '/' .. template, 'r')
-  if not file then
-    return vim.notify('Could not read ' .. template, vim.log.levels.ERROR)
-  end
-  local content = file:read('*a')
-  file:close()
-
-  vim.api.nvim_buf_set_lines(0, 0, -1, false, vim.split(render(content, {
-    title = os.date(period.name, when),
-    when = when,
-    periodic = period,
-  }), '\n'))
+  local lines = periodicLines(template, period, when)
+  if not lines then return end
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, lines)
   vim.cmd('silent write')
   vim.notify((existing and 'Filled ' or 'Created ') .. period.folder .. '/' .. name)
+end
+
+--- Make today's daily note on disk, without opening it: created from the
+--- template when it is not in the vault, filled when it is there but blank,
+--- the same rules as opening it. Run once per start with a UI when
+--- vim.g.pure_daily_on_start is set, so the note is there from the start
+--- (for Obsidian, for Claude actions that write in it) and not only once it
+--- is opened.
+function M.createDaily()
+  local root = vaultPath()
+  if not root or vim.fn.isdirectory(root) == 0 then return end
+  local period = periodic.Daily
+  local when = anchorOf(period, os.time())
+  local name = os.date(period.name, when) .. '.md'
+
+  local path = findPeriodic(root, period, name)
+  if path then
+    -- Left alone if it has any text, or is open here (it would be written
+    -- under the buffer).
+    local ok, current = pcall(vim.fn.readfile, path)
+    if not ok or vim.trim(table.concat(current, '\n')) ~= '' or vim.fn.bufloaded(path) == 1 then
+      return
+    end
+  else
+    path = root .. '/' .. period.folder .. '/' .. name
+    vim.fn.mkdir(vim.fs.dirname(path), 'p')
+  end
+
+  local lines = periodicLines('Daily.md', period, when)
+  if not lines then return end
+  -- The line endings a :write of a new file would use (the first of
+  -- 'fileformats'), like the notes opened and written from Neovim.
+  if vim.o.fileformats:match('^[^,]*') == 'dos' then
+    lines = vim.tbl_map(function(line) return line .. '\r' end, lines)
+  end
+  if vim.fn.writefile(lines, path) == 0 then
+    vim.notify('Created ' .. path:sub(#root + 2))
+  end
 end
 
 --- Open today's daily note, or another day with an offset in days.
@@ -860,6 +910,16 @@ vim.api.nvim_create_autocmd('UIEnter', {
   group = vim.api.nvim_create_augroup('PureTrashCleanup', { clear = true }),
   once = true,
   callback = function() vim.schedule(M.cleanTrash) end,
+})
+
+-- Today's daily note, once per start with a UI (vim.g.pure_daily_on_start).
+-- --headless runs never make one, like the trash above.
+vim.api.nvim_create_autocmd('UIEnter', {
+  group = vim.api.nvim_create_augroup('PureDailyOnStart', { clear = true }),
+  once = true,
+  callback = function()
+    if vim.g.pure_daily_on_start then vim.schedule(M.createDaily) end
+  end,
 })
 
 -- Exposed for tests.
