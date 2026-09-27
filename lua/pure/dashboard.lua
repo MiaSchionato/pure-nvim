@@ -2,98 +2,59 @@
 
 local M = {}
 
--- State to hold your original UI options
+-- What the dashboard hides, in two parts:
+--
+-- * Line numbers and the cursorline are set on the dashboard's own window,
+--   like :setlocal (vim.wo[win][0]): they belong to the dashboard buffer in
+--   that window and go with it, so a file opened there, or any other window,
+--   keeps its own. (They used to be set globally, for every window, and put
+--   back afterwards.)
+-- * The statusline and the tabline are global, so they follow the current
+--   tab: hidden while it shows the dashboard, back as soon as it does not (a
+--   file opened over it, another tab entered). With other tabs open the
+--   tabline stays, so they can still be seen. The check used to look at the
+--   windows of every tab, and gave up after the first restore: a dashboard in
+--   one tab kept the statusline hidden in the others.
 M.state = {
-  is_active = false,
-  user_laststatus = nil,
-  user_showtabline = nil,
-  user_winbar = nil,
-  user_cursorline = nil,
-  user_number = nil,
-  user_relativenumber = nil,
+  hidden = false,   -- the statusline / tabline are the dashboard's
+  laststatus = nil, -- the values to put back
+  showtabline = nil,
 }
 
--- Configuration for which UI elements to hide on the dashboard
-local dashboard_ui_opts = {
-  hide = {
-    statusline = true,
-    tabline = true,
-    winbar = true,
-    cursorline = true,
-    number = true,
-    relativenumber = true,
-  }
-}
-
--- Saves your current UI options
-function M.save_ui_options()
-  M.state.user_laststatus = vim.opt.laststatus:get()
-  M.state.user_showtabline = vim.opt.showtabline:get()
-  M.state.user_winbar = vim.opt.winbar:get()
-  M.state.user_cursorline = vim.opt.cursorline:get()
-  M.state.user_number = vim.opt.number:get()
-  M.state.user_relativenumber= vim.opt.relativenumber:get()
-  M.state.is_active = true
+local function tabShowsDashboard()
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if vim.bo[vim.api.nvim_win_get_buf(win)].filetype == 'dashboard' then return true end
+  end
+  return false
 end
 
--- Applies the special UI settings for the dashboard
-function M.set_dashboard_ui()
-  if dashboard_ui_opts.hide.statusline then vim.opt.laststatus = 0 end
-  if dashboard_ui_opts.hide.tabline then vim.opt.showtabline = 0 end
-  if dashboard_ui_opts.hide.winbar then vim.opt.winbar = '' end
-  if dashboard_ui_opts.hide.cursorline then vim.opt.cursorline = false end
-  if dashboard_ui_opts.hide.number then vim.opt.number = false end
-  if dashboard_ui_opts.hide.relativenumber then vim.opt.relativenumber = false end
+--- Hide the statusline and tabline if the current tab shows the dashboard,
+--- or put them back if it no longer does.
+function M.syncUI()
+  if tabShowsDashboard() then
+    if not M.state.hidden then
+      M.state.laststatus, M.state.showtabline = vim.o.laststatus, vim.o.showtabline
+      M.state.hidden = true
+    end
+    vim.o.laststatus = 0
+    vim.o.showtabline = #vim.api.nvim_list_tabpages() > 1 and M.state.showtabline or 0
+  elseif M.state.hidden then
+    vim.o.laststatus, vim.o.showtabline = M.state.laststatus, M.state.showtabline
+    M.state.hidden = false
+  end
 end
 
--- Restores your original UI options
-function M.restore_ui_options()
-  if not M.state.is_active then return end
+vim.api.nvim_create_autocmd({ 'BufEnter', 'WinEnter', 'TabEnter' }, {
+  group = vim.api.nvim_create_augroup('PureDashboardUI', { clear = true }),
+  callback = function() M.syncUI() end,
+})
 
-  vim.opt.laststatus = M.state.user_laststatus
-  vim.opt.showtabline = M.state.user_showtabline
-  vim.opt.winbar = M.state.user_winbar
-  vim.opt.cursorline = M.state.user_cursorline
-  -- number/relativenumber were saved and hidden but never restored, so line
-  -- numbers stayed off for the rest of the session after leaving the dashboard.
-  vim.opt.number = M.state.user_number
-  vim.opt.relativenumber = M.state.user_relativenumber
-
-  -- Reset state to indicate dashboard is no longer controlling the UI
-  M.state.is_active = false
-end
-
--- Creates a single, robust autocommand to manage UI state.
--- This is inspired by the logic in dashboard.nvim.
-local function setup_ui_management_autocommand()
-  local group = vim.api.nvim_create_augroup('CustomDashboardUIMgmt', { clear = true })
-  vim.api.nvim_create_autocmd('BufEnter', {
-    group = group,
-    callback = function(args)
-      -- When entering a dashboard buffer, ensure its special UI is set
-      if vim.bo[args.buf].filetype == 'dashboard' then
-        M.set_dashboard_ui()
-        return
-      end
-
-      -- If we are in a normal buffer, check if we should restore the original UI
-      if M.state.is_active then
-        local dashboard_is_visible = false
-        for _, win in ipairs(vim.api.nvim_list_wins()) do
-          if vim.bo[vim.api.nvim_win_get_buf(win)].filetype == 'dashboard' then
-            dashboard_is_visible = true
-            break
-          end
-        end
-
-        if not dashboard_is_visible then
-          M.restore_ui_options()
-          -- The autocommand has done its job, so we can remove it.
-          vim.api.nvim_del_augroup_by_name('CustomDashboardUIMgmt')
-        end
-      end
-    end,
-  })
+--- Whether `buf` is the blank buffer Neovim starts with, or :tabnew opens:
+--- no name, a normal buffer, unchanged and empty.
+local function isBlank(buf)
+  return vim.api.nvim_buf_get_name(buf) == '' and vim.bo[buf].buftype == ''
+    and not vim.bo[buf].modified and vim.api.nvim_buf_line_count(buf) == 1
+    and vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1] == ''
 end
 
 --- The art without its surrounding blank space: trailing blank lines dropped
@@ -177,15 +138,9 @@ local function render(buf, win)
   pcall(vim.api.nvim_win_set_cursor, win, { menu_row, 0 })
 end
 
--- Your function to draw the dashboard, now with UI management
+--- Show the dashboard in the current window.
 function M.drawDashboard()
-  -- If the dashboard isn't already active, save the current UI state
-  -- and set up the autocommand to manage restoring it.
-  if not M.state.is_active then
-    M.save_ui_options()
-    setup_ui_management_autocommand()
-  end
-
+  local previous = vim.api.nvim_get_current_buf()
   local buf = vim.api.nvim_create_buf(false, true)
 
   -- Set buffer options
@@ -194,11 +149,19 @@ function M.drawDashboard()
   vim.bo[buf].buftype = 'nofile'
   vim.bo[buf].swapfile = false
 
-  -- Apply dashboard-specific UI settings now
-  M.set_dashboard_ui()
-
   vim.api.nvim_win_set_buf(0, buf)
-  render(buf, vim.api.nvim_get_current_win())
+  local win = vim.api.nvim_get_current_win()
+  vim.wo[win][0].number = false
+  vim.wo[win][0].relativenumber = false
+  vim.wo[win][0].cursorline = false
+  M.syncUI()
+  render(buf, win)
+
+  -- The blank buffer it covers (Neovim's first one, or the one :tabnew made)
+  -- would stay behind in the buffer list, unnamed and unused.
+  if previous ~= buf and isBlank(previous) and #vim.fn.win_findbuf(previous) == 0 then
+    pcall(vim.api.nvim_buf_delete, previous, {})
+  end
 
   -- Redraw centred (and rescaled) whenever the window changes size: going
   -- full screen, a split, a font change.
@@ -214,9 +177,26 @@ function M.drawDashboard()
   local opts = { buffer = buf, silent = true, nowait = true }
   vim.keymap.set('n', 'd', function() require('pure.zettelkasten').openDaily() end, opts)
   vim.keymap.set('n', 'n', ':enew<CR>', opts)
-  vim.keymap.set('n', 'q', ':qa<CR>', opts)
+  -- In a tab of its own, q closes that tab; from the last one it quits.
+  vim.keymap.set('n', 'q', function()
+    vim.cmd(#vim.api.nvim_list_tabpages() > 1 and 'tabclose' or 'qa')
+  end, opts)
   -- The configuration's own repository first, then the plugins (pure/update.lua).
   vim.keymap.set('n', 'u', function() require('pure.update').run() end, opts)
+end
+
+--- Show the dashboard in `tab` if it is still what :tabnew leaves: one
+--- window on a blank buffer. Called once the command that opened the tab is
+--- done, so a tab opened on a file, or filled in right away by whatever
+--- opened it, is left alone.
+function M.drawInBlankTab(tab)
+  if not vim.api.nvim_tabpage_is_valid(tab) or tab ~= vim.api.nvim_get_current_tabpage() then return end
+  local win = vim.api.nvim_get_current_win()
+  for _, other in ipairs(vim.api.nvim_tabpage_list_wins(tab)) do
+    -- Floating windows (a notification) do not count.
+    if other ~= win and vim.api.nvim_win_get_config(other).relative == '' then return end
+  end
+  if isBlank(vim.api.nvim_win_get_buf(win)) then M.drawDashboard() end
 end
 
 return M
