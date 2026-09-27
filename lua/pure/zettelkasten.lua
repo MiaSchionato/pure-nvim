@@ -270,7 +270,7 @@ end
 ---
 --- The answer is checked before saving: a path that is not a directory, or that
 --- has no Templates folder, is almost certainly a typo, and finding that out
---- now beats finding out on the first <leader>nz.
+--- now beats finding out on the first <leader>nt.
 function M.setVault()
   local ok, input = pcall(vim.fn.input, {
     prompt = 'Obsidian vault folder (empty to cancel): ',
@@ -299,7 +299,7 @@ function M.setVault()
   if vim.g.pure_vault and vim.g.pure_vault ~= '' then
     vim.notify('Saved, but vim.g.pure_vault is set and takes precedence', vim.log.levels.WARN)
   end
-  -- pure/notes.lua and the <leader>em / fa / nm keys follow the vault.
+  -- pure/notes.lua and the <leader>ev / fv / nv keys follow the vault.
   vim.api.nvim_exec_autocmds('User', { pattern = 'PureVaultChanged', data = { vault = vaultPath() } })
 
   local templates = path .. '/' .. (vim.g.pure_templates or 'Templates')
@@ -558,6 +558,10 @@ end
 --- The file is named after the title and always ends in ".md": a note created
 --- without an extension, or with a generated name, would otherwise land in its
 --- folder as something Obsidian does not treat as a note.
+---
+--- A note already somewhere under the template's folder (anywhere in
+--- 1-Projects for '1-Projects/{{title}}') was put there on purpose, before
+--- the template: it stays in its folder, only named after the title.
 --- @param folder string
 --- @param title string|nil  defaults to the current file name
 local function moveCurrentFile(folder, title)
@@ -566,16 +570,26 @@ local function moveCurrentFile(folder, title)
     return vim.notify('Save the note before applying a template that moves it',
       vim.log.levels.WARN)
   end
+  path = vim.fs.normalize(path)
 
   local root = vaultPath()
   if not root then return end -- insertTemplate checks first; this is a guard
 
   title = safeName(title or currentTitle())
   if title == '' then title = 'Untitled' end
-  -- Replaced through a function: as a plain replacement string, a '%' in the
-  -- title is gsub syntax, and "100% focus" became the folder "100 focus".
-  local folder_name = folder:gsub('{{title}}', function() return title end)
-  local target_dir = root .. '/' .. folder_name
+
+  local base = folder:match('^(.-)/*{{title}}') or folder
+  local stays = base ~= '' and isInside(path, root .. '/' .. base)
+  local target_dir, folder_name
+  if stays then
+    target_dir = vim.fs.dirname(path)
+    folder_name = target_dir:sub(#root + 2)
+  else
+    -- Replaced through a function: as a plain replacement string, a '%' in
+    -- the title is gsub syntax, and "100% focus" became the folder "100 focus".
+    folder_name = folder:gsub('{{title}}', function() return title end)
+    target_dir = root .. '/' .. folder_name
+  end
   local target = target_dir .. '/' .. title .. '.md'
 
   if pathKey(target) == pathKey(path) then
@@ -586,20 +600,32 @@ local function moveCurrentFile(folder, title)
       vim.log.levels.WARN)
   end
 
-  vim.fn.mkdir(target_dir, 'p')
-  vim.cmd('silent write')
-
   local old = vim.api.nvim_get_current_buf()
-  local ok, err = os.rename(path, target)
-  if not ok then
-    return vim.notify('Could not move the note: ' .. tostring(err), vim.log.levels.ERROR)
+  local stat = vim.uv.fs_stat(path)
+  vim.fn.mkdir(target_dir, 'p')
+  if stat and stat.type == 'file' then
+    -- On disk already: saved, then renamed, so it stays the same file.
+    vim.cmd('silent write')
+    local ok, err = os.rename(path, target)
+    if not ok then
+      return vim.notify('Could not move the note: ' .. tostring(err), vim.log.levels.ERROR)
+    end
+  else
+    -- Never saved: written straight to its new place. Saving it at its own
+    -- path first failed with E13 when that path had just been made a folder:
+    -- a note named "Idea", no .md, becoming 1-Projects/Idea/Idea.md.
+    local ok, err = pcall(vim.cmd, 'silent write ' .. vim.fn.fnameescape(target))
+    if not ok then
+      return vim.notify('Could not save the note: ' .. tostring(err), vim.log.levels.ERROR)
+    end
+    vim.bo[old].modified = false
   end
 
   vim.cmd('edit ' .. vim.fn.fnameescape(target))
   if vim.api.nvim_buf_is_valid(old) and vim.api.nvim_get_current_buf() ~= old then
     vim.api.nvim_buf_delete(old, { force = true })
   end
-  vim.notify('Moved to ' .. folder_name)
+  vim.notify((stays and 'Saved as ' or 'Moved to ') .. target:sub(#root + 2))
 end
 
 --- Where the note for a period already is, if anywhere.
@@ -774,7 +800,7 @@ end
 
 --- Expand the template `selected` ("Project.md") into the current note and
 --- move the note if the template has a destination. A periodic template opens
---- its own note instead. <leader>nz and a note made from a [[link]] with a
+--- its own note instead. <leader>nt and a note made from a [[link]] with a
 --- template (pure/notes.lua) both come through here.
 --- @param selected string
 function M.applyTemplate(selected)
