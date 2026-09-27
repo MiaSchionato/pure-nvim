@@ -98,6 +98,7 @@ before use).
 | `vim.g.pure_calendar_sync` | `{ interval = 15 }` | [calendar](calendar.md) |
 | `vim.g.pure_claude_model` | the `claude` command's default | [claude](claude.md) |
 | `vim.g.pure_claude_cmd` | `'claude'` | [claude](claude.md) |
+| `vim.g.pure_claude_actions` | `'claude'` (folder of the vault) | [claude](claude.md) |
 | `vim.g.pure_claude_blocks` | on | [claude](claude.md) |
 | `vim.g.pure_keyhint_delay` | `1000` ms | [keyhint](keyhint.md) |
 | `vim.g.pure_keyhint_groups` | set in keymaps.lua | [keyhint](keyhint.md) |
@@ -138,6 +139,8 @@ Undo history is in `stdpath('state')/undo`.
 | `:CalendarRefresh` | draw and tidy the ```` ```calendar ```` grids of the note |
 | `:CalendarSync` | sync the calendar grids with Google now |
 | `:CalendarAuth` | connect Google Calendar (OAuth, once) |
+| `:ClaudeActions` | pick one of the vault's Claude actions and run it ([claude](claude.md)) |
+| `:ClaudeActionsExamples` | write the example actions into the vault's `claude` folder |
 | `:ClaudeBlock` | run the ```` ```claude ```` block under the cursor (again) |
 | `:NoteRename [name]` | rename the note and fix the links to it ([notes](notes.md)) |
 | `:NoteBacklinks` | the notes that link to this one |
