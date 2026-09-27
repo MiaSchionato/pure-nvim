@@ -98,6 +98,14 @@ Picking one of these opens the note for the current period:
 Day steps are counted from noon, so a daylight saving change can never turn
 "yesterday" into two days ago.
 
+**Today's daily note is made when Neovim starts** (with a UI, never in
+`--headless`), without opening it, when `vim.g.pure_daily_on_start` is set
+(`true` in `configs.lua`): it is there from the start, for Obsidian or a
+Claude action that writes in it, not only once it is opened. Same rules as
+above: never a second one, and a note with text is left alone. A Neovim left
+open past midnight makes the next day's on its next start, or when it is
+opened.
+
 ## Syncing the vault: `:VaultSync`
 
 Saves the vault's notes open in Neovim, commits everything that changed
