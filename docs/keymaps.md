@@ -43,6 +43,7 @@ See [claude.md](claude.md).
 | `<leader>ai` | n, x | Write here (visual: rewrite) |
 | `<leader>ar` | n, x | Repeat the last request |
 | `<leader>as` | n | Stop |
+| `<leader>ax` | n, x | Actions (claude/ folder of the vault) |
 
 ## `<leader>b` – Buffers
 

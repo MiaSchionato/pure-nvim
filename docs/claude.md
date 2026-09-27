@@ -50,7 +50,62 @@ answer, never change them.
 | `<leader>ar` | the last request again, with the context of now (another selection, another file) |
 | `<leader>ah` | past answers of this session, in the picker; opening one allows follow-ups |
 | `<leader>as` | stop everything running |
+| `<leader>ax` | the actions of the vault's `claude` folder (below) |
 | `<leader>ab` | run the ```` ```claude ```` block under the cursor (again) |
+
+## Actions: `<leader>ax`
+
+The requests you make often, one markdown file each, in the `claude` folder
+of the vault (any case: `Claude/` works; another folder with
+`vim.g.pure_claude_actions = 'Pasta'`, or an absolute path). `<leader>ax`
+lists them in the fzf picker, with the file as preview; the one you pick
+runs with the context of now (the note, the selection, the cursor).
+
+A file is an action when its frontmatter has a `description`; every other
+file of the folder (your own notes) is left alone. They sync with the vault
+and are edited like any note, in Neovim or Obsidian.
+
+```markdown
+---
+description: Revisar ortografia e gramática
+output: replace
+tools: Read, Grep
+---
+Revise a ortografia e a gramática do texto (português do Brasil).
+Mantenha o estilo e a formatação markdown.
+```
+
+The text is the request. `$ARGUMENTS` in it is asked for when the action
+runs ("Traduzir para $ARGUMENTS").
+
+| Key | What | Default |
+|---|---|---|
+| `description` | the name in the list (required) | |
+| `output` | `insert`: into the buffer below the cursor · `replace`: over the selection, or the whole note without one · `window`: the answer window (follow-ups with `a`) · `notify`: Claude works on its own and sends a short summary of what it did as a notification | `notify` when it may change files, else `window` |
+| `tools` | what Claude may use: `Read`, `Grep`, `Glob` read; `Edit`, `Write`, `Bash` change files (accepted without asking) | none for insert/replace; reading for window |
+| `dirs` | where it may change files: `vault`, `file` (the note's folder), or paths (`~/Downloads`); the first is where it runs | `vault` |
+| `confirm` | `auto`: ask before running only when one of the `dirs` is not in a git repository · `always` · `never` | `auto` |
+| `model` | the model for this action (`haiku`, `sonnet`, `opus`) | the usual one |
+| `key` | its own key, in normal and visual mode (`<leader>a1`) | none |
+
+Inside the vault nothing needs asking: it is a git repository (`:VaultSync`),
+so a change is undone from its history. Open notes an action changed on disk
+are reloaded when it ends. `<leader>ar` repeats the last action; its answers
+are in `<leader>ah`.
+
+It is the format of Claude Code's own commands (`.claude/commands/*.md`),
+whose other keys are ignored here.
+
+**Examples.** `:ClaudeActionsExamples` (or `<leader>ax` while the folder has
+no actions) writes five into the folder, never over an existing file:
+
+| File | What |
+|---|---|
+| Revisar texto | spelling and grammar of the selection (`replace`) |
+| Virar tarefas | loose text into `- [ ]` tasks (`replace`) |
+| Sugerir links | looks for related notes in the vault, adds `## Relacionadas` (`insert`) |
+| Resumir | the note or the selection in topics (`window`) |
+| Nota permanente | the selection becomes its own note in `3-Resources`, replaced by a sentence and its `[[link]]` (`replace`, with `Write`) |
 
 ## Requests in notes: ```` ```claude ```` blocks
 
