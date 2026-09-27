@@ -65,7 +65,7 @@ local function isoUtc(epoch) return os.date('!%Y-%m-%dT%H:%M:%SZ', epoch) end
 
 local function get(url)
   local res = vim.system({ 'curl', '-s', '--max-time', '60', url }, { text = true }):wait()
-  if res.code ~= 0 then error('ActivityWatch is not answering') end
+  if res.code ~= 0 then error('ActivityWatch is not answering', 0) end
   return vim.json.decode(res.stdout)
 end
 
@@ -85,10 +85,13 @@ local buckets -- name prefix -> bucket id, found once per report
 local function events(prefix, from, to)
   local server = (vim.g.pure_daystats_aw or 'http://127.0.0.1:5600') .. '/api/0'
   if not buckets then
-    buckets = {}
-    for id in pairs(get(server .. '/buckets/')) do buckets[id:match('^(.-)_') or id] = id end
+    -- Filled only once the server answered: set before, a failed first call
+    -- left it empty and the next section said "no bucket" instead.
+    local found = {}
+    for id in pairs(get(server .. '/buckets/')) do found[id:match('^(.-)_') or id] = id end
+    buckets = found
   end
-  local id = buckets[prefix] or error('ActivityWatch has no ' .. prefix .. ' bucket')
+  local id = buckets[prefix] or error('ActivityWatch has no ' .. prefix .. ' bucket', 0)
   return get(('%s/buckets/%s/events?start=%s&end=%s&limit=300000'):format(server, id, isoUtc(from), isoUtc(to)))
 end
 
