@@ -31,6 +31,11 @@ For questions that write nothing: "what does this do?", "why this error?",
 "how do I…". The answer comes in a floating window, drawn as markdown, as it
 is written. In visual mode the question is about the selection.
 
+The title shows what Claude is doing and the seconds since you asked
+(`thinking… 3s`). Each answer ends with its time, small and grey on the
+right (not copied with `y`); when done, the title has the window's total,
+follow-ups included (`ask 8.2s`).
+
 In the window:
 
 | Key | What |
