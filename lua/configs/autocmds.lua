@@ -43,6 +43,16 @@ vim.api.nvim_create_autocmd("VimEnter", {
   end,
 })
 
+-- A new tab (:tabnew, <leader>wn) opens on the dashboard too, not on an empty
+-- buffer. Looked at once the command is done: :tabnew file, :tab help or a
+-- plugin that fills its new tab straight away are left alone.
+vim.api.nvim_create_autocmd("TabNewEntered", {
+  callback = function()
+    local tab = vim.api.nvim_get_current_tabpage()
+    vim.schedule(function() require('pure.dashboard').drawInBlankTab(tab) end)
+  end,
+})
+
 
 -- Highlight "TODO:" lines.
 -- The colour is set once and again after a colorscheme change (it was reset
