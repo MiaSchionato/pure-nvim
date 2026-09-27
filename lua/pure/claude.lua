@@ -558,6 +558,7 @@ end
 --    confirm: auto           auto (only outside git) | always | never
 --    model: haiku            this action only
 --    key: <leader>a1         its own key
+--    context: daystats       more context: the text() of each lua/pure/<name>
 --    ---
 --    The request. $ARGUMENTS is asked for when the action runs.
 --
@@ -636,8 +637,22 @@ local function readAction(path)
     confirm = (meta.confirm or 'auto'):lower(),
     model = meta.model ~= '' and meta.model or nil,
     key = meta.key ~= '' and meta.key or nil,
+    context = list(meta.context),
     body = vim.trim(table.concat(body, '\n')),
   }
+end
+
+--- The extra context an action asks for (`context: daystats`): the text()
+--- of each module lua/pure/<name>, wrapped in <name> tags. A module that
+--- fails says so instead of stopping the action.
+local function extraContext(names)
+  local parts = {}
+  for _, name in ipairs(names or {}) do
+    local ok, text = pcall(function() return require('pure.' .. name).text() end)
+    if not ok then text = ('(%s unavailable: %s)'):format(name, tostring(text):match('^[^\n]*')) end
+    table.insert(parts, ('<%s>\n%s\n</%s>'):format(name, text, name))
+  end
+  return table.concat(parts, '\n\n')
 end
 
 --- Every action of the folder, sorted by description.
@@ -697,6 +712,7 @@ function M.runAction(a, ctx)
 
   local function go(args)
     local body = a.body:gsub('%$ARGUMENTS', function() return args or '' end)
+    if a.context then body = body .. '\n\n' .. extraContext(a.context) end
     local dirs = actionDirs(a, buf)
     if mustConfirm(a, dirs) then
       local choice = vim.fn.confirm(('Run "%s"?\nIt may change files in:\n  %s\nTools: %s'):format(a.description,
@@ -1133,6 +1149,6 @@ vim.api.nvim_create_user_command('ClaudeBlock', M.runBlockAtCursor, {
   desc = 'Run the ```claude block under the cursor (again)',
 })
 
-M._blocksIn, M._due, M._unfence, M._run = blocksIn, due, unfence, run
+M._blocksIn, M._due, M._unfence, M._run, M._extraContext = blocksIn, due, unfence, run, extraContext
 
 return M

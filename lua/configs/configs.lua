@@ -110,6 +110,14 @@ vim.g.pure_todoist_archive = '9-Archive/Todoist/'
 -- every `interval` minutes (see pure/todoist.lua). false: drawn, not written.
 vim.g.pure_todoist_sync = { interval = 10 }
 
+-- Day stats (pure/daystats.lua), the measured day given to Claude actions
+-- that ask for `context: daystats`. The focus log, relative to the vault;
+-- unset leaves focus out of the report.
+vim.g.pure_daystats_focus_log = '9-Archive/PomoDeck/focus-log.md'
+-- Sleep estimate: asleep up to `after` minutes after the PC closed, awake
+-- `before` minutes before its first use. Unset: only the two times.
+vim.g.pure_daystats_sleep = { after = 60, before = { 60, 120 } }
+
 -- Obsidian vault (pure/zettelkasten.lua, obsidian.nvim, <leader>em / fa / nm).
 -- Left unset, it is asked for on a fresh install and remembered, like the
 -- Todoist token; :ZettelVault changes it. Setting it here overrides that.
