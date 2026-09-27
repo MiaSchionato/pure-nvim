@@ -603,7 +603,8 @@ end
 --    confirm: auto           auto (only outside git) | always | never
 --    model: haiku            this action only
 --    key: <leader>a1         its own key
---    context: daystats       more context: the text() of each lua/pure/<name>
+--    context: stats.lua      more context: the text() of a Lua file of this
+--                            folder, or of a module lua/pure/<name>
 --    ---
 --    The request. $ARGUMENTS is asked for when the action runs.
 --
@@ -687,15 +688,25 @@ local function readAction(path)
   }
 end
 
---- The extra context an action asks for (`context: daystats`): the text()
---- of each module lua/pure/<name>, wrapped in <name> tags. A module that
---- fails says so instead of stopping the action.
+--- The extra context an action asks for (`context: stats.lua`): the text()
+--- of each source, wrapped in a tag named after it (<stats>). A source is a
+--- Lua file of the actions folder (read fresh each time: a personal script
+--- lives with the actions, out of this configuration) or a module
+--- lua/pure/<name>. One that fails says so instead of stopping the action.
 local function extraContext(names)
   local parts = {}
   for _, name in ipairs(names or {}) do
-    local ok, text = pcall(function() return require('pure.' .. name).text() end)
+    local tag = name:gsub('%.lua$', '')
+    local ok, text = pcall(function()
+      if name:match('%.lua$') then
+        local dir = actionsDir()
+        if not dir then error('no actions folder', 0) end
+        return dofile(dir .. '/' .. name).text()
+      end
+      return require('pure.' .. name).text()
+    end)
     if not ok then text = ('(%s unavailable: %s)'):format(name, tostring(text):match('^[^\n]*')) end
-    table.insert(parts, ('<%s>\n%s\n</%s>'):format(name, text, name))
+    table.insert(parts, ('<%s>\n%s\n</%s>'):format(tag, text, tag))
   end
   return table.concat(parts, '\n\n')
 end
@@ -838,6 +849,16 @@ function M.pickAction()
     local a = by_line[selection_line or '']
     if a then vim.schedule(function() M.runAction(a, ctx) end) end
   end)
+end
+
+--- Run the action whose file is `name` (without .md), with the context of
+--- now: how keymaps.lua gives an action a key.
+function M.runNamed(name)
+  local ctx = { buf = vim.api.nvim_get_current_buf(), win = vim.api.nvim_get_current_win(), range = selection() }
+  for _, a in ipairs(M.actions()) do
+    if a.name == name then return M.runAction(a, ctx) end
+  end
+  vim.notify(('Claude: no action "%s" in the actions folder'):format(name), vim.log.levels.WARN)
 end
 
 M._readAction = readAction

@@ -78,22 +78,37 @@ Mantenha o estilo e a formatação markdown.
 The text is the request. `$ARGUMENTS` in it is asked for when the action
 runs ("Traduzir para $ARGUMENTS").
 
-`context` brings what the buffer does not have. Each name is a module of
-`lua/pure/` with a `text()` function; its text is added at the end of the
-request, between `<name>` tags, so the action works from real data without
-needing `Bash`. A module that fails puts one line saying so in its place,
-and the action still runs. For example, an action that prepares the daily
-note from the [measured day](daystats.md):
+`context` brings what the buffer does not have: data only a script can
+gather (an API on this machine, a log, a database). Each name is either a
+**Lua file of the actions folder** (`stats.lua`) or a module of `lua/pure/`
+(`todoist`); either returns a table with a `text()` function. The text is
+added at the end of the request, between tags named after it (`<stats>`),
+so the action works from real data without needing `Bash`. A source that
+fails puts one line saying so in its place, and the action still runs.
+
+A Lua file of the actions folder is the place for a personal script: it
+lives and syncs with the vault, out of this configuration, and is read
+again each time the action runs. It runs with Neovim's rights, like any
+Lua, so keep there only files you wrote.
 
 ```markdown
 ---
 description: Preparar a nota do dia
 output: notify
 tools: Read, Glob, Grep, Edit
-context: daystats
+context: stats.lua
 ---
-Escreva na nota de hoje um próximo passo pequeno e o dia medido, que vem
-no fim deste pedido, em <daystats>.
+Escreva na nota de hoje um próximo passo pequeno a partir dos números do
+dia, que vêm no fim deste pedido, em <stats>.
+```
+
+```lua
+-- stats.lua, next to the action
+local M = {}
+function M.text()
+  return 'Focus today: …'  -- whatever the action should know
+end
+return M
 ```
 
 | Key | What | Default |
@@ -104,8 +119,8 @@ no fim deste pedido, em <daystats>.
 | `dirs` | where it may change files: `vault`, `file` (the note's folder), or paths (`~/Downloads`); the first is where it runs | `vault` |
 | `confirm` | `auto`: ask before running only when one of the `dirs` is not in a git repository · `always` · `never` | `auto` |
 | `model` | the model for this action (`haiku`, `sonnet`, `opus`) | the usual one |
-| `key` | its own key, in normal and visual mode (`<leader>a1`) | none |
-| `context` | more context for the request: the `text()` of each module `lua/pure/<name>`, added at its end between `<name>` tags (`context: daystats`, the [measured day](daystats.md)) | none |
+| `key` | its own key, in normal and visual mode (`<leader>a1`). To keep every key in `keymaps.lua` instead, map `require('pure.claude').runNamed('File name')` there | none |
+| `context` | more context for the request, added at its end: the `text()` of a Lua file of the actions folder (`stats.lua`) or of a module `lua/pure/<name>`, between tags named after it (see above) | none |
 
 Inside the vault nothing needs asking: it is a git repository (`:VaultSync`),
 so a change is undone from its history. Open notes an action changed on disk
