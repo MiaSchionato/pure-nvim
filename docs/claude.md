@@ -63,7 +63,8 @@ answer, never change them.
 The requests you make often, one markdown file each, in the `claude` folder
 of the vault (any case: `Claude/` works; another folder with
 `vim.g.pure_claude_actions = 'Pasta'`, or an absolute path). `<leader>ax`
-lists them in the fzf picker, with the file as preview; the one you pick
+lists them in the fzf picker by title (the file name, as Obsidian shows
+it), with the file as preview; the one you pick
 runs with the context of now (the note, the selection, the cursor).
 
 A file is an action when its frontmatter has a `description`; every other

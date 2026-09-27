@@ -844,7 +844,7 @@ local function extraContext(names)
   return table.concat(parts, '\n\n')
 end
 
---- Every action of the folder, sorted by description.
+--- Every action of the folder, sorted by title (file name).
 function M.actions()
   local dir = actionsDir()
   if not dir then return {} end
@@ -855,7 +855,7 @@ function M.actions()
       if a then table.insert(out, a) end
     end
   end
-  table.sort(out, function(x, y) return x.description:lower() < y.description:lower() end)
+  table.sort(out, function(x, y) return x.name:lower() < y.name:lower() end)
   return out
 end
 
@@ -970,7 +970,9 @@ function M.pickAction()
   end
   local by_line, lines = {}, {}
   for _, a in ipairs(actions) do
-    local line = ('%s  [%s]\t%s'):format(a.description, a.output, a.path)
+    -- The action's title (its file name, as Obsidian shows it); the
+    -- description is in the preview.
+    local line = ('%s  [%s]\t%s'):format(a.name, a.output, a.path)
     by_line[line] = a
     table.insert(lines, line)
   end
