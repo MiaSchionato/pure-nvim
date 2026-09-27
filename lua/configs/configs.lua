@@ -129,3 +129,7 @@ vim.g.pure_daystats_sleep = { after = 60, before = { 60, 120 } }
 -- everything; a number: only what was not modified for that many days;
 -- false: never. Deleted for good, not moved to the recycle bin.
 vim.g.pure_trash_cleanup = true
+-- Make today's daily note (from the Daily template) each time Neovim starts,
+-- without opening it, so it is there before it is first opened. false: only
+-- when it is opened (d on the dashboard, <leader>nz).
+vim.g.pure_daily_on_start = true
