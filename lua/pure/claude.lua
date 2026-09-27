@@ -340,7 +340,28 @@ end
 local function askInto(w, question, prompt, opts)
   local answer = {}
   local stopped = false
-  w.title('thinking…')
+  -- The seconds since the question went, next to what Claude is doing.
+  local t0, state = vim.uv.hrtime(), 'thinking…'
+  local function elapsed(decimals)
+    local secs = (vim.uv.hrtime() - t0) / 1e9
+    return decimals and ('%.1fs'):format(secs) or ('%ds'):format(math.floor(secs))
+  end
+  local timer = vim.uv.new_timer()
+  local function setState(s)
+    state = s
+    w.title(state .. ' ' .. elapsed())
+  end
+  local function stopTimer()
+    if timer and not timer:is_closing() then
+      timer:stop()
+      timer:close()
+    end
+  end
+  timer:start(1000, 1000, vim.schedule_wrap(function()
+    if not w.valid() then return stopTimer() end
+    w.title(state .. ' ' .. elapsed())
+  end))
+  setState('thinking…')
   local extra = opts.extra or {}
   local stop = run({
     prompt = prompt,
@@ -351,24 +372,36 @@ local function askInto(w, question, prompt, opts)
     cwd = opts.cwd,
     resume = opts.session,
     keep = true,
-    on_tool = function(name) w.title(name == 'Read' and 'reading…' or 'searching…') end,
+    on_tool = function(name) setState(name == 'Read' and 'reading…' or 'searching…') end,
     on_text = function(s)
       table.insert(answer, s)
-      w.title('writing…')
+      if state ~= 'writing…' then setState('writing…') end
       w.append(s)
     end,
     on_done = function(err, text, session)
+      stopTimer()
       if err then
         if not stopped then
           w.append('\n\n> **Error:** ' .. err:gsub('\n', '\n> ') .. '\n')
           if not w.valid() then vim.notify('Claude: ' .. err, vim.log.levels.ERROR) end
         end
-        w.title('error')
+        w.title((stopped and 'stopped' or 'error') .. ' ' .. elapsed(true))
         return
       end
       if #answer == 0 then w.append(text) end
       w.append('\n')
-      w.title(opts.kind .. ' · a: follow up, y: copy, q: close')
+      -- This answer's time, small at its end (not text: y does not copy it);
+      -- the window's total, follow-ups included, in the title.
+      w.total = (w.total or 0) + (vim.uv.hrtime() - t0) / 1e9
+      if w.valid() then
+        -- On the answer's last line of text: the empty line after it is
+        -- rewritten when a follow-up is appended, and would lose the mark.
+        local last_row = math.max(vim.api.nvim_buf_line_count(w.buf) - 2, 0)
+        pcall(vim.api.nvim_buf_set_extmark, w.buf, ns, last_row, 0, {
+          virt_text = { { elapsed(true), 'Comment' } }, virt_text_pos = 'right_align',
+        })
+      end
+      w.title(opts.kind .. (' %.1fs'):format(w.total) .. ' · a: follow up, y: copy, q: close')
       w.session = session
       w.answer = text
       addHistory(opts.kind, question, text, session)
