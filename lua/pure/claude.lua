@@ -1314,6 +1314,9 @@ end
 --- Run the blocks of `buf` that have no answer yet and are due.
 local function autoBlocks(buf)
   if vim.g.pure_claude_blocks == false then return end
+  -- Scheduled after the event: the buffer may be gone by then (a template
+  -- that moves the note writes it, then wipes the buffer of its old name).
+  if not vim.api.nvim_buf_is_valid(buf) then return end
   if vim.bo[buf].buftype ~= '' or vim.bo[buf].modified then return end
   local path = vim.api.nvim_buf_get_name(buf)
   if path == '' or not allowed(path) then return end
