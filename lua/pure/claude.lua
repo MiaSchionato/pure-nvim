@@ -88,6 +88,10 @@ end
 --- work in), write (edits files: accepted without asking), on_text(chunk),
 --- on_tool(name), on_done(err, text, session). Callbacks run on the main
 --- loop. Returns a function that stops it.
+
+
+
+-- CLAUDE CODE FUNCTION
 local function run(opts)
   local tools = table.concat(opts.tools or {}, ',')
   local args = { '-p', '--output-format', 'stream-json', '--verbose', '--include-partial-messages',
@@ -204,6 +208,102 @@ local function run(opts)
   running[id] = stop
   return stop
 end
+
+-- A adaptation to local llm made by gemini, review it
+-- local function run(opts)
+--   local model = opts.model or vim.g.pure_claude_model or 'qwen2.5-coder:7b'
+--
+--   local payload = vim.json.encode({
+--     model = model,
+--     messages = { { role = 'user', content = opts.prompt } },
+--     stream = true,
+--   })
+--
+--   local cmd = {
+--     'curl', '-s', '-N', '-X', 'POST', 'http://localhost:11434/api/chat',
+--     '-H', 'Content-Type: application/json',
+--     '-d', payload
+--   }
+--
+--   local pending, text, err_text = '', {}, {}
+--   local finished, stopped = false, false
+--   local queued, flush_pending = {}, false
+--
+--   local function flush()
+--     flush_pending = false
+--     if #queued == 0 or not opts.on_text then return end
+--     local chunk = table.concat(queued)
+--     queued = {}
+--     opts.on_text(chunk)
+--   end
+--
+--   local function emit(piece)
+--     table.insert(queued, piece)
+--     if not flush_pending then
+--       flush_pending = true
+--       vim.defer_fn(function() if not finished then flush() end end, 60)
+--     end
+--   end
+--
+--   local function event(line)
+--     local ok, ev = pcall(vim.json.decode, line)
+--     if not ok or type(ev) ~= 'table' then return end
+--
+--     if ev.message and ev.message.content then
+--       table.insert(text, ev.message.content)
+--       emit(ev.message.content)
+--     end
+--   end
+--
+--   local id = tostring(vim.uv.hrtime())
+--   local ok, obj = pcall(vim.system, cmd, {
+--     stdout = function(_, data)
+--       if not data then return end
+--       vim.schedule(function()
+--         if finished then return end
+--         pending = pending .. data
+--         local start = 1
+--         while true do
+--           local nl = pending:find('\n', start, true)
+--           if not nl then break end
+--           event(pending:sub(start, nl - 1))
+--           start = nl + 1
+--         end
+--         pending = pending:sub(start)
+--       end)
+--     end,
+--     stderr = function(_, data) if data then table.insert(err_text, data) end end,
+--   }, function(res)
+--     vim.schedule(function()
+--       running[id] = nil
+--       if finished then return end
+--       if pending ~= '' then event(pending) end
+--       flush()
+--       finished = true
+--       if res.code == 0 then
+--         return opts.on_done(nil, table.concat(text), nil)
+--       end
+--       local why = vim.trim(table.concat(err_text))
+--       if stopped then why = 'stopped' end
+--       opts.on_done(why ~= '' and why or ('curl exited with ' .. res.code), table.concat(text), nil)
+--     end)
+--   end)
+--
+--   if not ok then
+--     vim.schedule(function() opts.on_done('Could not run curl') end)
+--     return function() end
+--   end
+--
+--   local function stop()
+--     if running[id] then
+--       stopped = true
+--       pcall(function() obj:kill(15) end)
+--     end
+--   end
+--
+--   running[id] = stop
+--   return stop
+-- end
 
 function M.stop()
   local n = 0

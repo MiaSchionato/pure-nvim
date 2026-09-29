@@ -110,7 +110,7 @@ vim.g.pure_todoist_archive = '9-Archive/Todoist/'
 -- every `interval` minutes (see pure/todoist.lua). false: drawn, not written.
 vim.g.pure_todoist_sync = { interval = 10 }
 
--- Obsidian vault (pure/zettelkasten.lua, obsidian.nvim, <leader>em / fa / nm).
+-- Obsidian vault (pure/zettelkasten.lua, obsidian.nvim, <leader>ev / fv / nv).
 -- Left unset, it is asked for on a fresh install and remembered, like the
 -- Todoist token; :ZettelVault changes it. Setting it here overrides that.
 -- vim.g.pure_vault = '~/Atlas'
@@ -123,5 +123,5 @@ vim.g.pure_todoist_sync = { interval = 10 }
 vim.g.pure_trash_cleanup = true
 -- Make today's daily note (from the Daily template) each time Neovim starts,
 -- without opening it, so it is there before it is first opened. false: only
--- when it is opened (d on the dashboard, <leader>nz).
+-- when it is opened (d on the dashboard, <leader>nt).
 vim.g.pure_daily_on_start = true

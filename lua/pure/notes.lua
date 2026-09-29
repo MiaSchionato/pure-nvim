@@ -346,7 +346,7 @@ end
 ---
 ---   Yes                in the folder for new notes (Obsidian's setting), or
 ---                      the one the link names ([[Projects/New]])
----   With a template    the same, then the template is applied as <leader>nz
+---   With a template    the same, then the template is applied as <leader>nt
 ---                      applies it, moves included: the Project template
 ---                      sends the note to 1-Projects/<title>/
 ---   In another folder  asks which (made if missing)
