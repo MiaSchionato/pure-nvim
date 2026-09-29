@@ -32,9 +32,12 @@ For questions that write nothing: "what does this do?", "why this error?",
 is written. In visual mode the question is about the selection.
 
 The title shows what Claude is doing and the seconds since you asked
-(`thinking… 3s`). Each answer ends with its time, small and grey on the
-right (not copied with `y`); when done, the title has the window's total,
-follow-ups included (`ask 8.2s`).
+(`thinking… 3s`). Each answer ends with its time and tokens, small and
+grey on the right (not copied with `y`): `5.4s · 5.2k↑ 40↓`, tokens sent
+(the note and the instructions included, which is most of it) and
+received. When done, the title has the window's totals, follow-ups
+included. Writing into the buffer and actions that notify say their tokens
+in the notification.
 
 In the window:
 

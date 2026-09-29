@@ -256,6 +256,14 @@ local function command(args)
   return vim.list_extend({ exe }, args)
 end
 
+--- Tokens as the windows and notifications show them: "12.3k↑ 340↓"
+--- (sent, context included; received). '' when unknown.
+local function tokens(usage)
+  if not usage or ((usage.input or 0) == 0 and (usage.output or 0) == 0) then return '' end
+  local function n(v) return v >= 1000 and ('%.1fk'):format(v / 1000) or tostring(v) end
+  return n(usage.input or 0) .. '↑ ' .. n(usage.output or 0) .. '↓'
+end
+
 --- Stop a running process. On Windows kills the whole process tree.
 local function kill(obj)
   if vim.fn.has('win32') == 1 and obj.pid then
@@ -351,7 +359,11 @@ local function runClaude(opts, model)
       flush()
       finished = true
       if result and not result.is_error then
-        return opts.on_done(nil, result.result or table.concat(text), session)
+        local u = result.usage or {}
+        return opts.on_done(nil, result.result or table.concat(text), session, {
+          input = (u.input_tokens or 0) + (u.cache_creation_input_tokens or 0) + (u.cache_read_input_tokens or 0),
+          output = u.output_tokens or 0,
+        })
       end
       local why = result and (result.result or result.subtype)
         or vim.trim(table.concat(err_text))
@@ -421,7 +433,7 @@ local function runOllama(opts, model)
     end
   end
 
-  local ollama_err = nil
+  local ollama_err, ollama_usage = nil, nil
   local function event(line)
     line = line:gsub('\r$', '')
     if vim.trim(line) == '' then return end
@@ -431,6 +443,9 @@ local function runOllama(opts, model)
     if ev.error then
       ollama_err = ev.error
       return
+    end
+    if ev.done then
+      ollama_usage = { input = ev.prompt_eval_count or 0, output = ev.eval_count or 0 }
     end
 
     local piece = nil
@@ -500,7 +515,7 @@ local function runOllama(opts, model)
         ollama_sessions[session_id] = nil
       end
 
-      opts.on_done(nil, full_text, session_id)
+      opts.on_done(nil, full_text, session_id, ollama_usage)
     end)
   end)
 
@@ -716,7 +731,7 @@ local function askInto(w, question, prompt, opts)
       if state ~= 'writing…' then setState('writing…') end
       w.append(s)
     end,
-    on_done = function(err, text, session)
+    on_done = function(err, text, session, usage)
       stopTimer()
       if err then
         if not stopped then
@@ -731,15 +746,24 @@ local function askInto(w, question, prompt, opts)
       -- This answer's time, small at its end (not text: y does not copy it);
       -- the window's total, follow-ups included, in the title.
       w.total = (w.total or 0) + (vim.uv.hrtime() - t0) / 1e9
+      if usage then
+        w.tokens = w.tokens or { input = 0, output = 0 }
+        w.tokens.input = w.tokens.input + (usage.input or 0)
+        w.tokens.output = w.tokens.output + (usage.output or 0)
+      end
+      local used = tokens(usage)
       if w.valid() then
         -- On the answer's last line of text: the empty line after it is
         -- rewritten when a follow-up is appended, and would lose the mark.
         local last_row = math.max(vim.api.nvim_buf_line_count(w.buf) - 2, 0)
         pcall(vim.api.nvim_buf_set_extmark, w.buf, ns, last_row, 0, {
-          virt_text = { { elapsed(true), 'Comment' } }, virt_text_pos = 'right_align',
+          virt_text = { { elapsed(true) .. (used ~= '' and (' · ' .. used) or ''), 'Comment' } },
+          virt_text_pos = 'right_align',
         })
       end
-      w.title(opts.kind .. (' %.1fs'):format(w.total) .. ' · a: follow up, y: copy, q: close')
+      local total_used = tokens(w.tokens)
+      w.title(opts.kind .. (' %.1fs'):format(w.total) .. (total_used ~= '' and (' · ' .. total_used) or '')
+        .. ' · a: follow up, y: copy, q: close')
       w.session = session
       w.answer = text
       addHistory(opts.kind, question, text, session, extra.model)
@@ -902,7 +926,7 @@ function M.write(instruction, range, extra)
         local at = vim.api.nvim_buf_get_extmark_by_id(buf, ns, ghost, {})
         pcall(vim.api.nvim_buf_set_extmark, buf, ns, at[1] or ghost_row, 0, { id = ghost, virt_lines = shown })
       end,
-      on_done = function(err, text)
+      on_done = function(err, text, _, usage)
         if not vim.api.nvim_buf_is_valid(buf) then return end
         local at = vim.api.nvim_buf_get_extmark_by_id(buf, ns, a_mark, {})[1]
         clear()
@@ -920,7 +944,9 @@ function M.write(instruction, range, extra)
         end
         addHistory('write', extra.label or q, text, nil, extra.model)
         if extra.write then vim.cmd('silent! checktime') end
-        vim.notify(('%s: %d line%s written (u undoes)'):format(m_label, #lines, #lines == 1 and '' or 's'))
+        local used = tokens(usage)
+        vim.notify(('%s: %d line%s written (u undoes)%s'):format(m_label, #lines, #lines == 1 and '' or 's',
+          used ~= '' and (' · ' .. used) or ''))
       end,
     })
   end
@@ -1178,12 +1204,13 @@ function M.runAction(a, ctx)
       cwd = extra.cwd,
       dirs = extra.dirs,
       on_tool = function(name) used[name] = (used[name] or 0) + 1 end,
-      on_done = function(err, text)
+      on_done = function(err, text, _, usage)
         vim.cmd('silent! checktime')
         if err == 'stopped' then return end
         if err then return vim.notify('Claude: ' .. a.description .. ': ' .. err, vim.log.levels.ERROR) end
         addHistory('action', a.description, text)
-        vim.notify('Claude · ' .. a.description .. '\n' .. vim.trim(text))
+        local spent = tokens(usage)
+        vim.notify('Claude · ' .. a.description .. (spent ~= '' and (' · ' .. spent) or '') .. '\n' .. vim.trim(text))
       end,
     })
   end
