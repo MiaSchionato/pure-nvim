@@ -8,10 +8,16 @@ local fold_group = vim.api.nvim_create_augroup("PureFoldingAuto", { clear = true
 local function plainMarkdown(line)
     local box, rest = line:match("^[-*] %[(.)%] (.*)$")
     local icon = box and (box == " " and "󰄱 " or "󰄲 ") or ""
-    -- The task's own text may hold escaped brackets: \[1\].
-    local task = rest and rest:match("^%[(.-)%]%(https://app%.todoist%.com/app/task/")
-    if task then
-        return icon .. task:gsub("\\([%[%]])", "%1")
+    -- A task with a [[link]] is written as its text and then [↗](url).
+    local linked = rest and rest:match("^(.-)%s*%[↗%]%(https://app%.todoist%.com/app/task/")
+    if linked and linked:find("[[", 1, true) then
+        rest = linked
+    else
+        -- The task's own text may hold escaped brackets: \[1\].
+        local task = rest and rest:match("^%[(.-)%]%(https://app%.todoist%.com/app/task/")
+        if task then
+            return icon .. task:gsub("\\([%[%]])", "%1")
+        end
     end
     line = (box and (icon .. rest) or line)
         :gsub("%[%[([^%]|]-)|([^%]]-)%]%]", "%2")  -- [[target|alias]]

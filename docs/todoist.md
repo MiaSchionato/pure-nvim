@@ -165,6 +165,18 @@ never overwrites:
 If a begin marker has no end marker, that block is left alone (so a broken
 marker can never swallow the rest of the note).
 
+**Links to notes in a task.** A task whose text has a `[[wikilink]]`
+("Estudar [[Capítulo 3]]") is written as its text, with the link to Todoist
+as an arrow after it, since a link cannot sit inside another link's text:
+
+```
+- [ ] Estudar [[Capítulo 3]] [↗](https://app.todoist.com/app/task/123) · 2026-09-30
+```
+
+`<CR>` (or `K`) on the `[[note]]` opens it, in Neovim and in Obsidian; on the
+`↗`, the task in Todoist. In the `:Todoist` list, `<CR>` on the `[[note]]`
+opens it too. Other tasks keep the usual form, their text as the link.
+
 **Folded on open.** When a note with a synced list opens in a window, each
 task with subtasks starts folded to its own line (the fold shows just the
 task, without the link, date or project). `<leader>zz` opens one,
