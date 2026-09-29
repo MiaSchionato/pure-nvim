@@ -125,3 +125,6 @@ vim.g.pure_trash_cleanup = true
 -- without opening it, so it is there before it is first opened. false: only
 -- when it is opened (d on the dashboard, <leader>nt).
 vim.g.pure_daily_on_start = true
+-- vim.g.neovide_transparency = 1
+vim.g.neovide_normal_opacity = 1
+
