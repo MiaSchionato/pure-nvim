@@ -54,9 +54,10 @@ answer, never change them.
 | `<leader>ac` | review the code (or the selection) in the window: bugs, risky cases, simplifications, with line numbers |
 | `<leader>ar` | the last request again, with the context of now (another selection, another file) |
 | `<leader>ah` | past answers of this session, in the picker; opening one allows follow-ups |
+| `<leader>am` | select model: switch on the fly between Ollama (local) and Claude (cloud) |
 | `<leader>as` | stop everything running |
 | `<leader>ax` | the actions of the vault's `claude` folder (below) |
-| `<leader>ab` | run the ```` ```claude ```` block under the cursor (again) |
+| `<leader>ab` | run the ```` ```claude ```` or ```` ```llm ```` block under the cursor (again) |
 
 ## Actions: `<leader>ax`
 
@@ -189,6 +190,7 @@ Options, as the first lines of the block:
 |---|---|
 | `when: sunday` | not before that weekday (English or Portuguese: `domingo`, `sexta`…). In a weekly note (`2026-W39`), the weekday of that note's week |
 | `run: manual` | never on its own, only with `<leader>ab` |
+| `model: ...` | specific model for this block (e.g. `qwen2.5-coder:14b` or `haiku`) |
 
 It never runs:
 
@@ -202,19 +204,38 @@ It never runs:
 The note is saved after the answer is written, unless it had other unsaved
 changes by then.
 
+## Switch models on the fly: `<leader>am`
+
+Press `<leader>am` (or run `:ClaudeModel` / `:LLMModel`) to open the model selector.
+It lists:
+- **Local Ollama models**: automatically discovered from your running Ollama instance (`http://localhost:11434`), such as `qwen2.5-coder:14b` or `gemma4:26b`;
+- **Claude cloud models**: `default`, `sonnet`, `haiku`, `opus`;
+- **Custom model**: type any model name.
+
+Your selection is remembered across Neovim sessions (saved in Neovim's state cache).
+You can also set a model directly with arguments:
+```vim
+:ClaudeModel ollama:qwen2.5-coder:14b
+:ClaudeModel claude:sonnet
+```
+
 ## Settings
 
 ```lua
-vim.g.pure_claude_model = 'sonnet'  -- default: the claude command's own
-vim.g.pure_claude_cmd = 'claude'    -- the command, if not in the PATH
-vim.g.pure_claude_blocks = false    -- blocks run only with <leader>ab
+vim.g.pure_claude_model = nil              -- startup fallback if no state saved (e.g. 'ollama:qwen2.5-coder:14b' or 'sonnet')
+vim.g.pure_ollama_url = 'http://localhost:11434' -- Ollama API endpoint
+vim.g.pure_claude_cmd = 'claude'           -- Claude CLI command, if not in the PATH
+vim.g.pure_claude_blocks = false           -- blocks run only with <leader>ab
 ```
 
 ## Notes
 
-- The requests use `claude -p` (no interactive session). The prompt goes on
+- Claude requests use `claude -p` (no interactive session). The prompt goes on
   stdin; the answer is read as it streams (`--output-format stream-json`).
+- Ollama requests stream via Ollama's `/api/chat` endpoint using `curl`.
+  Conversation history is kept per window session so follow-ups with `a` work
+  seamlessly with local models too.
 - Writes into the buffer run without tools (faster); asks, reviews and
   blocks may read files, never write them or run commands.
 - On Windows, an npm install (`claude.cmd`) is run through `cmd.exe`; the
-  native install (`claude.exe`) directly.
+  native install (`claude.exe`) directly. Process trees are cleaned up reliably on stop.

@@ -15,6 +15,8 @@
 --    <leader>ac   review the code (or the selection) in the window.
 --    <leader>ar   the last request again, with the current context.
 --    <leader>ah   past answers.
+--    <leader>am   select model: switch on the fly between Ollama (local)
+--                 and Claude (cloud).
 --    <leader>as   stop what is running.
 --    <leader>ab   run the ```claude block under the cursor again.
 --    <leader>ax   the actions: markdown files of the vault's claude/ folder (see
@@ -42,7 +44,8 @@
 --  week after, a monthly in its month or the month after). For these
 --  requests Claude can read the vault (Read, Grep, Glob), never write to it.
 --
---    vim.g.pure_claude_model = nil     the claude command's default model
+--    vim.g.pure_claude_model = nil     the default model (e.g. 'ollama:qwen2.5-coder:14b')
+--    vim.g.pure_ollama_url = nil       Ollama API URL (default 'http://localhost:11434')
 --    vim.g.pure_claude_cmd = 'claude'  the command
 --    vim.g.pure_claude_blocks = true   false: blocks run only with <leader>ab
 -- =============================================================================
@@ -57,7 +60,188 @@ local running = {} -- id -> function that stops it
 local last        -- the last request: { kind, instruction, visual }
 
 -- -----------------------------------------------------------------------------
---  Running claude
+--  Model configuration and persistence
+-- -----------------------------------------------------------------------------
+
+local state_file = vim.fn.stdpath('state') .. '/pure_claude_model'
+
+local function loadState()
+  local ok, lines = pcall(vim.fn.readfile, state_file)
+  if ok and lines and lines[1] and vim.trim(lines[1]) ~= '' then
+    return vim.trim(lines[1])
+  end
+  return nil
+end
+
+local function saveState(id)
+  pcall(function()
+    vim.fn.mkdir(vim.fs.dirname(state_file), 'p')
+    local f = io.open(state_file, 'w')
+    if f then
+      f:write(id)
+      f:close()
+    end
+  end)
+end
+
+local active_model_id = loadState() or vim.g.pure_claude_model or 'claude:default'
+
+--- Parse a model string into { backend = 'ollama'|'claude', model = string|nil, id = string, name = string }
+local function parseModel(spec)
+  local target = spec or active_model_id
+  if not target or target == '' or target == 'default' then
+    return { backend = 'claude', model = nil, id = 'claude:default', name = 'claude' }
+  end
+
+  if target:match('^ollama:') then
+    local m = target:sub(8)
+    return { backend = 'ollama', model = m, id = target, name = m }
+  elseif target:match('^claude:') then
+    local m = target:sub(8)
+    local model = (m == 'default' or m == '') and nil or m
+    return { backend = 'claude', model = model, id = target, name = model or 'claude' }
+  end
+
+  if target == 'sonnet' or target == 'haiku' or target == 'opus' or target:match('^claude%-') then
+    return { backend = 'claude', model = target, id = 'claude:' .. target, name = target }
+  end
+
+  if target:find(':') or target:match('^qwen') or target:match('^gemma') or target:match('^llama')
+    or target:match('^deepseek') or target:match('^mistral') or target:match('^phi') then
+    return { backend = 'ollama', model = target, id = 'ollama:' .. target, name = target }
+  end
+
+  return { backend = 'claude', model = target, id = 'claude:' .. target, name = target }
+end
+
+local function modelLabel(spec)
+  local m = parseModel(spec)
+  if m.backend == 'ollama' then
+    return m.name
+  end
+  return m.name == 'claude' and 'Claude' or ('Claude ' .. m.name)
+end
+
+function M.getActiveModel()
+  return parseModel()
+end
+
+function M.modelName()
+  return parseModel().name
+end
+
+function M.setModel(id)
+  if not id or vim.trim(id) == '' then return end
+  local parsed = parseModel(vim.trim(id))
+  active_model_id = parsed.id
+  saveState(active_model_id)
+  vim.notify(('Claude/LLM: active model set to [%s] %s'):format(parsed.backend, parsed.name))
+end
+
+--- Fetch local Ollama models asynchronously from /api/tags
+local function fetchOllamaModels(cb)
+  local url = (vim.g.pure_ollama_url or 'http://localhost:11434') .. '/api/tags'
+  local ok = pcall(vim.system, { 'curl', '-s', '-m', '2', url }, { text = true }, function(res)
+    vim.schedule(function()
+      if res.code ~= 0 or not res.stdout or res.stdout == '' then
+        return cb({}, false)
+      end
+      local parse_ok, data = pcall(vim.json.decode, res.stdout)
+      if not parse_ok or not data or not data.models then
+        return cb({}, false)
+      end
+      local models = {}
+      for _, m in ipairs(data.models) do
+        if m.name then table.insert(models, m.name) end
+      end
+      cb(models, true)
+    end)
+  end)
+  if not ok then cb({}, false) end
+end
+
+--- Interactive model selector (fzf / pure.fuzzyUtils or vim.ui.select fallback)
+function M.selectModel()
+  fetchOllamaModels(function(ollama_models, online)
+    local choices = {}
+    local model_map = {}
+    local current = parseModel()
+
+    -- Ollama models
+    if #ollama_models > 0 then
+      for _, name in ipairs(ollama_models) do
+        local id = 'ollama:' .. name
+        local is_active = (current.id == id or (current.backend == 'ollama' and current.model == name))
+        local mark = is_active and '● ' or '  '
+        local suffix = is_active and ' (active)' or ''
+        local line = ('%s[ollama] %-28s%s\t%s'):format(mark, name, suffix, id)
+        table.insert(choices, line)
+        model_map[line] = id
+      end
+    else
+      local status_text = online and '(no models installed in Ollama)'
+        or ('(Ollama offline at ' .. (vim.g.pure_ollama_url or 'localhost:11434') .. ')')
+      local line = ('  [ollama] %-28s\t'):format(status_text)
+      table.insert(choices, line)
+    end
+
+    -- Claude presets
+    local claude_presets = {
+      { id = 'claude:default', name = 'default (Claude CLI)' },
+      { id = 'claude:sonnet',  name = 'sonnet (Claude 3.7 / 3.5)' },
+      { id = 'claude:haiku',   name = 'haiku (Claude 3.5)' },
+      { id = 'claude:opus',    name = 'opus (Claude 3)' },
+    }
+    for _, c in ipairs(claude_presets) do
+      local is_active = (current.id == c.id)
+      local mark = is_active and '● ' or '  '
+      local suffix = is_active and ' (active)' or ''
+      local line = ('%s[claude] %-28s%s\t%s'):format(mark, c.name, suffix, c.id)
+      table.insert(choices, line)
+      model_map[line] = c.id
+    end
+
+    -- Custom model option
+    local custom_line = '  [custom] Enter custom model name…\t__custom__'
+    table.insert(choices, custom_line)
+    model_map[custom_line] = '__custom__'
+
+    local function applySelection(id)
+      if not id or id == '' then return end
+      if id == '__custom__' then
+        vim.ui.input({ prompt = ' Model (e.g. ollama:qwen2.5-coder:14b or claude:sonnet): ' }, function(input)
+          if input and vim.trim(input) ~= '' then
+            M.setModel(vim.trim(input))
+          end
+        end)
+        return
+      end
+      M.setModel(id)
+    end
+
+    local ok_fz, fuzzy = pcall(require, 'pure.fuzzyUtils')
+    if ok_fz and fuzzy.pickList then
+      fuzzy.pickList(choices, {
+        title = ' LLM Models (current: ' .. current.name .. ') ',
+        fzf = [[--delimiter='\t' --with-nth=1]],
+      }, function(selected_line)
+        applySelection(model_map[selected_line or ''])
+      end)
+    else
+      vim.ui.select(choices, {
+        prompt = 'Select LLM Model (current: ' .. current.name .. '):',
+        format_item = function(item)
+          return (item:match('^(.-)\t') or item)
+        end,
+      }, function(selected)
+        if selected then applySelection(model_map[selected]) end
+      end)
+    end
+  end)
+end
+
+-- -----------------------------------------------------------------------------
+--  Process execution
 -- -----------------------------------------------------------------------------
 
 --- The claude executable with `args`, or nil when it is not installed.
@@ -72,9 +256,7 @@ local function command(args)
   return vim.list_extend({ exe }, args)
 end
 
---- Stop a running claude. On Windows the whole process tree: when claude
---- is npm's claude.cmd, killing it stopped only cmd.exe and left node
---- working (and using the CPU) behind it.
+--- Stop a running process. On Windows kills the whole process tree.
 local function kill(obj)
   if vim.fn.has('win32') == 1 and obj.pid then
     pcall(vim.system, { 'taskkill', '/T', '/F', '/PID', tostring(obj.pid) })
@@ -83,21 +265,12 @@ local function kill(obj)
   end
 end
 
---- Run one request. `opts`: prompt, tools (list), cwd, resume (session id),
---- keep (keep the session, to follow up), model, dirs (more folders it may
---- work in), write (edits files: accepted without asking), on_text(chunk),
---- on_tool(name), on_done(err, text, session). Callbacks run on the main
---- loop. Returns a function that stops it.
-
-
-
--- CLAUDE CODE FUNCTION
-local function run(opts)
+--- Run with Claude Code CLI
+local function runClaude(opts, model)
   local tools = table.concat(opts.tools or {}, ',')
   local args = { '-p', '--output-format', 'stream-json', '--verbose', '--include-partial-messages',
     '--tools', tools }
   if tools ~= '' then vim.list_extend(args, { '--allowedTools', tools }) end
-  local model = opts.model or vim.g.pure_claude_model
   if model then vim.list_extend(args, { '--model', model }) end
   if opts.write then vim.list_extend(args, { '--permission-mode', 'acceptEdits' }) end
   for _, d in ipairs(opts.dirs or {}) do vim.list_extend(args, { '--add-dir', d }) end
@@ -115,9 +288,6 @@ local function run(opts)
 
   local pending, text, session, result, err_text = '', {}, nil, nil, {}
   local finished, stopped = false, false
-  -- The answer comes in many small pieces; the screen is updated with them
-  -- at most every 60 ms, not once per piece (each redraws the window and
-  -- its markdown).
   local queued, flush_pending = {}, false
   local function flush()
     flush_pending = false
@@ -139,14 +309,12 @@ local function run(opts)
     session = ev.session_id or session
     if ev.type == 'stream_event' and ev.event then
       local e = ev.event
-      -- Only the answer's own text: not what goes on around a tool call.
       if e.type == 'content_block_delta' and e.delta and e.delta.type == 'text_delta' and not ev.parent_tool_use_id then
         table.insert(text, e.delta.text)
         emit(e.delta.text)
       elseif e.type == 'content_block_start' and e.content_block and e.content_block.type == 'tool_use' then
         if opts.on_tool then opts.on_tool(e.content_block.name) end
       elseif e.type == 'message_start' and #text > 0 then
-        -- A new turn after a tool call: keep its text apart from the last.
         table.insert(text, '\n\n')
         emit('\n\n')
       end
@@ -163,10 +331,6 @@ local function run(opts)
       if not data then return end
       vim.schedule(function()
         if finished then return end
-        -- Split with plain finds: the first line lists every command, skill
-        -- and MCP server installed (tens of KB), and the patterns used here
-        -- before ('([^\n]*)\n', '[^\n]*$') retried from every byte of a line
-        -- with no newline yet: quadratic, seconds of CPU on the main loop.
         pending = pending .. data
         local start = 1
         while true do
@@ -209,101 +373,165 @@ local function run(opts)
   return stop
 end
 
--- A adaptation to local llm made by gemini, review it
--- local function run(opts)
---   local model = opts.model or vim.g.pure_claude_model or 'qwen2.5-coder:7b'
---
---   local payload = vim.json.encode({
---     model = model,
---     messages = { { role = 'user', content = opts.prompt } },
---     stream = true,
---   })
---
---   local cmd = {
---     'curl', '-s', '-N', '-X', 'POST', 'http://localhost:11434/api/chat',
---     '-H', 'Content-Type: application/json',
---     '-d', payload
---   }
---
---   local pending, text, err_text = '', {}, {}
---   local finished, stopped = false, false
---   local queued, flush_pending = {}, false
---
---   local function flush()
---     flush_pending = false
---     if #queued == 0 or not opts.on_text then return end
---     local chunk = table.concat(queued)
---     queued = {}
---     opts.on_text(chunk)
---   end
---
---   local function emit(piece)
---     table.insert(queued, piece)
---     if not flush_pending then
---       flush_pending = true
---       vim.defer_fn(function() if not finished then flush() end end, 60)
---     end
---   end
---
---   local function event(line)
---     local ok, ev = pcall(vim.json.decode, line)
---     if not ok or type(ev) ~= 'table' then return end
---
---     if ev.message and ev.message.content then
---       table.insert(text, ev.message.content)
---       emit(ev.message.content)
---     end
---   end
---
---   local id = tostring(vim.uv.hrtime())
---   local ok, obj = pcall(vim.system, cmd, {
---     stdout = function(_, data)
---       if not data then return end
---       vim.schedule(function()
---         if finished then return end
---         pending = pending .. data
---         local start = 1
---         while true do
---           local nl = pending:find('\n', start, true)
---           if not nl then break end
---           event(pending:sub(start, nl - 1))
---           start = nl + 1
---         end
---         pending = pending:sub(start)
---       end)
---     end,
---     stderr = function(_, data) if data then table.insert(err_text, data) end end,
---   }, function(res)
---     vim.schedule(function()
---       running[id] = nil
---       if finished then return end
---       if pending ~= '' then event(pending) end
---       flush()
---       finished = true
---       if res.code == 0 then
---         return opts.on_done(nil, table.concat(text), nil)
---       end
---       local why = vim.trim(table.concat(err_text))
---       if stopped then why = 'stopped' end
---       opts.on_done(why ~= '' and why or ('curl exited with ' .. res.code), table.concat(text), nil)
---     end)
---   end)
---
---   if not ok then
---     vim.schedule(function() opts.on_done('Could not run curl') end)
---     return function() end
---   end
---
---   local function stop()
---     if running[id] then
---       stopped = true
---       pcall(function() obj:kill(15) end)
---     end
---   end
---
---   running[id] = stop
---   return stop
--- end
+local ollama_sessions = {} -- session_id -> { messages = ... }
+
+--- Run with local Ollama API
+local function runOllama(opts, model)
+  local url = vim.g.pure_ollama_url or 'http://localhost:11434'
+  local session_id = opts.resume or tostring(vim.uv.hrtime())
+  local messages = {}
+
+  if opts.resume and ollama_sessions[opts.resume] then
+    for _, m in ipairs(ollama_sessions[opts.resume].messages or {}) do
+      table.insert(messages, { role = m.role, content = m.content })
+    end
+  end
+  table.insert(messages, { role = 'user', content = opts.prompt })
+
+  local payload = vim.json.encode({
+    model = model,
+    messages = messages,
+    stream = true,
+  })
+
+  local cmd = {
+    'curl', '-s', '-N', '-X', 'POST',
+    url .. '/api/chat',
+    '-H', 'Content-Type: application/json',
+    '-d', '@-',
+  }
+
+  local pending, text, err_text = '', {}, {}
+  local finished, stopped = false, false
+  local queued, flush_pending = {}, false
+
+  local function flush()
+    flush_pending = false
+    if #queued == 0 or not opts.on_text then return end
+    local chunk = table.concat(queued)
+    queued = {}
+    opts.on_text(chunk)
+  end
+
+  local function emit(piece)
+    table.insert(queued, piece)
+    if not flush_pending then
+      flush_pending = true
+      vim.defer_fn(function() if not finished then flush() end end, 60)
+    end
+  end
+
+  local ollama_err = nil
+  local function event(line)
+    line = line:gsub('\r$', '')
+    if vim.trim(line) == '' then return end
+    local ok, ev = pcall(vim.json.decode, line)
+    if not ok or type(ev) ~= 'table' then return end
+
+    if ev.error then
+      ollama_err = ev.error
+      return
+    end
+
+    local piece = nil
+    if ev.message then
+      piece = ev.message.content
+      if (not piece or piece == '') and ev.message.thinking then
+        piece = ev.message.thinking
+      end
+    end
+
+    if piece and piece ~= '' then
+      table.insert(text, piece)
+      emit(piece)
+    end
+  end
+
+  local id = tostring(vim.uv.hrtime())
+  local ok, obj = pcall(vim.system, cmd, {
+    stdin = payload,
+    stdout = function(_, data)
+      if not data then return end
+      vim.schedule(function()
+        if finished then return end
+        pending = pending .. data
+        local start = 1
+        while true do
+          local nl = pending:find('\n', start, true)
+          if not nl then break end
+          event(pending:sub(start, nl - 1))
+          start = nl + 1
+        end
+        pending = pending:sub(start)
+      end)
+    end,
+    stderr = function(_, data) if data then table.insert(err_text, data) end end,
+  }, function(res)
+    vim.schedule(function()
+      running[id] = nil
+      if finished then return end
+      if pending ~= '' then event(pending) end
+      flush()
+      finished = true
+
+      if stopped then
+        return opts.on_done('stopped', table.concat(text), session_id)
+      end
+
+      if ollama_err then
+        return opts.on_done('Ollama: ' .. tostring(ollama_err), table.concat(text), session_id)
+      end
+
+      if res.code ~= 0 then
+        local why = vim.trim(table.concat(err_text))
+        if res.code == 7 then
+          why = 'Could not connect to Ollama at ' .. url .. ' (is Ollama running?)'
+        elseif why == '' then
+          why = 'curl exited with code ' .. res.code
+        end
+        return opts.on_done(why, table.concat(text), session_id)
+      end
+
+      local full_text = table.concat(text)
+      if session_id and (opts.keep or opts.resume) then
+        table.insert(messages, { role = 'assistant', content = full_text })
+        ollama_sessions[session_id] = { messages = messages }
+      else
+        ollama_sessions[session_id] = nil
+      end
+
+      opts.on_done(nil, full_text, session_id)
+    end)
+  end)
+
+  if not ok then
+    vim.schedule(function() opts.on_done('Could not run curl for Ollama: ' .. tostring(obj)) end)
+    return function() end
+  end
+
+  local function stop()
+    if running[id] then
+      stopped = true
+      kill(obj)
+    end
+  end
+  running[id] = stop
+  return stop
+end
+
+--- Run one request. `opts`: prompt, tools (list), cwd, resume (session id),
+--- keep (keep the session, to follow up), model, dirs (more folders it may
+--- work in), write (edits files: accepted without asking), on_text(chunk),
+--- on_tool(name), on_done(err, text, session). Callbacks run on the main
+--- loop. Returns a function that stops it.
+local function run(opts)
+  local active = parseModel(opts.model)
+  if active.backend == 'ollama' then
+    return runOllama(opts, active.model)
+  else
+    return runClaude(opts, active.model)
+  end
+end
 
 function M.stop()
   local n = 0
@@ -311,7 +539,8 @@ function M.stop()
     stop()
     n = n + 1
   end
-  vim.notify(n > 0 and 'Claude: stopped' or 'Claude: nothing running')
+  local m_label = modelLabel()
+  vim.notify(n > 0 and (m_label .. ': stopped') or (m_label .. ': nothing running'))
 end
 
 -- -----------------------------------------------------------------------------
@@ -400,25 +629,33 @@ local ASK_RULES = 'You are called from inside Neovim with the user\'s current bu
   .. 'Markdown is fine; the answer is shown in a small floating window. '
   .. 'You may read other files of the project, never change them.'
 
-local function addHistory(kind, question, answer, session)
-  table.insert(history, { kind = kind, question = question, answer = answer, session = session, time = os.time() })
+local function addHistory(kind, question, answer, session, model_spec)
+  table.insert(history, {
+    kind = kind,
+    question = question,
+    answer = answer,
+    session = session,
+    model = modelLabel(model_spec),
+    time = os.time(),
+  })
   if #history > 50 then table.remove(history, 1) end
 end
 
 --- A window for an answer: `question` on top, then the answer as it comes.
 --- Returns an object to write into it.
-local function answerWindow(title)
-  local win, buf = require('configs.functions').createWindow(' Claude · ' .. title .. ' ', 0.7)
+local function answerWindow(title, model_spec)
+  local m_label = modelLabel(model_spec)
+  local win, buf = require('configs.functions').createWindow(' ' .. m_label .. ' · ' .. title .. ' ', 0.7)
   vim.bo[buf].filetype = 'markdown'
   vim.bo[buf].bufhidden = 'wipe'
   vim.b[buf].pure_mdview = true
   vim.wo[win].wrap, vim.wo[win].linebreak = true, true
   vim.wo[win].conceallevel = 2
-  local w = { win = win, buf = buf }
+  local w = { win = win, buf = buf, model = model_spec }
 
   function w.valid() return vim.api.nvim_win_is_valid(win) and vim.api.nvim_buf_is_valid(buf) end
   function w.title(s)
-    if w.valid() then pcall(vim.api.nvim_win_set_config, win, { title = ' Claude · ' .. s .. ' ' }) end
+    if w.valid() then pcall(vim.api.nvim_win_set_config, win, { title = ' ' .. modelLabel(w.model) .. ' · ' .. s .. ' ' }) end
   end
   --- Append `s` (may hold newlines) at the end, following it with the
   --- cursor when the cursor is on the last line.
@@ -440,7 +677,7 @@ end
 local function askInto(w, question, prompt, opts)
   local answer = {}
   local stopped = false
-  -- The seconds since the question went, next to what Claude is doing.
+  -- The seconds since the question went, next to what the model is doing.
   local t0, state = vim.uv.hrtime(), 'thinking…'
   local function elapsed(decimals)
     local secs = (vim.uv.hrtime() - t0) / 1e9
@@ -463,6 +700,7 @@ local function askInto(w, question, prompt, opts)
   end))
   setState('thinking…')
   local extra = opts.extra or {}
+  local m_label = modelLabel(extra.model)
   local stop = run({
     prompt = prompt,
     tools = extra.tools or READ_TOOLS,
@@ -483,7 +721,7 @@ local function askInto(w, question, prompt, opts)
       if err then
         if not stopped then
           w.append('\n\n> **Error:** ' .. err:gsub('\n', '\n> ') .. '\n')
-          if not w.valid() then vim.notify('Claude: ' .. err, vim.log.levels.ERROR) end
+          if not w.valid() then vim.notify(m_label .. ': ' .. err, vim.log.levels.ERROR) end
         end
         w.title((stopped and 'stopped' or 'error') .. ' ' .. elapsed(true))
         return
@@ -504,7 +742,7 @@ local function askInto(w, question, prompt, opts)
       w.title(opts.kind .. (' %.1fs'):format(w.total) .. ' · a: follow up, y: copy, q: close')
       w.session = session
       w.answer = text
-      addHistory(opts.kind, question, text, session)
+      addHistory(opts.kind, question, text, session, extra.model)
       if extra.write then vim.cmd('silent! checktime') end
     end,
   })
@@ -512,23 +750,24 @@ local function askInto(w, question, prompt, opts)
 end
 
 local function openAnswer(kind, question, prompt, cwd, preset, extra)
-  local w = answerWindow(kind)
+  local w = answerWindow(kind, extra and extra.model)
   vim.api.nvim_buf_set_lines(w.buf, 0, -1, false, { '## ' .. (question:gsub('\n', ' ')), '', '' })
   if preset then
     vim.api.nvim_buf_set_lines(w.buf, 2, -1, false, vim.split(preset, '\n', { plain = true }))
   end
 
   local o = { buffer = w.buf, nowait = true, silent = true }
+  local m_label = modelLabel(extra and extra.model)
   vim.keymap.set('n', 'q', function() pcall(vim.api.nvim_win_close, w.win, true) end, o)
   vim.keymap.set('n', '<Esc>', function() pcall(vim.api.nvim_win_close, w.win, true) end, o)
   vim.keymap.set('n', 'y', function()
     if not w.answer then return end
     vim.fn.setreg('+', w.answer)
     vim.fn.setreg('"', w.answer)
-    vim.notify('Claude: answer copied')
+    vim.notify(m_label .. ': answer copied')
   end, o)
   vim.keymap.set('n', 'a', function()
-    if not w.session then return vim.notify('Claude: wait for the answer first') end
+    if not w.session then return vim.notify(m_label .. ': wait for the answer first') end
     vim.ui.input({ prompt = ' Follow up: ' }, function(q)
       if not q or vim.trim(q) == '' or not w.valid() then return end
       vim.api.nvim_set_current_win(w.win)
@@ -587,6 +826,7 @@ local MARK = '<<<INSERT HERE>>>'
 
 --- An answer wrapped whole in one ``` fence: the inside only.
 local function unfence(text)
+  text = text:gsub('<think>.-</think>%s*', '')
   local lines = vim.split(vim.trim(text), '\n', { plain = true })
   if #lines >= 2 and lines[1]:match('^%s*```') and lines[#lines]:match('^%s*```%s*$') then
     return vim.list_slice(lines, 2, #lines - 1)
@@ -634,8 +874,9 @@ function M.write(instruction, range, extra)
       { end_row = last_row - 1, end_col = #(vim.api.nvim_buf_get_lines(buf, last_row - 1, last_row, false)[1] or ''),
         hl_group = 'Visual', hl_eol = true }) or nil
     local ghost_row = last_row - 1
+    local m_label = modelLabel(extra.model)
     local ghost = vim.api.nvim_buf_set_extmark(buf, ns, ghost_row, 0, {
-      virt_lines = { { { '  Claude is writing…', 'Comment' } } },
+      virt_lines = { { { ('  %s is writing…'):format(m_label), 'Comment' } } },
     })
     local streamed = ''
     local function clear()
@@ -666,9 +907,9 @@ function M.write(instruction, range, extra)
         local at = vim.api.nvim_buf_get_extmark_by_id(buf, ns, a_mark, {})[1]
         clear()
         if err == 'stopped' then return end
-        if err then return vim.notify('Claude: ' .. err, vim.log.levels.ERROR) end
+        if err then return vim.notify(m_label .. ': ' .. err, vim.log.levels.ERROR) end
         if not vim.bo[buf].modifiable then
-          return vim.notify('Claude: the buffer is not modifiable', vim.log.levels.WARN)
+          return vim.notify(m_label .. ': the buffer is not modifiable', vim.log.levels.WARN)
         end
         local lines = unfence(text)
         if not at then return end
@@ -677,9 +918,9 @@ function M.write(instruction, range, extra)
         else
           vim.api.nvim_buf_set_lines(buf, at, at + count, false, lines)
         end
-        addHistory('write', extra.label or q, text)
+        addHistory('write', extra.label or q, text, nil, extra.model)
         if extra.write then vim.cmd('silent! checktime') end
-        vim.notify(('Claude: %d line%s written (u undoes)'):format(#lines, #lines == 1 and '' or 's'))
+        vim.notify(('%s: %d line%s written (u undoes)'):format(m_label, #lines, #lines == 1 and '' or 's'))
       end,
     })
   end
@@ -689,11 +930,11 @@ end
 
 --- The last request again, with the context of now.
 function M.repeatLast()
-  if not last then return vim.notify('Claude: nothing to repeat yet') end
+  if not last then return vim.notify(modelLabel() .. ': nothing to repeat yet') end
   local range = selection()
   if last.kind == 'action' then
     local a = M._readAction(last.action)
-    if not a then return vim.notify('Claude: the last action is gone') end
+    if not a then return vim.notify(modelLabel() .. ': the last action is gone') end
     return M.runAction(a, { buf = vim.api.nvim_get_current_buf(), win = vim.api.nvim_get_current_win(), range = range })
   end
   if last.kind == 'write' then return M.write(last.instruction, range) end
@@ -705,11 +946,11 @@ end
 function M.history()
   local items = {}
   for i = #history, 1, -1 do table.insert(items, history[i]) end
-  if #items == 0 then return vim.notify('Claude: no answers yet') end
+  if #items == 0 then return vim.notify('Claude/LLM: no answers yet') end
   vim.ui.select(items, {
-    prompt = 'Claude answers',
+    prompt = 'Claude / Ollama answers',
     format_item = function(h)
-      return ('%s  %-6s %s'):format(os.date('%H:%M', h.time), h.kind, (h.question:gsub('\n', ' ')))
+      return ('%s  %-6s [%s] %s'):format(os.date('%H:%M', h.time), h.kind, h.model or 'Claude', (h.question:gsub('\n', ' ')))
     end,
   }, function(h)
     if not h then return end
@@ -1115,18 +1356,18 @@ vim.api.nvim_create_autocmd('BufWritePost', {
 
 local block_begin, block_end = '<!-- claude -->', '<!-- /claude -->'
 
---- Every ```claude block: { first, last (0-based fence rows), options, prompt }.
+--- Every ```claude or ```llm block: { first, last (0-based fence rows), options, prompt }.
 local function blocksIn(lines)
   local blocks, i = {}, 1
   while i <= #lines do
-    if lines[i]:match('^%s*```%s*claude%s*$') then
+    if lines[i]:match('^%s*```%s*claude%s*$') or lines[i]:match('^%s*```%s*llm%s*$') then
       local j = i + 1
       while j <= #lines and not lines[j]:match('^%s*```%s*$') do j = j + 1 end
       local options, body, head = {}, {}, true
       for k = i + 1, j - 1 do
         local key, value = lines[k]:match('^%s*(%a+)%s*:%s*(.-)%s*$')
-        if head and key and (key == 'when' or key == 'run') then
-          options[key] = value:lower()
+        if head and key and (key == 'when' or key == 'run' or key == 'model') then
+          options[key] = (key == 'model') and value or value:lower()
         else
           head = head and lines[k]:match('^%s*$') ~= nil
           table.insert(body, lines[k])
@@ -1152,7 +1393,7 @@ local function regionOf(lines, block)
   for r = row + 1, #lines - 1 do
     local text = vim.trim(lines[r + 1])
     if text == block_end then return { first = row, last = r } end
-    if text == block_begin or text:match('^```%s*claude') then break end
+    if text == block_begin or text:match('^```%s*claude') or text:match('^```%s*llm') then break end
   end
   return false
 end
@@ -1273,20 +1514,22 @@ local function runBlock(buf, block)
     .. ('Note: %s\nToday: %s\n%s\n\n<note>\n%s\n</note>\n\nRequest: %s'):format(shown,
       os.date('%Y-%m-%d, %A'), vaultHints(), table.concat(lines, '\n'), block.prompt)
 
+  local m_label = modelLabel(block.options.model)
   local mark = vim.api.nvim_buf_set_extmark(buf, ns, block.last, 0, {
-    virt_lines = { { { '  Claude is answering…', 'Comment' } } },
+    virt_lines = { { { ('  %s is answering…'):format(m_label), 'Comment' } } },
   })
   local tick = vim.b[buf].changedtick
   run({
     prompt = prompt,
     tools = READ_TOOLS,
+    model = block.options.model,
     cwd = cwd,
     on_done = function(err, text)
       block_running[id] = nil
       if not vim.api.nvim_buf_is_valid(buf) then return end
       local at = vim.api.nvim_buf_get_extmark_by_id(buf, ns, mark, {})
       pcall(vim.api.nvim_buf_del_extmark, buf, ns, mark)
-      if err then return vim.notify('Claude block: ' .. err, vim.log.levels.ERROR) end
+      if err then return vim.notify(m_label .. ' block: ' .. err, vim.log.levels.ERROR) end
       -- Find the block again (lines may have moved meanwhile).
       local now = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
       local target
@@ -1341,7 +1584,7 @@ function M.runBlockAtCursor()
       return runBlock(buf, b)
     end
   end
-  vim.notify('Claude: no ```claude block under the cursor')
+  vim.notify(modelLabel() .. ': no ```claude or ```llm block under the cursor')
 end
 
 vim.api.nvim_create_autocmd({ 'BufWinEnter', 'BufWritePost' }, {
@@ -1352,6 +1595,34 @@ vim.api.nvim_create_autocmd({ 'BufWinEnter', 'BufWritePost' }, {
 
 vim.api.nvim_create_user_command('ClaudeBlock', M.runBlockAtCursor, {
   desc = 'Run the ```claude block under the cursor (again)',
+})
+
+vim.api.nvim_create_user_command('ClaudeModel', function(opts)
+  if opts.args and vim.trim(opts.args) ~= '' then
+    M.setModel(vim.trim(opts.args))
+  else
+    M.selectModel()
+  end
+end, {
+  nargs = '?',
+  desc = 'Select or set the active LLM model (Ollama / Claude)',
+  complete = function()
+    return {
+      'claude:default', 'claude:sonnet', 'claude:haiku', 'claude:opus',
+      'ollama:qwen2.5-coder:14b', 'ollama:gemma4:26b',
+    }
+  end,
+})
+
+vim.api.nvim_create_user_command('LLMModel', function(opts)
+  if opts.args and vim.trim(opts.args) ~= '' then
+    M.setModel(vim.trim(opts.args))
+  else
+    M.selectModel()
+  end
+end, {
+  nargs = '?',
+  desc = 'Select or set the active LLM model (Ollama / Claude)',
 })
 
 M._blocksIn, M._due, M._unfence, M._run, M._extraContext = blocksIn, due, unfence, run, extraContext

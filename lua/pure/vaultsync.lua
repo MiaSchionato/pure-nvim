@@ -73,7 +73,6 @@ local function unresolved(dir)
   return left
 end
 
---- @param dir string
 --- @param res vim.SystemCompleted
 --- @return string
 local function output(res)
