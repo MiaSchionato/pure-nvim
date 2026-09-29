@@ -1,4 +1,26 @@
+local M = {}
+
 local mdGroup = vim.api.nvim_create_augroup("PureMarkdown", { clear = true})
+
+--- <C-l> in insert mode (mapped below): the last really misspelled word
+--- before the cursor on this line becomes the first spelling suggestion.
+function M.fixLastWord()
+  local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+  local line = vim.api.nvim_get_current_line()
+  local before = line:sub(1, col)
+  -- vim.spell.check gives { word, type, 1-based start col }; type 'bad'
+  -- only: 'rare', 'local' and 'caps' are left alone.
+  local last
+  for _, hit in ipairs(vim.spell.check(before)) do
+    if hit[2] == 'bad' then last = hit end
+  end
+  if not last then return vim.notify('No misspelled word before the cursor') end
+  local word, start = last[1], last[3] - 1
+  local fix = vim.fn.spellsuggest(word, 1)[1]
+  if not fix then return vim.notify('No suggestion for "' .. word .. '"') end
+  vim.api.nvim_buf_set_text(0, row - 1, start, row - 1, start + #word, { fix })
+  vim.api.nvim_win_set_cursor(0, { row, col + #fix - #word })
+end
 
 
 vim.api.nvim_create_autocmd("FileType", {
@@ -12,7 +34,9 @@ vim.api.nvim_create_autocmd("FileType", {
     -- Only enable languages whose word list is actually present. A missing one
     -- makes Neovim warn ('Cannot find word list "pt.utf-8.spl"') every single
     -- time a markdown buffer opens, and prompt to download it.
-    local wanted = { "pt_br", "en", "it" }
+    -- Brazilian Portuguese: with the region, European spellings ("facto")
+    -- are marked as regional words. vim.g.pure_spelllang overrides the list.
+    local wanted = vim.g.pure_spelllang or { "pt_br", "en", "it" }
     local available = {}
     for _, lang in ipairs(wanted) do
       local base = lang:gsub("_.*", "")   -- 'pt_br' looks for 'pt.<enc>.spl'
@@ -21,7 +45,13 @@ vim.api.nvim_create_autocmd("FileType", {
       end
     end
     vim.opt_local.spelllang = #available > 0 and available or { "en" }
-    -- vim.opt_local.complete:append("kspell")
+    -- Better suggestions: "best" ranks by closeness across the three
+    -- languages, and 9 keeps z= on one screen. camel checks each part of
+    -- camelCase words instead of flagging the whole word.
+    vim.opt_local.spellsuggest = "best,9"
+    vim.opt_local.spelloptions = "camel"
+    -- No "kspell" in 'complete': with autocomplete on, every word typed would
+    -- open a menu of dictionary words, and <CR> now takes its first item.
 
     -- Keep indentation
     vim.opt_local.autoindent = true
@@ -46,6 +76,21 @@ vim.api.nvim_create_autocmd("FileType", {
     vim.keymap.set("n", "<leader>dw", "zw", {buffer = true}) -- Dictionary Wrong (word)
     vim.keymap.set("n", "<leader>dp", "[s", {buffer = true}) -- Dictionary previous misspelled word
     vim.keymap.set("n", "<leader>dn", "]s", {buffer = true}) -- Dictionary next misspelled word
+    -- Autocorrect on demand: <C-l> in insert mode replaces the last misspelled
+    -- word before the cursor, on this line, with the first suggestion, and
+    -- the cursor stays where it was (moved by the length difference). Undo
+    -- (u) takes back just the correction, thanks to the <C-g>u around it.
+    -- Added for Improvment.md in the vault: a fix meant leaving insert mode.
+    --
+    -- The first version was <Esc>[s1z=`]a, which did not work well: [s also
+    -- stops on rare and regional words (many, with three languages on) and
+    -- "fixed" correct ones; with no bad word on the line it wrapped around
+    -- the file and changed a word far away; and leaving insert mode moved
+    -- the cursor. This only looks at this line, before the cursor, at words
+    -- that are really wrong.
+    vim.keymap.set("i", "<C-l>", function()
+      return "<C-g>u<Cmd>lua require('pure.render-md').fixLastWord()<CR><C-g>u"
+    end, { buffer = true, expr = true, desc = "Fix the last misspelled word" })
     vim.keymap.set("n", "<leader>tx", require('configs.functions').toggleCheckbox, { buffer = true, desc = "Alternar Checkbox" })
     -- Obsidian's extra states, in notes only: the Todoist list is markdown too
     -- (a buffer with buftype set), but Todoist knows just [ ] and [x].
@@ -56,3 +101,5 @@ vim.api.nvim_create_autocmd("FileType", {
   end
 })
 
+
+return M

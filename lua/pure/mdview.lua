@@ -7,7 +7,7 @@
 --  '-' inside a code block is never mistaken for a bullet.
 --
 --    # Heading         icon over the #s, coloured band across the line
---    - item            bullet per nesting level (● ○ ◆ ◇)
+--    - item            bullet per nesting level (• ◦ ▪ ▫, vim.g.pure_md_bullets)
 --    - [ ] / - [x]     checkbox icons; done items are dimmed
 --    > quote           bar instead of '>'
 --    ---               full-width line
@@ -45,7 +45,10 @@ local ns = vim.api.nvim_create_namespace('pure_mdview')
 local enabled = true
 
 local heading_icons = { '󰲡 ', '󰲣 ', '󰲥 ', '󰲧 ', '󰲩 ', '󰲫 ' }
-local bullets = { '●', '○', '◆', '◇' }
+-- Smaller glyphs than the old ● ○ ◆ ◇, which looked heavy next to the text
+-- (asked for in the vault's Improvment.md). vim.g.pure_md_bullets overrides
+-- them, one per nesting level, repeating after the last.
+local bullets = vim.g.pure_md_bullets or { '•', '◦', '▪', '▫' }
 local checkbox = { unchecked = '󰄱', checked = '󰄲' }
 -- Obsidian's extra states. Markdown does not know them ('- [~] x' is a plain
 -- item whose text starts with '[~]'), so render.bullet finds them by text.

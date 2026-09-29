@@ -1083,7 +1083,10 @@ local function feed(keys)
   local cb = vim.o.clipboard
   local default = cb:find('unnamedplus') and '+' or cb:find('unnamed') and '*' or '"'
   local reg = vim.v.register ~= default and ('"' .. vim.v.register) or ''
-  api.nvim_feedkeys(reg .. vim.v.count1 .. keys, 'n', false)
+  -- 'i': in front of what is already typed ahead, not after it. Without it a
+  -- macro (or keys typed faster than the mapping runs) such as "obar<Esc>"
+  -- ran "bar<Esc>" first and the o afterwards.
+  api.nvim_feedkeys(reg .. vim.v.count1 .. keys, 'in', false)
 end
 
 local function redraw(buf, b, byDay, orphans)
@@ -1129,7 +1132,8 @@ local function openLine()
   local buf = api.nvim_get_current_buf()
   local row = api.nvim_win_get_cursor(0)[1] - 1
   local b = gridAt(buf, row)
-  if not b then return feed('o') end
+  -- Outside a grid: o, going on with a list item (pure/lists.lua).
+  if not b then return feed(require('pure.lists').open('o')) end
   -- On a week's bottom border the new line belongs to the week above it.
   local at = isBorder(api.nvim_get_current_line()) and row or row + 1
   blankLineAt(buf, at, columnAt())

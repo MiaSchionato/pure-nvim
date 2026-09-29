@@ -96,6 +96,12 @@ local function parseModel(spec)
   if target:match('^ollama:') then
     local m = target:sub(8)
     return { backend = 'ollama', model = m, id = target, name = m }
+  elseif target:match('^agy:') then
+    -- Antigravity's CLI (agy), added to <leader>am beside Ollama and Claude.
+    -- "agy:" alone: agy's own default model.
+    local m = target:sub(5)
+    local model = m ~= '' and m or nil
+    return { backend = 'agy', model = model, id = target, name = model or 'agy' }
   elseif target:match('^claude:') then
     local m = target:sub(8)
     local model = (m == 'default' or m == '') and nil or m
@@ -118,6 +124,9 @@ local function modelLabel(spec)
   local m = parseModel(spec)
   if m.backend == 'ollama' then
     return m.name
+  end
+  if m.backend == 'agy' then
+    return m.model and ('agy ' .. m.model) or 'agy'
   end
   return m.name == 'claude' and 'Claude' or ('Claude ' .. m.name)
 end
@@ -160,8 +169,57 @@ local function fetchOllamaModels(cb)
   if not ok then cb({}, false) end
 end
 
+--- agy's models, from `agy models` ("id<TAB>name" lines). It takes a few
+--- seconds, so the list is cached in the state folder: the picker opens with
+--- the cached list and it is refreshed in the background for next time. Only
+--- the first time, with no cache, does the picker wait for it.
+local agy_cache_file = vim.fn.stdpath('state') .. '/pure_agy_models'
+
+local function readAgyCache()
+  local ok, lines = pcall(vim.fn.readfile, agy_cache_file)
+  if not ok then return nil end
+  local models = {}
+  for _, l in ipairs(lines) do
+    local id, name = l:match('^(%S+)\t(.*)$')
+    if id then table.insert(models, { id = id, name = name }) end
+  end
+  return #models > 0 and models or nil
+end
+
+local function fetchAgyModels(cb)
+  if vim.fn.executable('agy') == 0 then return cb({}) end
+  local ok = pcall(vim.system, { 'agy', 'models' }, { text = true }, function(res)
+    vim.schedule(function()
+      local models, lines = {}, {}
+      for l in vim.gsplit(res.stdout or '', '\n', { plain = true }) do
+        l = l:gsub('\r$', '')
+        local id, name = l:match('^(%S+)\t(.*)$')
+        if id then
+          table.insert(models, { id = id, name = name })
+          table.insert(lines, l)
+        end
+      end
+      if #lines > 0 then pcall(vim.fn.writefile, lines, agy_cache_file) end
+      cb(models)
+    end)
+  end)
+  if not ok then cb({}) end
+end
+
+--- The agy models for the picker: `cb(models)`, from the cache when there
+--- is one (refreshed meanwhile), else after asking agy.
+local function agyModels(cb)
+  local cached = readAgyCache()
+  if cached then
+    fetchAgyModels(function() end)
+    return cb(cached)
+  end
+  fetchAgyModels(cb)
+end
+
 --- Interactive model selector (fzf / pure.fuzzyUtils or vim.ui.select fallback)
 function M.selectModel()
+  agyModels(function(agy_models)
   fetchOllamaModels(function(ollama_models, online)
     local choices = {}
     local model_map = {}
@@ -201,6 +259,20 @@ function M.selectModel()
       model_map[line] = c.id
     end
 
+    -- agy (Antigravity) models, when agy is installed. Its default first.
+    if vim.fn.executable('agy') == 1 then
+      local entries = { { id = 'agy:', name = 'default (agy CLI)' } }
+      for _, m in ipairs(agy_models) do table.insert(entries, { id = 'agy:' .. m.id, name = m.name }) end
+      for _, a in ipairs(entries) do
+        local is_active = (current.id == a.id)
+        local mark = is_active and '● ' or '  '
+        local suffix = is_active and ' (active)' or ''
+        local line = ('%s[agy]    %-28s%s\t%s'):format(mark, a.name, suffix, a.id)
+        table.insert(choices, line)
+        model_map[line] = a.id
+      end
+    end
+
     -- Custom model option
     local custom_line = '  [custom] Enter custom model name…\t__custom__'
     table.insert(choices, custom_line)
@@ -238,6 +310,7 @@ function M.selectModel()
       end)
     end
   end)
+  end) -- agyModels
 end
 
 -- -----------------------------------------------------------------------------
@@ -373,38 +446,39 @@ local function runClaude(opts, model)
   return stop
 end
 
-local ollama_sessions = {} -- session_id -> { messages = ... }
-
---- Run with local Ollama API
-local function runOllama(opts, model)
-  local url = vim.g.pure_ollama_url or 'http://localhost:11434'
-  local session_id = opts.resume or tostring(vim.uv.hrtime())
-  local messages = {}
-
-  if opts.resume and ollama_sessions[opts.resume] then
-    for _, m in ipairs(ollama_sessions[opts.resume].messages or {}) do
-      table.insert(messages, { role = m.role, content = m.content })
-    end
+--- Run with agy (Antigravity's CLI), added to <leader>am. Same shape as
+--- runClaude: print mode, streamed JSON.
+---
+--- The prompt goes on stdin as one stream-json "user" event, not as -p's
+--- argument: a prompt with the whole file in it is too long for a Windows
+--- command line (32k characters). agy has no --tools list, so what a request
+--- may do is set by its mode. Its default mode asks before each edit, and
+--- print mode has nobody to ask, so edits fail and reads work: read-only.
+--- A request that writes (opts.write) gets accept-edits. (Not --mode plan:
+--- it answered "I have created the plan... approve it" before the answer.)
+--- Its events:
+---   step_update  step_type agent_response: text_delta is answer text;
+---                another step type, while ACTIVE, is agy using a tool
+---   result       status SUCCESS and response (the whole answer), or error
+local function runAgy(opts, model)
+  local exe = vim.fn.exepath('agy')
+  if exe == '' then
+    vim.schedule(function() opts.on_done('agy is not installed: `agy` is not in the PATH') end)
+    return function() end
   end
-  table.insert(messages, { role = 'user', content = opts.prompt })
+  local args = { exe, '--output-format', 'stream-json', '--input-format', 'stream-json' }
+  if opts.write then vim.list_extend(args, { '--mode', 'accept-edits' }) end
+  if model then vim.list_extend(args, { '--model', model }) end
+  for _, d in ipairs(opts.dirs or {}) do vim.list_extend(args, { '--add-dir', d }) end
+  if opts.resume then vim.list_extend(args, { '--conversation', opts.resume }) end
+  -- -p last and empty: the prompt comes from stdin. (Given first, -p took the
+  -- next flag as its prompt.)
+  vim.list_extend(args, { '-p', '' })
+  local input = vim.json.encode({ event = 'user', message = { role = 'user', content = opts.prompt } }) .. '\n'
 
-  local payload = vim.json.encode({
-    model = model,
-    messages = messages,
-    stream = true,
-  })
-
-  local cmd = {
-    'curl', '-s', '-N', '-X', 'POST',
-    url .. '/api/chat',
-    '-H', 'Content-Type: application/json',
-    '-d', '@-',
-  }
-
-  local pending, text, err_text = '', {}, {}
+  local pending, text, session, result, err_text = '', {}, nil, nil, {}
   local finished, stopped = false, false
   local queued, flush_pending = {}, false
-
   local function flush()
     flush_pending = false
     if #queued == 0 or not opts.on_text then return end
@@ -412,7 +486,6 @@ local function runOllama(opts, model)
     queued = {}
     opts.on_text(chunk)
   end
-
   local function emit(piece)
     table.insert(queued, piece)
     if not flush_pending then
@@ -420,36 +493,40 @@ local function runOllama(opts, model)
       vim.defer_fn(function() if not finished then flush() end end, 60)
     end
   end
-
-  local ollama_err = nil
+  local last_step
   local function event(line)
-    line = line:gsub('\r$', '')
-    if vim.trim(line) == '' then return end
-    local ok, ev = pcall(vim.json.decode, line)
+    local ok, ev = pcall(vim.json.decode, line, { luanil = { object = true, array = true } })
     if not ok or type(ev) ~= 'table' then return end
-
-    if ev.error then
-      ollama_err = ev.error
-      return
-    end
-
-    local piece = nil
-    if ev.message then
-      piece = ev.message.content
-      if (not piece or piece == '') and ev.message.thinking then
-        piece = ev.message.thinking
+    if ev.event == 'init' and ev.conversation_id then session = ev.conversation_id end
+    if ev.event == 'step_update' and ev.step_update then
+      local s = ev.step_update
+      session = s.conversation_id or session
+      if s.step_type == 'agent_response' then
+        -- A new response step after an earlier one: a blank line between.
+        if last_step and last_step ~= s.step_index and #text > 0 then
+          table.insert(text, '\n\n')
+          emit('\n\n')
+        end
+        last_step = s.step_index
+        if s.text_delta and s.text_delta ~= '' then
+          table.insert(text, s.text_delta)
+          emit(s.text_delta)
+        end
+      elseif s.state == 'ACTIVE' and s.step_type ~= 'user_input' and opts.on_tool then
+        -- agy's view_file is Claude's Read: the window then says "reading…".
+        local tool = s.tool_name or s.step_type
+        opts.on_tool(tool == 'view_file' and 'Read' or tool)
       end
-    end
-
-    if piece and piece ~= '' then
-      table.insert(text, piece)
-      emit(piece)
+    elseif ev.event == 'result' and ev.result then
+      result = ev.result
+      session = result.conversation_id or session
     end
   end
 
   local id = tostring(vim.uv.hrtime())
-  local ok, obj = pcall(vim.system, cmd, {
-    stdin = payload,
+  local ok, obj = pcall(vim.system, args, {
+    cwd = opts.cwd,
+    stdin = input,
     stdout = function(_, data)
       if not data then return end
       vim.schedule(function()
@@ -459,7 +536,7 @@ local function runOllama(opts, model)
         while true do
           local nl = pending:find('\n', start, true)
           if not nl then break end
-          event(pending:sub(start, nl - 1))
+          event((pending:sub(start, nl - 1):gsub('\r$', '')))
           start = nl + 1
         end
         pending = pending:sub(start)
@@ -473,42 +550,25 @@ local function runOllama(opts, model)
       if pending ~= '' then event(pending) end
       flush()
       finished = true
-
-      if stopped then
-        return opts.on_done('stopped', table.concat(text), session_id)
-      end
-
-      if ollama_err then
-        return opts.on_done('Ollama: ' .. tostring(ollama_err), table.concat(text), session_id)
-      end
-
-      if res.code ~= 0 then
-        local why = vim.trim(table.concat(err_text))
-        if res.code == 7 then
-          why = 'Could not connect to Ollama at ' .. url .. ' (is Ollama running?)'
-        elseif why == '' then
-          why = 'curl exited with code ' .. res.code
+      if stopped then return opts.on_done('stopped', table.concat(text), session) end
+      if result and result.status == 'SUCCESS' then
+        local answer = (result.response and result.response ~= '') and result.response or table.concat(text)
+        -- It happened in testing: SUCCESS with no answer at all. Said so,
+        -- rather than an empty window or nothing written with no reason.
+        if vim.trim(answer) == '' then
+          return opts.on_done('agy returned an empty answer; try again (<leader>ar)', '', session)
         end
-        return opts.on_done(why, table.concat(text), session_id)
+        return opts.on_done(nil, answer, session)
       end
-
-      local full_text = table.concat(text)
-      if session_id and (opts.keep or opts.resume) then
-        table.insert(messages, { role = 'assistant', content = full_text })
-        ollama_sessions[session_id] = { messages = messages }
-      else
-        ollama_sessions[session_id] = nil
-      end
-
-      opts.on_done(nil, full_text, session_id)
+      local why = result and (result.error or result.status) or vim.trim(table.concat(err_text))
+      opts.on_done((why and why ~= '') and ('agy: ' .. why) or ('agy exited with ' .. res.code),
+        table.concat(text), session)
     end)
   end)
-
   if not ok then
-    vim.schedule(function() opts.on_done('Could not run curl for Ollama: ' .. tostring(obj)) end)
+    vim.schedule(function() opts.on_done('Could not run agy: ' .. tostring(obj)) end)
     return function() end
   end
-
   local function stop()
     if running[id] then
       stopped = true
@@ -519,15 +579,654 @@ local function runOllama(opts, model)
   return stop
 end
 
+local ollama_sessions = {} -- session_id -> { messages = ... }
+
+-- -----------------------------------------------------------------------------
+--  Tools for local models
+-- -----------------------------------------------------------------------------
+--  Claude Code brings its own tools (Read, Grep, Glob, Edit, Write); Ollama
+--  has none, and runOllama used to ignore opts.tools. So a local model could
+--  not read another file, and an action or block meant to change files only
+--  described the change. These are the same tools, run here by Neovim and
+--  offered through Ollama's tool calling: the names in opts.tools (as the
+--  actions and blocks write them) pick which ones the model gets.
+--
+--  Every path must be inside opts.cwd or one of opts.dirs. Edit / Write only
+--  when opts.tools has them, and never on a file with unsaved changes in
+--  Neovim (the edit would be lost on the next :w, or lose them).
+
+local TOOL_LIMIT = 40000 -- characters of one tool result the model gets back
+local MAX_ROUNDS = 25    -- rounds of tool calls before giving up
+
+--- Tool definitions, by the Claude Code name that enables them.
+local OLLAMA_TOOLS = {
+  Read = { name = 'read_file', description = 'Read a text file. Returns it with line numbers.',
+    parameters = { type = 'object', required = { 'path' }, properties = {
+      path = { type = 'string', description = 'File path, relative to the working folder or absolute' } } } },
+  Glob = { name = 'list_files', description = 'List files matching a glob pattern, e.g. "**/*.md".',
+    parameters = { type = 'object', required = { 'pattern' }, properties = {
+      pattern = { type = 'string', description = 'Glob pattern' },
+      path = { type = 'string', description = 'Folder to search in (default: the working folder)' } } } },
+  Grep = { name = 'grep', description = 'Search file contents with a regular expression. Returns file:line:text.',
+    parameters = { type = 'object', required = { 'pattern' }, properties = {
+      pattern = { type = 'string', description = 'Regular expression' },
+      path = { type = 'string', description = 'File or folder to search in (default: the working folder)' } } } },
+  Edit = { name = 'edit_file', description = 'Replace an exact piece of text in a file. old_text must appear '
+      .. 'exactly once; include enough surrounding text to make it unique. Read the file first.',
+    parameters = { type = 'object', required = { 'path', 'old_text', 'new_text' }, properties = {
+      path = { type = 'string' }, old_text = { type = 'string' }, new_text = { type = 'string' } } } },
+  Write = { name = 'write_file', description = 'Create a file, or replace a whole file, with the given content.',
+    parameters = { type = 'object', required = { 'path', 'content' }, properties = {
+      path = { type = 'string' }, content = { type = 'string' } } } },
+}
+-- MultiEdit is Claude Code's multi-replace: the same edit_file, called once
+-- per change.
+OLLAMA_TOOLS.MultiEdit = OLLAMA_TOOLS.Edit
+local CLAUDE_NAME = { read_file = 'Read', list_files = 'Glob', grep = 'Grep', edit_file = 'Edit', write_file = 'Write' }
+
+--- The tools opts.tools enables ("Edit(notes/**)" counts as Edit), without
+--- repeats; and a set of their names.
+local function ollamaTools(names)
+  local defs, seen = {}, {}
+  for _, n in ipairs(names or {}) do
+    local def = OLLAMA_TOOLS[n:match('^%a+') or '']
+    if def and not seen[def.name] then
+      seen[def.name] = true
+      table.insert(defs, { type = 'function', ['function'] = def })
+    end
+  end
+  return defs, seen
+end
+
+local function toolKey(p)
+  p = vim.fs.normalize(p)
+  return vim.fn.has('win32') == 1 and p:lower() or p
+end
+
+--- `path` made absolute against the request's folder, or nil and why when it
+--- is outside every folder the request may use.
+local function toolPath(path, opts)
+  if type(path) ~= 'string' or path == '' then return nil, 'no path given' end
+  local cwd = opts.cwd or vim.fn.getcwd()
+  local absolute = path:match('^%a:[/\\]') or path:match('^[/\\]')
+  -- simplify() resolves "." and "..": without it "proj/../outside.txt"
+  -- starts with "proj/" and passed the check below, and "proj/." (the
+  -- folder itself) did not.
+  -- fs_realpath() on the part that exists: Windows spelled the same folder
+  -- "MIASCH~1" one time and "Mia Schionato" the next, so the folder itself
+  -- failed the check; it also follows symlinks, so a link inside the
+  -- folder cannot lead the model outside it. A file not made yet keeps the
+  -- rest of its path as given.
+  local function full(p)
+    p = (vim.fs.normalize(vim.fn.simplify(vim.fn.fnamemodify(p, ':p'))):gsub('/$', ''))
+    local rest, cur = {}, p
+    while not vim.uv.fs_realpath(cur) do
+      local parent = vim.fs.dirname(cur)
+      if not parent or parent == cur then return p end
+      table.insert(rest, 1, vim.fs.basename(cur))
+      cur = parent
+    end
+    local base = (vim.fs.normalize(vim.uv.fs_realpath(cur)):gsub('/$', ''))
+    return #rest > 0 and (base .. '/' .. table.concat(rest, '/')) or base
+  end
+  -- The path as given is kept for the file itself (a new file keeps its
+  -- case); the comparison is case-blind on Windows.
+  local abs = full(absolute and path or (cwd .. '/' .. path))
+  local key = toolKey(abs)
+  for _, root in ipairs(vim.list_extend({ cwd }, opts.dirs or {})) do
+    local r = toolKey(full(root))
+    if key == r or key:sub(1, #r + 1) == r .. '/' then return abs end
+  end
+  return nil, 'outside the folders this request may use: ' .. path
+end
+
+local function clip(s)
+  if #s <= TOOL_LIMIT then return s end
+  return s:sub(1, TOOL_LIMIT) .. '\n[... cut: ' .. (#s - TOOL_LIMIT) .. ' more characters ...]'
+end
+
+--- Whether `abs` is open in Neovim with unsaved changes.
+local function dirtyBuffer(abs)
+  local b = vim.fn.bufnr(abs)
+  return b > 0 and vim.api.nvim_buf_is_loaded(b) and vim.bo[b].modified
+end
+
+--- Run one tool call; the text the model gets back.
+local function runTool(name, args, opts)
+  args = type(args) == 'table' and args or {}
+  if name == 'read_file' then
+    local abs, why = toolPath(args.path, opts)
+    if not abs then return 'Error: ' .. why end
+    local ok, lines = pcall(vim.fn.readfile, abs)
+    if not ok then return 'Error: cannot read ' .. tostring(args.path) end
+    for i, l in ipairs(lines) do lines[i] = ('%d\t%s'):format(i, l) end
+    return clip(table.concat(lines, '\n'))
+  elseif name == 'list_files' or name == 'grep' then
+    local abs, why = toolPath(args.path or '.', opts)
+    if not abs then return 'Error: ' .. why end
+    if vim.fn.executable('rg') == 0 then return 'Error: ripgrep (rg) is not installed' end
+    local cmd = name == 'grep'
+      and { 'rg', '--line-number', '--no-heading', '--smart-case', '--max-count', '50', '--', args.pattern or '', abs }
+      or { 'rg', '--files', '--glob', args.pattern or '*', abs }
+    if not vim.uv.fs_stat(abs) then return 'Error: no such file or folder: ' .. tostring(args.path) end
+    local res = vim.system(cmd, { text = true }):wait(15000)
+    local out = vim.trim((res.stdout or ''):gsub('\r', ''))
+    -- rg exits 1 for "nothing found", 2 for a real error (bad regex...).
+    if res.code == 2 and out == '' then return 'Error: ' .. vim.trim(res.stderr or 'rg failed') end
+    if out == '' then return 'No matches.' end
+    -- Relative to the request's folder, as the model's own paths are: short
+    -- paths it can pass straight back to read_file.
+    local base = vim.uv.fs_realpath(opts.cwd or vim.fn.getcwd())
+    if base then
+      base = vim.fs.normalize(base):gsub('/$', '') .. '/'
+      local lines = {}
+      for l in vim.gsplit(out, '\n', { plain = true }) do
+        l = l:gsub('\\', '/')
+        if toolKey(l:sub(1, #base)) == toolKey(base) then l = l:sub(#base + 1) end
+        table.insert(lines, l)
+      end
+      out = table.concat(lines, '\n')
+    end
+    return clip(out)
+  elseif name == 'edit_file' or name == 'write_file' then
+    local abs, why = toolPath(args.path, opts)
+    if not abs then return 'Error: ' .. why end
+    if dirtyBuffer(abs) then
+      return 'Error: ' .. args.path .. ' has unsaved changes in the editor; not changed'
+    end
+    local content
+    if name == 'write_file' then
+      content = args.content or ''
+    else
+      local f = io.open(abs, 'rb')
+      if not f then return 'Error: cannot read ' .. args.path end
+      local old = f:read('*a')
+      f:close()
+      local needle = args.old_text or ''
+      local from, to = old:find(needle, 1, true)
+      if needle == '' or not from then
+        return 'Error: old_text was not found in ' .. args.path .. '; read the file and copy the text exactly'
+      end
+      if old:find(needle, to + 1, true) then
+        return 'Error: old_text appears more than once; include more surrounding text'
+      end
+      content = old:sub(1, from - 1) .. (args.new_text or '') .. old:sub(to + 1)
+    end
+    vim.fn.mkdir(vim.fs.dirname(abs), 'p')
+    local f = io.open(abs, 'wb')
+    if not f then return 'Error: cannot write ' .. args.path end
+    f:write(content)
+    f:close()
+    return (name == 'write_file' and 'Wrote ' or 'Edited ') .. args.path
+  end
+  return 'Error: unknown tool ' .. tostring(name)
+end
+
+--- Models Ollama said have no tool support: asked without tools from then on.
+local no_tools = {}
+
+--- Tool calls a model wrote as text instead of through Ollama's tool_calls:
+--- qwen2.5-coder answered a plain question with
+---   {"name": "read_file", "arguments": {"path": "x.md"}}
+--- (bare, in a ```json fence, or in qwen's <tool_call> tags), and that JSON
+--- was shown as the answer. Only names in `enabled` count, so an answer that
+--- is JSON for another reason stays an answer. Returns calls shaped like
+--- Ollama's, or nil.
+---
+--- Only the FIRST call is taken. qwen2.5-coder also wrote a whole plan at
+--- once: read_file, then edit_file with an old_text it had guessed without
+--- reading, then "done". Running the first one and giving it the result lets
+--- it make the next call knowing the file, as a real tool loop does.
+
+--- The JSON value starting at `s`'s first character ('{' or '['), balanced
+--- by hand (strings and escapes respected), or nil.
+local function leadingJson(s)
+  local open = s:sub(1, 1)
+  if open ~= '{' and open ~= '[' then return nil end
+  local depth, in_str, esc = 0, false, false
+  for i = 1, #s do
+    local ch = s:sub(i, i)
+    if in_str then
+      if esc then esc = false
+      elseif ch == '\\' then esc = true
+      elseif ch == '"' then in_str = false end
+    elseif ch == '"' then in_str = true
+    elseif ch == '{' or ch == '[' then depth = depth + 1
+    elseif ch == '}' or ch == ']' then
+      depth = depth - 1
+      if depth == 0 then return s:sub(1, i) end
+    end
+  end
+  return nil
+end
+
+local function textToolCalls(s, enabled)
+  s = vim.trim(s)
+  -- The first call's JSON: inside <tool_call> tags, a ``` fence, or bare.
+  local body = s:match('^<tool_call>%s*(.-)%s*</tool_call>')
+    or s:match('^```%w*%s*\n(.-)\n%s*```') or s
+  local json = leadingJson(vim.trim(body))
+  if not json then return nil end
+  local ok, data = pcall(vim.json.decode, json)
+  if not ok or type(data) ~= 'table' then return nil end
+  local c = vim.islist(data) and data[1] or data
+  if type(c) ~= 'table' then return nil end
+  local fn = type(c['function']) == 'table' and c['function'] or c
+  if type(fn.name) ~= 'string' or not enabled[fn.name] then return nil end
+  return { { ['function'] = { name = fn.name, arguments = fn.arguments or fn.parameters or {} } } }
+end
+M._textToolCalls = textToolCalls
+
+--- Run with the local Ollama API. With tools (opts.tools), the model's tool
+--- calls run here and the results go back to it, round after round, until
+--- it answers with text only.
+local function runOllama(opts, model)
+  local url = vim.g.pure_ollama_url or 'http://localhost:11434'
+  local session_id = opts.resume or tostring(vim.uv.hrtime())
+  local messages = {}
+
+  local tools, enabled = ollamaTools(opts.tools)
+  if no_tools[model] then tools = {} end
+
+  if opts.resume and ollama_sessions[opts.resume] then
+    messages = vim.deepcopy(ollama_sessions[opts.resume].messages or {})
+  elseif #tools > 0 then
+    -- Where the tools work, so relative paths mean what the model thinks.
+    local where = { opts.cwd or vim.fn.getcwd() }
+    vim.list_extend(where, opts.dirs or {})
+    table.insert(messages, { role = 'system', content = 'You can use tools to read'
+      .. ((enabled.edit_file or enabled.write_file) and ' and change' or '') .. ' files. '
+      .. 'Relative paths are relative to ' .. where[1] .. '. You may only use these folders: '
+      .. table.concat(where, ', ') .. '. Use the tools only when the request needs what a file '
+      .. 'holds, instead of guessing it; answer anything else (general knowledge, the text already '
+      .. 'given to you) directly, without tools. When done, answer with text only.' })
+      -- "Only when needed": told just to prefer tools, qwen2.5-coder searched
+      -- the files eleven times for "the capital of France" and gave up.
+  end
+  table.insert(messages, { role = 'user', content = opts.prompt })
+
+  local text, round_text = {}, {}
+  local finished, stopped = false, false
+  local queued, flush_pending = {}, false
+  local obj
+  local id = tostring(vim.uv.hrtime())
+  local rounds = 0
+
+  local function flush()
+    flush_pending = false
+    if #queued == 0 or not opts.on_text then return end
+    local chunk = table.concat(queued)
+    queued = {}
+    opts.on_text(chunk)
+  end
+  local function emit(piece)
+    table.insert(queued, piece)
+    if not flush_pending then
+      flush_pending = true
+      vim.defer_fn(function() if not finished then flush() end end, 60)
+    end
+  end
+
+  -- Thinking is never part of the answer. It used to be emitted as answer
+  -- text when a chunk had no content, so reasoning models wrote their whole
+  -- reasoning into the buffer. Now it goes to opts.on_thinking (shown dimmed,
+  -- never written; see showThinking). Two ways models send it: Ollama's
+  -- separate `thinking` field, or <think>...</think> inside the content
+  -- (older Ollama, some models), split out here even across chunks.
+  local inside, carry = false, ''
+  --- How much of the end of `s` could be the start of `tag`, so a tag split
+  --- between two chunks is not missed.
+  local function partialTail(s, tag)
+    for k = math.min(#s, #tag - 1), 1, -1 do
+      if s:sub(-k) == tag:sub(1, k) then return k end
+    end
+    return 0
+  end
+  local function think(piece)
+    if piece ~= '' and opts.on_thinking then opts.on_thinking(piece) end
+  end
+  -- A round's text that may be a tool call written as text (textToolCalls)
+  -- is held back, not shown, until the round ends and says which it is:
+  -- nil not decided yet, true holding, false shown as it comes.
+  local holding, held = nil, {}
+  local function show(piece)
+    table.insert(text, piece)
+    emit(piece)
+  end
+  local function release()
+    holding = false
+    for _, p in ipairs(held) do show(p) end
+    held = {}
+  end
+  local function answer(piece)
+    if piece == '' then return end
+    table.insert(round_text, piece)
+    if #tools == 0 or holding == false then return show(piece) end
+    table.insert(held, piece)
+    local so_far = vim.trim(table.concat(round_text))
+    if so_far == '' then return end
+    local function starts(prefix)
+      return so_far:sub(1, #prefix) == prefix or prefix:sub(1, #so_far) == so_far
+    end
+    if so_far:match('^[%[{]') or starts('```') or starts('<tool_call>') then
+      holding = true
+    else
+      release()
+    end
+  end
+  local function content(s, final)
+    s = carry .. s
+    carry = ''
+    while s ~= '' do
+      local tag = inside and '</think>' or '<think>'
+      local at = s:find(tag, 1, true)
+      local take = inside and think or answer
+      if at then
+        take(s:sub(1, at - 1))
+        s = s:sub(at + #tag)
+        inside = not inside
+      else
+        local keep = final and 0 or partialTail(s, tag)
+        take(s:sub(1, #s - keep))
+        carry = s:sub(#s - keep + 1)
+        s = ''
+      end
+    end
+  end
+
+  local function finish(err, full)
+    if finished then return end
+    content('', true) -- a partial "<thi" held back is plain text after all
+    flush()
+    finished = true
+    running[id] = nil
+    if stopped then return opts.on_done('stopped', table.concat(text), session_id) end
+    if not err and (opts.keep or opts.resume) then
+      ollama_sessions[session_id] = { messages = messages }
+    else
+      ollama_sessions[session_id] = nil
+    end
+    opts.on_done(err, full or table.concat(text), session_id)
+  end
+
+  --- One streamed /api/chat call. At its end the tool calls run and the next
+  --- round starts, or the answer is done.
+  local function request()
+    rounds = rounds + 1
+    round_text = {}
+    holding, held = nil, {}
+    local calls, ollama_err, pending, err_text = {}, nil, '', {}
+
+    local function event(line)
+      line = line:gsub('\r$', '')
+      if vim.trim(line) == '' then return end
+      local ok, ev = pcall(vim.json.decode, line)
+      if not ok or type(ev) ~= 'table' then return end
+      if ev.error then
+        ollama_err = ev.error
+        return
+      end
+      local m = ev.message
+      if type(m) ~= 'table' then return end
+      if type(m.thinking) == 'string' then think(m.thinking) end
+      if type(m.content) == 'string' then content(m.content) end
+      if type(m.tool_calls) == 'table' then vim.list_extend(calls, m.tool_calls) end
+    end
+
+    local payload = vim.json.encode({
+      model = model,
+      messages = messages,
+      stream = true,
+      tools = #tools > 0 and tools or nil,
+      -- num_ctx: without it Ollama runs with its small default context and
+      -- silently drops the start of a long prompt (the rules, the file),
+      -- which is why local models "forgot" what to do. num_predict -1: no
+      -- cap on the answer, so a model may think for as long as it needs.
+      options = {
+        num_ctx = vim.g.pure_ollama_num_ctx or 32768,
+        num_predict = -1,
+      },
+    })
+
+    local ok, res_obj = pcall(vim.system, {
+      'curl', '-s', '-N', '-X', 'POST', url .. '/api/chat',
+      '-H', 'Content-Type: application/json', '-d', '@-',
+    }, {
+      stdin = payload,
+      stdout = function(_, data)
+        if not data then return end
+        vim.schedule(function()
+          if finished then return end
+          pending = pending .. data
+          local start = 1
+          while true do
+            local nl = pending:find('\n', start, true)
+            if not nl then break end
+            event(pending:sub(start, nl - 1))
+            start = nl + 1
+          end
+          pending = pending:sub(start)
+        end)
+      end,
+      stderr = function(_, data) if data then table.insert(err_text, data) end end,
+    }, function(res)
+      vim.schedule(function()
+        if finished then return end
+        if pending ~= '' then event(pending) end
+        if stopped then return finish('stopped') end
+
+        -- A model without tool support: asked again, once, without tools.
+        if ollama_err and #tools > 0
+            and tostring(ollama_err):lower():find('does not support tools', 1, true) then
+          no_tools[model] = true
+          tools = {}
+          vim.notify(model .. ' cannot use tools: it answers without reading or changing files',
+            vim.log.levels.WARN)
+          rounds = rounds - 1
+          return request()
+        end
+        if ollama_err then return finish('Ollama: ' .. tostring(ollama_err)) end
+        if res.code ~= 0 then
+          local why = vim.trim(table.concat(err_text))
+          if res.code == 7 then
+            why = 'Could not connect to Ollama at ' .. url .. ' (is Ollama running?)'
+          elseif why == '' then
+            why = 'curl exited with code ' .. res.code
+          end
+          return finish(why)
+        end
+
+        content('', true)
+        local said = table.concat(round_text)
+        local history_text = said
+        if #calls == 0 and holding then
+          -- Held text: a tool call written as text runs as one; anything
+          -- else was an answer after all and is shown now.
+          local written = textToolCalls(said, enabled)
+          if written then
+            calls = written
+            -- Kept as that one call only: with the whole written plan in the
+            -- history, the model took its guessed later steps as done.
+            history_text = ''
+          else
+            release()
+          end
+        elseif holding then
+          held = {} -- text before real tool calls: not part of the answer
+        end
+        table.insert(messages, { role = 'assistant', content = history_text, tool_calls = #calls > 0 and calls or nil })
+        if #calls == 0 then
+          -- The answer is the last round's text: "let me read the file",
+          -- said before a tool call, is not part of it (in <leader>ai it
+          -- would have been written into the buffer).
+          return finish(nil, said ~= '' and said or table.concat(text))
+        end
+        if rounds >= MAX_ROUNDS then
+          return finish('Ollama: stopped after ' .. MAX_ROUNDS .. ' rounds of tool calls')
+        end
+        for _, call in ipairs(calls) do
+          local fn = call['function'] or {}
+          local args = fn.arguments
+          if type(args) == 'string' then
+            local okj, decoded = pcall(vim.json.decode, args)
+            args = okj and decoded or {}
+          end
+          if opts.on_tool then opts.on_tool(CLAUDE_NAME[fn.name] or fn.name) end
+          local result = enabled[fn.name] and runTool(fn.name, args, opts)
+            or ('Error: tool ' .. tostring(fn.name) .. ' is not available here')
+          table.insert(messages, { role = 'tool', tool_name = fn.name, content = result })
+        end
+        -- A blank line between rounds' text, as runClaude puts between messages.
+        if #text > 0 then show('\n\n') end
+        request()
+      end)
+    end)
+    if ok then
+      obj = res_obj
+    else
+      finish('Could not run curl for Ollama: ' .. tostring(res_obj))
+    end
+  end
+
+  running[id] = function()
+    stopped = true
+    if obj then kill(obj) end
+  end
+  local stop = running[id]
+  request()
+  return stop
+end
+
 --- Run one request. `opts`: prompt, tools (list), cwd, resume (session id),
 --- keep (keep the session, to follow up), model, dirs (more folders it may
 --- work in), write (edits files: accepted without asking), on_text(chunk),
 --- on_tool(name), on_done(err, text, session). Callbacks run on the main
 --- loop. Returns a function that stops it.
+-- -----------------------------------------------------------------------------
+--  User context
+-- -----------------------------------------------------------------------------
+--  A markdown file about the user that every request gets (Improvment.md in
+--  the vault asked for it), whatever the model. It is kept out of every git
+--  repository for privacy: in Neovim's data folder, not in this config or
+--  the vault, unless vim.g.pure_llm_user_context points elsewhere.
+--
+--  The model can add to it: what it puts in <remember>...</remember> in its
+--  answer is appended to the file (dated) and taken out of the answer, so it
+--  is never shown or written into a buffer. vim.g.pure_llm_memory = false
+--  turns that off (the file is still read). <leader>au opens it.
+
+local function userContextFile()
+  local p = vim.g.pure_llm_user_context
+  if p == false then return nil end
+  return vim.fs.normalize(vim.fn.expand(p or (vim.fn.stdpath('data') .. '/llm_user.md')))
+end
+M.userContextFile = userContextFile
+
+--- The prompt's first part: the file's content and how to add to it.
+local function userContextBlock()
+  local path = userContextFile()
+  if not path then return '' end
+  local ok, lines = pcall(vim.fn.readfile, path)
+  local text = ok and vim.trim(table.concat(lines, '\n')) or ''
+  local parts = {}
+  if text ~= '' then
+    table.insert(parts, '<user_context>\nWhat the user wrote (or asked you to remember) about themselves; '
+      .. 'use it when it is relevant:\n' .. text .. '\n</user_context>')
+  end
+  if vim.g.pure_llm_memory ~= false then
+    table.insert(parts, 'If the user tells you something lasting about themselves that would help in later '
+      .. 'requests (a preference, their work, how they like answers), add it at the very end of your answer '
+      .. 'as <remember>one short sentence</remember>. It is saved to their context file and hidden from the '
+      .. 'answer. Do not use it for anything else, and not for things already in <user_context>.')
+  end
+  return #parts > 0 and (table.concat(parts, '\n\n') .. '\n\n') or ''
+end
+
+--- Append `facts` to the user context file, one dated line each.
+local function remember(facts)
+  local path = userContextFile()
+  if not path or #facts == 0 then return end
+  vim.fn.mkdir(vim.fs.dirname(path), 'p')
+  local lines = {}
+  if not vim.uv.fs_stat(path) then
+    lines = { '# About me', '', 'Read by every LLM request from Neovim (pure/claude.lua). Edit freely.', '' }
+  end
+  for _, f in ipairs(facts) do table.insert(lines, ('- %s (%s)'):format(f, os.date('%Y-%m-%d'))) end
+  vim.fn.writefile(lines, path, 'a')
+  vim.notify('Remembered: ' .. table.concat(facts, '; '))
+end
+
+--- `text` without its <remember> tags, and what they held.
+local function takeRemembered(text)
+  local facts = {}
+  text = (text or ''):gsub('%s*<remember>(.-)</remember>', function(f)
+    f = vim.trim(f:gsub('%s+', ' '))
+    if f ~= '' then table.insert(facts, f) end
+    return ''
+  end)
+  return text, facts
+end
+
+--- A stream filter that keeps <remember>...</remember> out of what is shown,
+--- even when a tag is split between two chunks. `feed(s)` returns what may be
+--- shown now; `feed('', true)` the rest at the end.
+local function rememberFilter()
+  local inside, carry = false, ''
+  local function partialTail(s, tag)
+    for k = math.min(#s, #tag - 1), 1, -1 do
+      if s:sub(-k) == tag:sub(1, k) then return k end
+    end
+    return 0
+  end
+  return function(s, final)
+    s = carry .. s
+    carry = ''
+    local out = {}
+    while s ~= '' do
+      local tag = inside and '</remember>' or '<remember>'
+      local at = s:find(tag, 1, true)
+      if at then
+        if not inside then table.insert(out, s:sub(1, at - 1)) end
+        s = s:sub(at + #tag)
+        inside = not inside
+      else
+        local keep = final and 0 or partialTail(s, tag)
+        if not inside then table.insert(out, s:sub(1, #s - keep)) end
+        carry = s:sub(#s - keep + 1)
+        s = ''
+      end
+    end
+    return table.concat(out)
+  end
+end
+
 local function run(opts)
   local active = parseModel(opts.model)
+  -- The user context goes with every new conversation (a follow-up's
+  -- session already has it), and <remember> is taken out of the answer.
+  opts = vim.tbl_extend('force', {}, opts)
+  if not opts.resume then opts.prompt = userContextBlock() .. opts.prompt end
+  local filter = rememberFilter()
+  local on_text, on_done = opts.on_text, opts.on_done
+  if on_text then
+    opts.on_text = function(s)
+      local shown = filter(s)
+      if shown ~= '' then on_text(shown) end
+    end
+  end
+  opts.on_done = function(err, text, session)
+    if on_text then
+      local rest = filter('', true)
+      if rest ~= '' then on_text(rest) end
+    end
+    local clean, facts = takeRemembered(text)
+    if not err and vim.g.pure_llm_memory ~= false then remember(facts) end
+    return on_done(err, clean, session)
+  end
   if active.backend == 'ollama' then
     return runOllama(opts, active.model)
+  elseif active.backend == 'agy' then
+    return runAgy(opts, active.model)
   else
     return runClaude(opts, active.model)
   end
@@ -636,6 +1335,9 @@ local function addHistory(kind, question, answer, session, model_spec)
     answer = answer,
     session = session,
     model = modelLabel(model_spec),
+    -- The model itself, not only its label: a follow-up on an answer reached
+    -- with [ / ] in the window goes to the model that gave it.
+    spec = model_spec,
     time = os.time(),
   })
   if #history > 50 then table.remove(history, 1) end
@@ -673,9 +1375,93 @@ local function answerWindow(title, model_spec)
   return w
 end
 
+--- A model's thinking as virtual lines (dimmed, never text: y does not copy
+--- it, and it is never written into a buffer). `max`: only the last lines.
+--- vim.g.pure_llm_thinking: 'show' (default) shows it while the model
+--- thinks, 'hide' never does.
+local function thinkingLines(text, max)
+  local lines = vim.split(vim.trim(text), '\n', { plain = true })
+  if max and #lines > max then lines = vim.list_slice(lines, #lines - max + 1, #lines) end
+  local out = {}
+  for _, l in ipairs(lines) do table.insert(out, { { '  ┊ ' .. l, 'Comment' } }) end
+  return out
+end
+
+--- A dimmed status line under 0-based `row` of `buf` with the seconds since
+--- it started, ticking every second: "  qwen3.5:9b is writing… 12s". Added
+--- (Improvment.md) so every LLM command working in the buffer shows how long
+--- it has been going, as the <leader>aa window's title already did.
+--- `s.state` is the text before the seconds, `s.extra` more virtual lines
+--- under it (the streamed text, the thinking); `s.draw()` after changing
+--- them; `s.stop()` removes it. `s.id` is the extmark, which follows edits.
+local function statusMark(buf, row, state)
+  local t0 = vim.uv.hrtime()
+  local s = { state = state }
+  s.id = vim.api.nvim_buf_set_extmark(buf, ns, row, 0, {})
+  local timer = vim.uv.new_timer()
+  function s.draw()
+    if not s.id or not vim.api.nvim_buf_is_valid(buf) then return end
+    local secs = math.floor((vim.uv.hrtime() - t0) / 1e9)
+    local lines = { { { ('  %s %ds'):format(s.state, secs), 'Comment' } } }
+    vim.list_extend(lines, s.extra or {})
+    local at = vim.api.nvim_buf_get_extmark_by_id(buf, ns, s.id, {})
+    if at[1] then
+      pcall(vim.api.nvim_buf_set_extmark, buf, ns, at[1], 0, { id = s.id, virt_lines = lines })
+    end
+  end
+  function s.stop()
+    if timer and not timer:is_closing() then
+      timer:stop()
+      timer:close()
+    end
+    if s.id and vim.api.nvim_buf_is_valid(buf) then pcall(vim.api.nvim_buf_del_extmark, buf, ns, s.id) end
+    s.id = nil
+  end
+  timer:start(1000, 1000, vim.schedule_wrap(s.draw))
+  s.draw()
+  return s
+end
+
+--- The thinking of one answer in the window `w`, above the answer's first
+--- line (`row`). Live: its last lines. Once the answer comes: one line,
+--- "▸ thought for 12s", that t in the window opens and closes like a fold.
+--- Added so thinking is visible without being part of the answer.
+local function showThinking(w, row)
+  local th = { text = '', open = false, answered = false }
+  local mark
+  function th.draw()
+    if not w.valid() or th.text == '' then return end
+    local hide = vim.g.pure_llm_thinking == 'hide'
+    local lines
+    if th.open then
+      lines = thinkingLines(th.text)
+      table.insert(lines, 1, { { '▾ thinking (t: hide)', 'Comment' } })
+    elseif th.answered then
+      if hide then return end
+      lines = { { { ('▸ thought for %s (t: show)'):format(th.secs or '?'), 'Comment' } } }
+    else
+      if hide then return end
+      lines = thinkingLines(th.text, 12)
+    end
+    mark = vim.api.nvim_buf_set_extmark(w.buf, ns, row, 0,
+      { id = mark, virt_lines = lines, virt_lines_above = true })
+  end
+  function th.add(s) th.text = th.text .. s; th.draw() end
+  function th.answer(secs)
+    if th.answered then return end
+    th.answered, th.secs = true, secs
+    th.draw()
+  end
+  w.thoughts = w.thoughts or {}
+  table.insert(w.thoughts, th)
+  return th
+end
+
 --- Stream one request into the window `w`.
 local function askInto(w, question, prompt, opts)
   local answer = {}
+  -- The answer starts on the window's last line; its thinking goes above it.
+  local th = w.valid() and showThinking(w, vim.api.nvim_buf_line_count(w.buf) - 1) or nil
   local stopped = false
   -- The seconds since the question went, next to what the model is doing.
   local t0, state = vim.uv.hrtime(), 'thinking…'
@@ -711,9 +1497,15 @@ local function askInto(w, question, prompt, opts)
     resume = opts.session,
     keep = true,
     on_tool = function(name) setState(name == 'Read' and 'reading…' or 'searching…') end,
+    on_thinking = function(s)
+      if th then th.add(s) end
+    end,
     on_text = function(s)
       table.insert(answer, s)
-      if state ~= 'writing…' then setState('writing…') end
+      if state ~= 'writing…' then
+        if th then th.answer(elapsed()) end
+        setState('writing…')
+      end
       w.append(s)
     end,
     on_done = function(err, text, session)
@@ -726,7 +1518,10 @@ local function askInto(w, question, prompt, opts)
         w.title((stopped and 'stopped' or 'error') .. ' ' .. elapsed(true))
         return
       end
-      if #answer == 0 then w.append(text) end
+      if th then th.answer(elapsed()) end
+      -- A model may finish its tool calls (an edit) without a word; the
+      -- window said nothing at all then.
+      if #answer == 0 then w.append(vim.trim(text or '') ~= '' and text or '_(no text answer)_') end
       w.append('\n')
       -- This answer's time, small at its end (not text: y does not copy it);
       -- the window's total, follow-ups included, in the title.
@@ -739,10 +1534,14 @@ local function askInto(w, question, prompt, opts)
           virt_text = { { elapsed(true), 'Comment' } }, virt_text_pos = 'right_align',
         })
       end
-      w.title(opts.kind .. (' %.1fs'):format(w.total) .. ' · a: follow up, y: copy, q: close')
+      w.title(opts.kind .. (' %.1fs'):format(w.total) .. ' · [ ]: older/newer, a: follow up, y: copy, q: close')
       w.session = session
       w.answer = text
       addHistory(opts.kind, question, text, session, extra.model)
+      w.index = #history -- where [ / ] in the window start from
+      -- Chat-like: the follow-up box takes the cursor once the answer is
+      -- in, if you are still in the answer (never pulled from elsewhere).
+      if w.focusInput and w.valid() and vim.api.nvim_get_current_win() == w.win then w.focusInput() end
       if extra.write then vim.cmd('silent! checktime') end
     end,
   })
@@ -766,15 +1565,115 @@ local function openAnswer(kind, question, prompt, cwd, preset, extra)
     vim.fn.setreg('"', w.answer)
     vim.notify(m_label .. ': answer copied')
   end, o)
-  vim.keymap.set('n', 'a', function()
-    if not w.session then return vim.notify(m_label .. ': wait for the answer first') end
-    vim.ui.input({ prompt = ' Follow up: ' }, function(q)
-      if not q or vim.trim(q) == '' or not w.valid() then return end
-      vim.api.nvim_set_current_win(w.win)
-      w.append('\n---\n\n## ' .. q .. '\n\n')
-      askInto(w, q, q, { cwd = cwd, session = w.session, kind = kind, extra = extra })
-    end)
+  -- t opens / closes the thinking of every answer in the window, like a fold.
+  vim.keymap.set('n', 't', function()
+    local thoughts = w.thoughts or {}
+    if #thoughts == 0 then return vim.notify(m_label .. ': no thinking to show') end
+    local open = not thoughts[#thoughts].open
+    for _, th in ipairs(thoughts) do th.open = open; th.draw() end
   end, o)
+  local function followUp(q)
+    if not q or vim.trim(q) == '' or not w.valid() then return end
+    if not w.session then return vim.notify(m_label .. ': wait for the answer first') end
+    w.append('\n---\n\n## ' .. q .. '\n\n')
+    -- To the model of the answer shown (it changes with [ / ]).
+    local ex = vim.tbl_extend('force', extra or {}, { model = w.model })
+    askInto(w, q, q, { cwd = cwd, session = w.session, kind = kind, extra = ex })
+  end
+
+  -- The follow-up box: one line docked under the answer, always there, as
+  -- in a chat (Improvment.md). It replaced a vim.ui.input prompt that 'a'
+  -- opened at the top of the screen and that went away after each question.
+  --   in the box     Enter sends; Esc goes up to the answer; <C-u> / <C-d>
+  --                  scroll the answer without leaving the box
+  --   in the answer  a or i go down to the box
+  -- The answer window gives up the box's 3 rows (the line and its border).
+  local cfg = vim.api.nvim_win_get_config(w.win)
+  local row = type(cfg.row) == 'table' and cfg.row[false] or cfg.row
+  local col = type(cfg.col) == 'table' and cfg.col[false] or cfg.col
+  local height = math.max(cfg.height - 3, 3)
+  vim.api.nvim_win_set_config(w.win, { relative = 'editor', row = row, col = col, height = height, width = cfg.width })
+  local ibuf = vim.api.nvim_create_buf(false, true)
+  vim.bo[ibuf].bufhidden = 'wipe'
+  -- No completion in the box: <CR> would take a suggestion instead of sending.
+  vim.bo[ibuf].complete = ''
+  vim.bo[ibuf].omnifunc = ''
+  local iwin = vim.api.nvim_open_win(ibuf, false, {
+    relative = 'editor', row = row + height + 2, col = col, width = cfg.width, height = 1,
+    style = 'minimal', border = 'rounded',
+    title = ' Follow up · Enter: send · Esc: to the answer ', title_pos = 'left',
+  })
+  w.input = { win = iwin, buf = ibuf }
+  local iopts = { buffer = ibuf, nowait = true, silent = true }
+  local function send()
+    local q = vim.trim(vim.api.nvim_buf_get_lines(ibuf, 0, 1, false)[1] or '')
+    if q == '' then return end
+    if not w.session then return vim.notify(m_label .. ': wait for the answer first') end
+    vim.api.nvim_buf_set_lines(ibuf, 0, -1, false, { '' })
+    followUp(q)
+  end
+  vim.keymap.set({ 'i', 'n' }, '<CR>', send, iopts)
+  vim.keymap.set('i', '<Esc>', function()
+    vim.cmd('stopinsert')
+    if w.valid() then vim.api.nvim_set_current_win(w.win) end
+  end, iopts)
+  vim.keymap.set('n', '<Esc>', function() if w.valid() then vim.api.nvim_set_current_win(w.win) end end, iopts)
+  local function scroll(keys)
+    return function()
+      if w.valid() then
+        vim.api.nvim_win_call(w.win, function() vim.cmd('normal! ' .. vim.keycode(keys)) end)
+      end
+    end
+  end
+  vim.keymap.set({ 'i', 'n' }, '<C-u>', scroll('<C-u>'), iopts)
+  vim.keymap.set({ 'i', 'n' }, '<C-d>', scroll('<C-d>'), iopts)
+  --- Into the box, typing.
+  function w.focusInput()
+    if vim.api.nvim_win_is_valid(iwin) then
+      vim.api.nvim_set_current_win(iwin)
+      vim.cmd('startinsert!')
+    end
+  end
+  vim.keymap.set('n', 'a', w.focusInput, o)
+  vim.keymap.set('n', 'i', w.focusInput, o)
+  -- One goes, both go.
+  vim.api.nvim_create_autocmd('WinClosed', {
+    pattern = tostring(iwin), once = true,
+    callback = function() vim.schedule(function() pcall(vim.api.nvim_win_close, w.win, true) end) end,
+  })
+  vim.api.nvim_create_autocmd('WinClosed', {
+    pattern = tostring(w.win), once = true,
+    callback = function() vim.schedule(function() pcall(vim.api.nvim_win_close, iwin, true) end) end,
+  })
+
+  -- [ / ]: the previous / next answer of this session's history, in this
+  -- same window, without going through <leader>ah (Improvment.md). A follow-up
+  -- (a) then continues the answer shown.
+  local function showEntry(i)
+    local h = history[i]
+    if not h then return end
+    if w.stop and not w.answer then return vim.notify(m_label .. ': wait for the answer first') end
+    vim.api.nvim_buf_clear_namespace(w.buf, ns, 0, -1)
+    w.thoughts = {}
+    local lines = { '## ' .. (h.question:gsub('\n', ' ')), '' }
+    vim.list_extend(lines, vim.split(h.answer or '', '\n', { plain = true }))
+    vim.api.nvim_buf_set_lines(w.buf, 0, -1, false, lines)
+    pcall(vim.api.nvim_win_set_cursor, w.win, { 1, 0 })
+    w.index, w.session, w.answer, w.model, w.total = i, h.session, h.answer, h.spec, nil
+    w.title(('%s %d/%d · %s · [ ]: older/newer, %sy: copy, q: close'):format(h.kind, i, #history,
+      os.date('%H:%M', h.time), h.session and 'a: follow up, ' or ''))
+  end
+  vim.keymap.set('n', '[', function()
+    local i = (w.index or (#history + 1)) - 1
+    if i < 1 then return vim.notify(m_label .. ': no older answer') end
+    showEntry(i)
+  end, o)
+  vim.keymap.set('n', ']', function()
+    local i = (w.index or #history) + 1
+    if i > #history then return vim.notify(m_label .. ': no newer answer') end
+    showEntry(i)
+  end, o)
+  w.showEntry = showEntry
   -- Closing the window stops a request still running: nobody would see it.
   vim.api.nvim_create_autocmd('WinClosed', {
     pattern = tostring(w.win),
@@ -791,7 +1690,14 @@ function M.ask(question, range)
   local buf = vim.api.nvim_get_current_buf()
   range = range or selection()
   local function go(q)
-    if not q or vim.trim(q) == '' then return end
+    if q == nil then return end -- cancelled
+    if vim.trim(q) == '' then
+      -- Enter on an empty question: the last answer again, where [ / ]
+      -- reach the ones before it (no need for <leader>ah).
+      if #history == 0 then return vim.notify(modelLabel() .. ': no answers yet') end
+      local w = openAnswer(history[#history].kind, history[#history].question, nil, workdir(buf))
+      return w.showEntry(#history)
+    end
     last = { kind = 'ask', instruction = q }
     local prompt = ASK_RULES .. '\n\n' .. context(buf, range) .. '\n\nRequest: ' .. q
     openAnswer('ask', q, prompt, workdir(buf))
@@ -875,12 +1781,13 @@ function M.write(instruction, range, extra)
         hl_group = 'Visual', hl_eol = true }) or nil
     local ghost_row = last_row - 1
     local m_label = modelLabel(extra.model)
-    local ghost = vim.api.nvim_buf_set_extmark(buf, ns, ghost_row, 0, {
-      virt_lines = { { { ('  %s is writing…'):format(m_label), 'Comment' } } },
-    })
-    local streamed = ''
+    -- The ghost lines: a status with the seconds on top ("… is writing… 12s",
+    -- see statusMark), then the thinking or the text as it comes.
+    local ghost = statusMark(buf, ghost_row, m_label .. ' is waiting…')
+    local streamed, thought = '', ''
     local function clear()
-      for _, id in ipairs({ a_mark, ghost, hl }) do
+      ghost.stop()
+      for _, id in ipairs({ a_mark, hl }) do
         if id then pcall(vim.api.nvim_buf_del_extmark, buf, ns, id) end
       end
     end
@@ -892,15 +1799,29 @@ function M.write(instruction, range, extra)
       model = extra.model,
       dirs = extra.dirs,
       write = extra.write,
+      on_tool = function(name)
+        if streamed ~= '' then return end
+        ghost.state = m_label .. (name == 'Read' and ' is reading…' or ' is searching…')
+        ghost.draw()
+      end,
+      -- Thinking only in the ghost lines while no answer has come: it is never
+      -- written into the buffer (on_done inserts the answer text only).
+      on_thinking = function(s)
+        thought = thought .. s
+        if streamed ~= '' then return end
+        ghost.state = m_label .. ' is thinking…'
+        ghost.extra = vim.g.pure_llm_thinking ~= 'hide' and thinkingLines(thought, 8) or nil
+        ghost.draw()
+      end,
       on_text = function(s)
         streamed = streamed .. s
-        if not vim.api.nvim_buf_is_valid(buf) then return end
         local shown = {}
         for _, l in ipairs(vim.split(streamed, '\n', { plain = true })) do
           table.insert(shown, { { l == '' and ' ' or l, 'Comment' } })
         end
-        local at = vim.api.nvim_buf_get_extmark_by_id(buf, ns, ghost, {})
-        pcall(vim.api.nvim_buf_set_extmark, buf, ns, at[1] or ghost_row, 0, { id = ghost, virt_lines = shown })
+        ghost.state = m_label .. ' is writing…'
+        ghost.extra = shown
+        ghost.draw()
       end,
       on_done = function(err, text)
         if not vim.api.nvim_buf_is_valid(buf) then return end
@@ -955,8 +1876,10 @@ function M.history()
   }, function(h)
     if not h then return end
     local w = openAnswer(h.kind, h.question, nil, vim.fn.getcwd(), h.answer)
-    w.session, w.answer = h.session, h.answer
-    w.title(h.kind .. (h.session and ' · a: follow up, y: copy, q: close' or ' · y: copy, q: close'))
+    -- At its place in the history, so [ / ] in the window go on from it.
+    for i, e in ipairs(history) do
+      if e == h then return w.showEntry(i) end
+    end
   end)
 end
 
@@ -1168,8 +2091,12 @@ function M.runAction(a, ctx)
     end
 
     -- notify: Claude works on its own; its summary comes as a notification.
+    -- Meanwhile a status with the seconds under the cursor line (statusMark),
+    -- where it was started: before, nothing in the buffer said it was running.
     vim.notify('Claude: ' .. a.description .. '…')
     local used = {}
+    local status = statusMark(buf, vim.api.nvim_win_get_cursor(0)[1] - 1,
+      modelLabel(a.model) .. ' · ' .. a.description .. '…')
     run({
       prompt = AGENT_RULES .. '\n\n' .. context(buf, ctx.range) .. '\n\nTask: ' .. body,
       tools = a.tools or READ_TOOLS,
@@ -1179,6 +2106,7 @@ function M.runAction(a, ctx)
       dirs = extra.dirs,
       on_tool = function(name) used[name] = (used[name] or 0) + 1 end,
       on_done = function(err, text)
+        status.stop()
         vim.cmd('silent! checktime')
         if err == 'stopped' then return end
         if err then return vim.notify('Claude: ' .. a.description .. ': ' .. err, vim.log.levels.ERROR) end
@@ -1515,9 +2443,8 @@ local function runBlock(buf, block)
       os.date('%Y-%m-%d, %A'), vaultHints(), table.concat(lines, '\n'), block.prompt)
 
   local m_label = modelLabel(block.options.model)
-  local mark = vim.api.nvim_buf_set_extmark(buf, ns, block.last, 0, {
-    virt_lines = { { { ('  %s is answering…'):format(m_label), 'Comment' } } },
-  })
+  -- With the seconds going (statusMark), as <leader>aa's window shows them.
+  local status = statusMark(buf, block.last, m_label .. ' is answering…')
   local tick = vim.b[buf].changedtick
   run({
     prompt = prompt,
@@ -1526,9 +2453,9 @@ local function runBlock(buf, block)
     cwd = cwd,
     on_done = function(err, text)
       block_running[id] = nil
-      if not vim.api.nvim_buf_is_valid(buf) then return end
-      local at = vim.api.nvim_buf_get_extmark_by_id(buf, ns, mark, {})
-      pcall(vim.api.nvim_buf_del_extmark, buf, ns, mark)
+      if not vim.api.nvim_buf_is_valid(buf) then return status.stop() end
+      local at = status.id and vim.api.nvim_buf_get_extmark_by_id(buf, ns, status.id, {}) or {}
+      status.stop()
       if err then return vim.notify(m_label .. ' block: ' .. err, vim.log.levels.ERROR) end
       -- Find the block again (lines may have moved meanwhile).
       local now = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
@@ -1626,5 +2553,6 @@ end, {
 })
 
 M._blocksIn, M._due, M._unfence, M._run, M._extraContext = blocksIn, due, unfence, run, extraContext
+M._runTool = runTool
 
 return M
