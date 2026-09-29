@@ -1370,7 +1370,15 @@ end
 --- One task as a line of the region.
 local function syncLine(t, depth, projects)
   local f = taskFields(t, projects)
-  local parts = { ('%s- [ ] [%s](%s%s)'):format(string.rep('  ', depth), (f.c:gsub('([%[%]])', '\\%1')), task_url, t.id) }
+  local parts
+  if f.c:find('[[', 1, true) then
+    -- A [[wikilink]] in the task: a link cannot sit inside another link's
+    -- text, so the task is written as it is and the link to Todoist is an
+    -- arrow after it. The [[note]] then works in Obsidian and with <CR>.
+    parts = { ('%s- [ ] %s [↗](%s%s)'):format(string.rep('  ', depth), f.c, task_url, t.id) }
+  else
+    parts = { ('%s- [ ] [%s](%s%s)'):format(string.rep('  ', depth), (f.c:gsub('([%[%]])', '\\%1')), task_url, t.id) }
+  end
   if f.d ~= '' then table.insert(parts, f.d) end
   if priorityLabel(f.p) ~= '' then table.insert(parts, priorityLabel(f.p)) end
   if f.j ~= '' then table.insert(parts, f.j) end
@@ -1445,7 +1453,11 @@ local function parseItem(line, by_name)
   if not indent then return nil end
   local item = { depth = #(indent:gsub('\t', '  ')), checked = mark == 'x' or mark == 'X', d = '', p = 1 }
   local text, id, tail = rest:match('^%[(.-)%]%(' .. vim.pesc(task_url) .. '([%w_]+)%)(.*)$')
-  if text then
+  local plain, pid, ptail = rest:match('^(.-)%s*%[↗%]%(' .. vim.pesc(task_url) .. '([%w_]+)%)(.*)$')
+  if plain and (not text or plain:find('[[', 1, true)) then
+    -- "text with [[links]] [↗](url)": see syncLine.
+    item.id, item.c, tail = pid, vim.trim(plain), ptail
+  elseif text then
     item.id, item.c = id, (text:gsub('\\([%[%]])', '%1'))
   else
     local cut = rest:find(' · ', 1, true)

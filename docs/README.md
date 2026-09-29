@@ -72,7 +72,10 @@ file loads everything.
 
 It is generated, never edited: `nvim -l scripts/bundle.lua` (from the
 repository root) writes `pure.lua` from the current modules (committed to
-`single-file` as `init.lua`). Each module
+`single-file` as `init.lua`). A GitHub Action
+(`.github/workflows/single-file.yml`) does this on every push to `windows`
+and commits the result to `single-file`; it can also be started by hand on
+GitHub (Actions → Rebuild single-file → Run workflow). Each module
 becomes a `package.preload` entry with its code unchanged; `colors/`,
 `snippets/` and `docs/` are embedded and unpacked into
 `stdpath('cache')/pure-bundle` on start (`vim.g.pure_bundle_dir`).
