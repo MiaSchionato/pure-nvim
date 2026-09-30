@@ -2,6 +2,24 @@ local M = {}
 
 local mdGroup = vim.api.nvim_create_augroup("PureMarkdown", { clear = true})
 
+-- While typing, **bold** and `code` flashed back to their raw marks for one
+-- key (Improvment.md). Since Neovim 0.11 treesitter parses asynchronously
+-- once a parse takes over 3 ms, which a note with its inline markdown does;
+-- the screen was drawn in between, with no highlight yet. Parsing
+-- synchronously (vim.g._ts_force_sync_parsing, Neovim's own switch) is only
+-- turned on in markdown buffers: notes are small, while a large code file
+-- could make every key wait for the parse.
+-- FileType too: a buffer made markdown after it was entered (:set ft=markdown)
+-- got it only on the next BufEnter. Only for the current buffer, or a buffer
+-- loaded in the background would decide for the one being edited.
+vim.api.nvim_create_autocmd({ "BufEnter", "WinEnter", "FileType" }, {
+  group = mdGroup,
+  callback = function(args)
+    if args.buf ~= vim.api.nvim_get_current_buf() then return end
+    vim.g._ts_force_sync_parsing = vim.bo[args.buf].filetype == "markdown" or nil
+  end,
+})
+
 --- <C-l> in insert mode (mapped below): the last really misspelled word
 --- before the cursor on this line becomes the first spelling suggestion.
 function M.fixLastWord()

@@ -138,6 +138,32 @@ local function render(buf, win)
   pcall(vim.api.nvim_win_set_cursor, win, { menu_row, 0 })
 end
 
+--- l on the dashboard: back to the last note of the vault that was open
+--- (Improvment.md), at the line where it was left: the newest entry of
+--- v:oldfiles that is a markdown file inside the vault. With no such note
+--- (or no vault), the last file Neovim was closed on, Vim's '0 mark.
+function M.lastNote()
+  local ok, zet = pcall(require, 'pure.zettelkasten')
+  local vault = ok and zet.vaultPath() or nil
+  local key = function(p)
+    p = vim.fs.normalize(p)
+    return vim.fn.has('win32') == 1 and p:lower() or p
+  end
+  if vault then
+    local root = key(vault) .. '/'
+    for _, f in ipairs(vim.v.oldfiles) do
+      local path = vim.fs.normalize(f)
+      if f:match('%.md$') and key(path):sub(1, #root) == root and vim.fn.filereadable(path) == 1 then
+        vim.cmd('edit ' .. vim.fn.fnameescape(path))
+        -- Where it was left ('"), as reopening a file with :e does not do.
+        pcall(vim.cmd, 'normal! g`"')
+        return
+      end
+    end
+  end
+  if not pcall(vim.cmd, "normal! '0") then vim.notify('No recent note or file') end
+end
+
 --- Show the dashboard in the current window.
 function M.drawDashboard()
   local previous = vim.api.nvim_get_current_buf()
@@ -176,6 +202,7 @@ function M.drawDashboard()
   -- Set your keymaps for the dashboard buffer
   local opts = { buffer = buf, silent = true, nowait = true }
   vim.keymap.set('n', 'd', function() require('pure.zettelkasten').openDaily() end, opts)
+  vim.keymap.set('n', 'l', M.lastNote, opts)
   vim.keymap.set('n', 'n', ':enew<CR>', opts)
   -- In a tab of its own, q closes that tab; from the last one it quits.
   vim.keymap.set('n', 'q', function()

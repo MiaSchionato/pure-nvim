@@ -211,13 +211,23 @@ function render.code(buf, node, mark)
   end
 end
 
+--- The list marker's range without the spaces the parser sometimes puts in
+--- it: for a nested item under a task ("    - [ ] sub") the marker node
+--- was "  - " from column 2, so concealing it hid half the indentation and
+--- the subtask showed level with its parent (Improvment.md).
+local function markerRange(buf, node)
+  local row, sc, _, ec = node:range()
+  local lead = #(lineText(buf, row):sub(sc + 1, ec):match('^%s*'))
+  return row, sc + lead, ec
+end
+
 --- Bullets change with depth; a task item's bullet is hidden instead, since
 --- the checkbox takes its place.
 function render.bullet(buf, node, mark)
   local item = node:parent()
   for child in item:iter_children() do
     if child:type():match('^task_list_marker') then
-      local row, sc, _, ec = node:range()
+      local row, sc, ec = markerRange(buf, node)
       mark(row, sc, { end_col = ec, conceal = '' })
       return
     end
@@ -225,7 +235,7 @@ function render.bullet(buf, node, mark)
 
   -- '- [~] text' and the like: hide the bullet, draw the state's icon over
   -- the '[' and conceal the rest of the box, as for real task items.
-  local row, sc, _, ec = node:range()
+  local row, sc, ec = markerRange(buf, node)
   local box_col, state = lineText(buf, row):match('()%[([^%]])%]', ec + 1)
   if box_col == ec + 1 and extra_states[state] then
     -- The whole '[~]' is concealed *into* the icon. Treesitter reads '[~]' as
@@ -243,7 +253,7 @@ function render.bullet(buf, node, mark)
     if parent:type() == 'list' then depth = depth + 1 end
     parent = parent:parent()
   end
-  local row, col = node:start()
+  local _, col = markerRange(buf, node)
   mark(row, col, {
     virt_text = { { bullets[(depth - 1) % #bullets + 1], 'PureMdBullet' } },
     virt_text_pos = 'overlay',

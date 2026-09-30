@@ -367,12 +367,13 @@ local function claude(fn)
   return function() require('pure.claude')[fn]() end
 end
 map({ 'n', 'x' }, '<leader>ai', claude('write'), func.getOpts(opts, "Write here (visual: rewrite)"))
-map({ 'n', 'x' }, '<leader>aa', claude('ask'), func.getOpts(opts, "Ask (answer in a window)"))
+map({ 'n', 'x' }, '<leader>aa', claude('ask'), func.getOpts(opts, "Chat: show / hide (like <leader>tt)"))
 map({ 'n', 'x' }, '<leader>ac', claude('review'), func.getOpts(opts, "Review the code"))
 map({ 'n', 'x' }, '<leader>ar', claude('repeatLast'), func.getOpts(opts, "Repeat the last request"))
 map('n', '<leader>ah', claude('history'), func.getOpts(opts, "Past answers"))
 map('n', '<leader>as', claude('stop'), func.getOpts(opts, "Stop"))
 map('n', '<leader>am', claude('selectModel'), func.getOpts(opts, "Select model (Ollama / Claude / agy)"))
+map('n', '<leader>at', claude('toggleThinking'), func.getOpts(opts, "Thinking of <leader>ai (show / hide)"))
 -- The file about you that every request reads (outside any git repository).
 map('n', '<leader>au', function()
   local path = require('pure.claude').userContextFile()
@@ -466,7 +467,24 @@ end, func.getOpts(opts, "Toggle line numbers"))
 map('n', '<leader>jl', '<C-i>', func.getOpts(opts, "Jump forward"))
 map('n', '<leader>jh', '<C-o>', func.getOpts(opts, "Jump back"))
 
-map('n', '<leader>zz', 'za', func.getOpts(opts, "Toggle fold"))
+-- Only a fold that starts on this line (pure/folding.lua): za closed the fold
+-- around the line, which in a markdown list was the whole section.
+map('n', '<leader>zz', function() require('pure.folding').toggleHere() end,
+  func.getOpts(opts, "Toggle the fold starting here"))
+-- Tasks by state (Improvment.md); the same key again, or <leader>zr, goes back.
+map('n', '<leader>zt', function() require('pure.folding').tasks('done') end,
+  func.getOpts(opts, "Fold done tasks (see what is left)"))
+map('n', '<leader>zT', function() require('pure.folding').tasks('open') end,
+  func.getOpts(opts, "Fold open tasks (see what is done)"))
+-- The same on Vim's own z prefix, without <leader> (Improvment.md). They
+-- replace Vim's zt / zz ("scroll this line to the top / middle"), which the
+-- owner of this configuration does not use and asked to give up.
+map('n', 'zt', function() require('pure.folding').tasks('done') end,
+  func.getOpts(opts, "Fold done tasks (see what is left)"))
+map('n', 'zT', function() require('pure.folding').tasks('open') end,
+  func.getOpts(opts, "Fold open tasks (see what is done)"))
+map('n', 'zz', function() require('pure.folding').toggleHere() end,
+  func.getOpts(opts, "Toggle the fold starting here"))
 -- Folds are made automatically (treesitter, or indentation), and those
 -- methods refuse zf. Folding a selection by hand switches the window to manual
 -- folds -- the automatic ones stay -- and <leader>zr goes back to automatic.
@@ -547,7 +565,18 @@ vim.schedule(function()
     return #(ahead:match('^' .. closers .. '+') or '')
   end
 
+  -- Right after a list item's marker ("- [ ] |", "- |", "1. |"), where the
+  -- item is still empty: Tab / S-Tab make it a sub-item / take it back out
+  -- (Improvment.md, fourth round). Anywhere else Tab never indents.
+  local function atItemStart()
+    local it = require('pure.lists').item()
+    return it ~= nil and vim.api.nvim_win_get_cursor(0)[2] == it.start
+  end
+
   map('i', '<tab>', function()
+    if atItemStart() then
+      return (vim.fn.pumvisible() == 1 and "<C-e>" or "") .. "<C-t>"
+    end
     if vim.fn.pumvisible() == 1 then return "<C-n>" end
     local n = closersAhead()
     if n > 0 then return string.rep("<right>", n) end
@@ -559,6 +588,9 @@ vim.schedule(function()
 
   --  Mirrors Tab backwards: previous suggestion, snippet back; else the builtin.
   map('i', '<S-tab>', function()
+    if atItemStart() then
+      return (vim.fn.pumvisible() == 1 and "<C-e>" or "") .. "<C-d>"
+    end
     if vim.fn.pumvisible() == 1 then return "<C-p>" end
     -- was `direction = 1` here too, so the backward jump asked whether a
     -- *forward* jump was possible.

@@ -238,9 +238,12 @@ function M.selectModel()
       end
     else
       local status_text = online and '(no models installed in Ollama)'
-        or ('(Ollama offline at ' .. (vim.g.pure_ollama_url or 'localhost:11434') .. ')')
-      local line = ('  [ollama] %-28s\t'):format(status_text)
+        or ('(offline) start Ollama and list its models')
+      local line = ('  [ollama] %-28s\t%s'):format(status_text, online and '' or '__start_ollama__')
       table.insert(choices, line)
+      -- Offline: picking the line starts Ollama (startOllama) and reopens
+      -- this list with its models.
+      if not online then model_map[line] = '__start_ollama__' end
     end
 
     -- Claude presets
@@ -280,6 +283,12 @@ function M.selectModel()
 
     local function applySelection(id)
       if not id or id == '' then return end
+      if id == '__start_ollama__' then
+        return M.startOllama(function(up, why)
+          if up then return M.selectModel() end
+          if why then vim.notify('Ollama: ' .. why, vim.log.levels.WARN) end
+        end)
+      end
       if id == '__custom__' then
         vim.ui.input({ prompt = ' Model (e.g. ollama:qwen2.5-coder:14b or claude:sonnet): ' }, function(input)
           if input and vim.trim(input) ~= '' then
@@ -783,6 +792,102 @@ end
 --- Models Ollama said have no tool support: asked without tools from then on.
 local no_tools = {}
 
+-- -----------------------------------------------------------------------------
+--  Starting Ollama on demand
+-- -----------------------------------------------------------------------------
+--  Asked for in the vault's Improvment.md: Ollama need not run all the
+--  time. When a request finds it down, it is offered to start it; started
+--  here, it belongs to this Neovim and is stopped when Neovim quits. One
+--  already running (started elsewhere) is never stopped.
+--
+--    vim.g.pure_ollama_autostart = 'ask'   (default) ask first
+--                                = true    start without asking
+--                                = false   never: the request fails as before
+--
+--  Only for an Ollama on this machine (localhost / 127.0.0.1).
+
+local ollama_server   -- the `ollama serve` started here (vim.system object)
+local ollama_declined -- "No" once: not asked again this session
+
+local function ollamaUrl() return vim.g.pure_ollama_url or 'http://localhost:11434' end
+
+--- `cb(true)` once Ollama answers at its URL, polling up to `tries` times
+--- half a second apart; `cb(false)` if it never does.
+local function waitOllama(tries, cb)
+  vim.system({ 'curl', '-s', '-m', '1', ollamaUrl() .. '/api/version' }, { text = true }, function(res)
+    vim.schedule(function()
+      if res.code == 0 and (res.stdout or ''):find('version', 1, true) then return cb(true) end
+      if tries <= 1 then return cb(false) end
+      vim.defer_fn(function() waitOllama(tries - 1, cb) end, 500)
+    end)
+  end)
+end
+
+--- Start Ollama if allowed (asking, by default); `cb(ok, why)`.
+local function startOllama(cb)
+  local setting = vim.g.pure_ollama_autostart
+  if setting == nil then setting = 'ask' end
+  if setting == false or ollama_declined then return cb(false) end
+  if not ollamaUrl():match('^https?://localhost[:/]') and not ollamaUrl():match('^https?://127%.0%.0%.1[:/]') then
+    return cb(false) -- an Ollama on another machine is not ours to start
+  end
+  local exe = vim.fn.exepath('ollama')
+  if exe == '' then return cb(false, 'the `ollama` command is not in the PATH') end
+  if ollama_server then return waitOllama(40, cb) end -- starting already
+  if setting == 'ask' and vim.fn.confirm('Ollama is not running. Start it now (it stops when Neovim quits)?',
+      '&Yes\n&No', 1) ~= 1 then
+    ollama_declined = true
+    return cb(false)
+  end
+  -- Where its models are. vim.g.pure_ollama_models wins. Otherwise an
+  -- OLLAMA_MODELS that points at a folder with no models, while the default
+  -- ~/.ollama/models has them, is passed over: found on this machine, where
+  -- the variable named an empty D:\Models the Ollama app itself ignored, so
+  -- the server started here found no model at all.
+  local function hasModels(dir)
+    return dir and vim.fn.isdirectory(dir .. '/manifests') == 1
+      and #vim.fn.readdir(dir .. '/manifests') > 0
+  end
+  local models = vim.g.pure_ollama_models
+  if not models then
+    local default = vim.fs.normalize(vim.uv.os_homedir() .. '/.ollama/models')
+    local env = vim.env.OLLAMA_MODELS
+    if env and env ~= '' and not hasModels(env) and hasModels(default) then
+      models = default
+      vim.notify(('OLLAMA_MODELS (%s) has no models; using %s'):format(env, default), vim.log.levels.WARN)
+    end
+  end
+  local ok, obj = pcall(vim.system, { exe, 'serve' },
+    { env = models and { OLLAMA_MODELS = vim.fn.expand(models) } or nil }, function() ollama_server = nil end)
+  if not ok then return cb(false, 'could not start ollama: ' .. tostring(obj)) end
+  ollama_server = obj
+  vim.notify('Starting Ollama…')
+  -- A cold start can take a few seconds (up to 20 here).
+  waitOllama(40, function(up)
+    if not up then return cb(false, 'Ollama was started but does not answer at ' .. ollamaUrl()) end
+    vim.notify('Ollama is running (it stops when Neovim quits)')
+    cb(true)
+  end)
+end
+
+-- For <leader>am's "(offline) start Ollama" line, defined above this.
+M.startOllama = startOllama
+
+-- The Ollama started here goes with this Neovim. The whole process tree:
+-- the models run in runner processes of their own. Synchronous (:wait),
+-- or Neovim is gone before taskkill runs.
+vim.api.nvim_create_autocmd('VimLeavePre', {
+  group = vim.api.nvim_create_augroup('PureOllamaServer', { clear = true }),
+  callback = function()
+    if not ollama_server or not ollama_server.pid then return end
+    if vim.fn.has('win32') == 1 then
+      pcall(function() vim.system({ 'taskkill', '/T', '/F', '/PID', tostring(ollama_server.pid) }):wait(3000) end)
+    else
+      pcall(function() ollama_server:kill(15) end)
+    end
+  end,
+})
+
 --- Tool calls a model wrote as text instead of through Ollama's tool_calls:
 --- qwen2.5-coder answered a plain question with
 ---   {"name": "read_file", "arguments": {"path": "x.md"}}
@@ -872,6 +977,25 @@ local function runOllama(opts, model)
   -- Tokens (tokens()), summed over every round of tool calls: each round
   -- sends the whole conversation again.
   local usage = { input = 0, output = 0 }
+
+  -- The context size, as small as the request allows. A fixed 32768 kept a
+  -- 9B model partly on the CPU of an 8 GB card and halved its speed
+  -- (measured with qwen3.5:9b on an RTX 5060: 56 tokens/s at 8192, 39 at
+  -- 16384, 29 at 32768). So: 8192, doubled while the conversation (about 3
+  -- characters a token, plus room for the answer) needs more, up to
+  -- vim.g.pure_ollama_num_ctx (default 32768). It only grows within one
+  -- request: a new size makes Ollama reload the model.
+  local num_ctx = 0
+  local function contextSize()
+    local chars = 0
+    for _, m in ipairs(messages) do chars = chars + #(m.content or '') end
+    local need = math.ceil(chars / 3) + 2048
+    local max = vim.g.pure_ollama_num_ctx or 32768
+    local size = 8192
+    while size < need and size < max do size = size * 2 end
+    num_ctx = math.max(num_ctx, math.min(size, max))
+    return num_ctx
+  end
 
   local function flush()
     flush_pending = false
@@ -1005,10 +1129,11 @@ local function runOllama(opts, model)
       tools = #tools > 0 and tools or nil,
       -- num_ctx: without it Ollama runs with its small default context and
       -- silently drops the start of a long prompt (the rules, the file),
-      -- which is why local models "forgot" what to do. num_predict -1: no
-      -- cap on the answer, so a model may think for as long as it needs.
+      -- which is why local models "forgot" what to do; sized by
+      -- contextSize(). num_predict -1: no cap on the answer, so a model may
+      -- think for as long as it needs.
       options = {
-        num_ctx = vim.g.pure_ollama_num_ctx or 32768,
+        num_ctx = contextSize(),
         num_predict = -1,
       },
     })
@@ -1055,6 +1180,16 @@ local function runOllama(opts, model)
           local why = vim.trim(table.concat(err_text))
           if res.code == 7 then
             why = 'Could not connect to Ollama at ' .. url .. ' (is Ollama running?)'
+            -- Down before anything was said: offer to start it, then ask
+            -- again from the start (startOllama).
+            if rounds == 1 and #text == 0 then
+              return startOllama(function(up, reason)
+                if stopped then return finish('stopped') end
+                if not up then return finish(reason and (why .. ': ' .. reason) or why) end
+                rounds = 0
+                request()
+              end)
+            end
           elseif why == '' then
             why = 'curl exited with code ' .. res.code
           end
@@ -1162,16 +1297,83 @@ local function userContextBlock()
     table.insert(parts, 'If the user tells you something lasting about themselves that would help in later '
       .. 'requests (a preference, their work, how they like answers), add it at the very end of your answer '
       .. 'as <remember>one short sentence</remember>. It is saved to their context file and hidden from the '
-      .. 'answer. Do not use it for anything else, and not for things already in <user_context>.')
+      .. 'answer. Do not use it for anything else. Never repeat, rephrase or confirm something '
+      .. '<user_context> already says: only facts that are new.')
   end
   return #parts > 0 and (table.concat(parts, '\n\n') .. '\n\n') or ''
 end
 
---- Append `facts` to the user context file, one dated line each.
+-- Words that say nothing about the fact itself, in the three languages the
+-- notes are written in: "My name is Mia" and "O nome dela é Mia" share
+-- just "name/nome" and "mia", which is what makes them the same fact.
+local STOPWORDS = {}
+for w in ([[a an the is are am was be my me i you your user user's users he she they their his her
+  of to in on at for and or with that this it its called likes prefers
+  o os as um uma e é sou são era eu meu minha seu sua dele dela do da dos das de em no na nos nas
+  para por com que se ele ela usuário usuária gosta prefere
+  il lo la gli le un una è sono di da del della per con che mi mio tuo]]):gmatch('%S+') do
+  STOPWORDS[w] = true
+end
+-- The same idea in en / pt / it, one word for it: without this "I am called
+-- Mia", "Her name is Mia" and "O nome dela é Mia" were three facts, and a
+-- preference written in English did not match the same one in Portuguese.
+-- Only words that profile facts use a lot; the rest match as they are.
+local SAME = {}
+for group in ([[name,names,named,called,call,nome,chama,chamo,chamada,chamado,chiamo,chiama
+  answer,answers,answered,reply,replies,resposta,respostas,responder,risposta,risposte
+  portuguese,portugues,portoghese  brazil,brazilian,brasil,brasileiro,brasileira
+  english,ingles,inglese  italian,italiano,italiana
+  work,works,job,trabalha,trabalho,trabalhar,lavoro,lavora
+  language,languages,idioma,idiomas,lingua,linguas,lingue
+  write,writes,writing,escreve,escrevo,escrever,scrive,scrivo]]):gmatch('%S+') do
+  local head = group:match('^[^,]+')
+  for w in group:gmatch('[^,]+') do SAME[w] = head end
+end
+-- Accented letters folded to plain ones, so "usuário" and "usuario" match.
+local ACCENTS = { ['á'] = 'a', ['à'] = 'a', ['â'] = 'a', ['ã'] = 'a', ['é'] = 'e', ['ê'] = 'e', ['è'] = 'e',
+  ['í'] = 'i', ['ó'] = 'o', ['ô'] = 'o', ['õ'] = 'o', ['ò'] = 'o', ['ú'] = 'u', ['ù'] = 'u', ['ç'] = 'c' }
+
+--- The words of a fact that carry its meaning, as a set.
+local function factWords(s)
+  s = vim.fn.tolower(s):gsub('%(%d%d%d%d%-%d%d%-%d%d%)', '')
+  for from, to in pairs(ACCENTS) do s = s:gsub(from, to) end
+  local set, n = {}, 0
+  for w in s:gmatch('[%w\']+') do
+    w = SAME[w] or w
+    if not STOPWORDS[w] and not set[w] then set[w], n = true, n + 1 end
+  end
+  return set, n
+end
+
+--- Whether `fact` says what one of `lines` already says: most of its
+--- meaningful words (60%) are in that line. Added because every model that
+--- was told the user's name wrote it down again, in its own words.
+local function known(fact, lines)
+  local words, n = factWords(fact)
+  if n == 0 then return true end
+  for _, line in ipairs(lines) do
+    local have = factWords(line)
+    local shared = 0
+    for w in pairs(words) do if have[w] then shared = shared + 1 end end
+    if shared / n >= 0.6 then return true end
+  end
+  return false
+end
+
+--- Append `facts` to the user context file, one dated line each; a fact the
+--- file already holds (see known) is left out.
 local function remember(facts)
   local path = userContextFile()
   if not path or #facts == 0 then return end
   vim.fn.mkdir(vim.fs.dirname(path), 'p')
+  local ok, existing = pcall(vim.fn.readfile, path)
+  existing = ok and existing or {}
+  local new = {}
+  for _, f in ipairs(facts) do
+    if not known(f, existing) and not known(f, new) then table.insert(new, f) end
+  end
+  facts = new
+  if #facts == 0 then return end
   local lines = {}
   if not vim.uv.fs_stat(path) then
     lines = { '# About me', '', 'Read by every LLM request from Neovim (pure/claude.lua). Edit freely.', '' }
@@ -1180,6 +1382,8 @@ local function remember(facts)
   vim.fn.writefile(lines, path, 'a')
   vim.notify('Remembered: ' .. table.concat(facts, '; '))
 end
+
+M._knownFact = known
 
 --- `text` without its <remember> tags, and what they held.
 local function takeRemembered(text)
@@ -1372,30 +1576,37 @@ end
 --- A window for an answer: `question` on top, then the answer as it comes.
 --- Returns an object to write into it.
 local function answerWindow(title, model_spec)
-  local m_label = modelLabel(model_spec)
-  local win, buf = require('configs.functions').createWindow(' ' .. m_label .. ' · ' .. title .. ' ', 0.7)
+  local buf = vim.api.nvim_create_buf(false, true)
   vim.bo[buf].filetype = 'markdown'
-  vim.bo[buf].bufhidden = 'wipe'
+  -- 'hide', not 'wipe': <leader>aa hides the chat and shows it again later
+  -- with its whole conversation (see M.ask); q wipes it for good.
+  vim.bo[buf].bufhidden = 'hide'
   vim.b[buf].pure_mdview = true
-  vim.wo[win].wrap, vim.wo[win].linebreak = true, true
-  vim.wo[win].conceallevel = 2
-  local w = { win = win, buf = buf, model = model_spec }
+  local w = { buf = buf, model = model_spec, title_text = title }
 
-  function w.valid() return vim.api.nvim_win_is_valid(win) and vim.api.nvim_buf_is_valid(buf) end
+  --- The chat exists (its buffer); it may be hidden.
+  function w.valid() return vim.api.nvim_buf_is_valid(buf) end
+  --- The chat is on screen.
+  function w.visible() return w.win ~= nil and vim.api.nvim_win_is_valid(w.win) end
+  --- Kept while hidden, and put back on the window when it is shown.
   function w.title(s)
-    if w.valid() then pcall(vim.api.nvim_win_set_config, win, { title = ' ' .. modelLabel(w.model) .. ' · ' .. s .. ' ' }) end
+    w.title_text = s
+    if w.visible() then
+      pcall(vim.api.nvim_win_set_config, w.win, { title = ' ' .. modelLabel(w.model) .. ' · ' .. s .. ' ' })
+    end
   end
   --- Append `s` (may hold newlines) at the end, following it with the
-  --- cursor when the cursor is on the last line.
+  --- cursor when the cursor is on the last line. Hidden, the text still
+  --- goes in: an answer keeps coming while the chat is hidden.
   function w.append(s)
     if not w.valid() then return end
     local count = vim.api.nvim_buf_line_count(buf)
-    local follow = vim.api.nvim_win_get_cursor(win)[1] >= count - 1
+    local follow = w.visible() and vim.api.nvim_win_get_cursor(w.win)[1] >= count - 1
     local last_line = vim.api.nvim_buf_get_lines(buf, count - 1, count, false)[1] or ''
     local new = vim.split(last_line .. s, '\n', { plain = true })
     vim.api.nvim_buf_set_lines(buf, count - 1, count, false, new)
     if follow then
-      pcall(vim.api.nvim_win_set_cursor, win, { vim.api.nvim_buf_line_count(buf), 0 })
+      pcall(vim.api.nvim_win_set_cursor, w.win, { vim.api.nvim_buf_line_count(buf), 0 })
     end
   end
   return w
@@ -1446,6 +1657,27 @@ local function statusMark(buf, row, state)
   timer:start(1000, 1000, vim.schedule_wrap(s.draw))
   s.draw()
   return s
+end
+
+-- <leader>at: the thinking of <leader>ai (write), which has no window of its
+-- own to put a t key in, and plain t in a buffer you edit is the t{char}
+-- motion. `writing[buf]` is the write running in that buffer (its toggle);
+-- `last_thought[buf]` the thinking of the last one, kept after it is done.
+local writing, last_thought = {}, {}
+
+--- <leader>at: a write running in this buffer shows all its thinking, or
+--- goes back to the short form; with none running, the last write's
+--- thinking opens in a window (q closes it).
+function M.toggleThinking()
+  local buf = vim.api.nvim_get_current_buf()
+  if writing[buf] then return writing[buf].toggle() end
+  local t = last_thought[buf]
+  if not t then return vim.notify('No thinking to show in this buffer') end
+  local win, tbuf = require('configs.functions').createWindow(' ' .. t.model .. ' · thinking ', 0.6)
+  vim.api.nvim_buf_set_lines(tbuf, 0, -1, false, vim.split(vim.trim(t.text), '\n', { plain = true }))
+  vim.bo[tbuf].bufhidden, vim.bo[tbuf].modifiable = 'wipe', false
+  vim.wo[win].wrap, vim.wo[win].linebreak = true, true
+  vim.keymap.set('n', 'q', function() pcall(vim.api.nvim_win_close, win, true) end, { buffer = tbuf, nowait = true })
 end
 
 --- The thinking of one answer in the window `w`, above the answer's first
@@ -1583,17 +1815,35 @@ local function askInto(w, question, prompt, opts)
   w.stop = function() stopped = true; stop() end
 end
 
-local function openAnswer(kind, question, prompt, cwd, preset, extra)
-  local w = answerWindow(kind, extra and extra.model)
-  vim.api.nvim_buf_set_lines(w.buf, 0, -1, false, { '## ' .. (question:gsub('\n', ' ')), '', '' })
-  if preset then
-    vim.api.nvim_buf_set_lines(w.buf, 2, -1, false, vim.split(preset, '\n', { plain = true }))
+--- The <leader>aa chat: shown, hidden (kept with its conversation), or nil.
+--- One at a time: a new one replaces it.
+local chat
+
+local NEW_CHAT = { '_New chat: type your question in the box below._', '',
+  '_In this window: [ ] older / newer answers · n new chat · y copy · t thinking · Esc hide (<leader>aa shows it again) · q close_' }
+
+--- The chat window: `question` asked with `prompt` (sent at once), `preset`
+--- (an answer from the history, shown), or, with `fresh` ({ ctx }), an empty
+--- chat whose first question is typed in the box.
+local function openAnswer(kind, question, prompt, cwd, preset, extra, fresh)
+  if chat and chat.valid() then chat.destroy() end
+  local w = answerWindow(question and kind or 'new chat', extra and extra.model)
+  chat = w
+  w.cwd = cwd
+  if question then
+    vim.api.nvim_buf_set_lines(w.buf, 0, -1, false, { '## ' .. (question:gsub('\n', ' ')), '', '' })
+    if preset then
+      vim.api.nvim_buf_set_lines(w.buf, 2, -1, false, vim.split(preset, '\n', { plain = true }))
+    end
+  else
+    vim.api.nvim_buf_set_lines(w.buf, 0, -1, false, NEW_CHAT)
+    w.fresh, w.ctx = true, fresh and fresh.ctx or ''
   end
 
   local o = { buffer = w.buf, nowait = true, silent = true }
   local m_label = modelLabel(extra and extra.model)
-  vim.keymap.set('n', 'q', function() pcall(vim.api.nvim_win_close, w.win, true) end, o)
-  vim.keymap.set('n', '<Esc>', function() pcall(vim.api.nvim_win_close, w.win, true) end, o)
+  local function running() return w.stop ~= nil and w.answer == nil and not w.fresh end
+
   vim.keymap.set('n', 'y', function()
     if not w.answer then return end
     vim.fn.setreg('+', w.answer)
@@ -1607,55 +1857,118 @@ local function openAnswer(kind, question, prompt, cwd, preset, extra)
     local open = not thoughts[#thoughts].open
     for _, th in ipairs(thoughts) do th.open = open; th.draw() end
   end, o)
+
   local function followUp(q)
     if not q or vim.trim(q) == '' or not w.valid() then return end
     if not w.session then return vim.notify(m_label .. ': wait for the answer first') end
     w.append('\n---\n\n## ' .. q .. '\n\n')
     -- To the model of the answer shown (it changes with [ / ]).
     local ex = vim.tbl_extend('force', extra or {}, { model = w.model })
-    askInto(w, q, q, { cwd = cwd, session = w.session, kind = kind, extra = ex })
+    askInto(w, q, q, { cwd = w.cwd, session = w.session, kind = kind, extra = ex })
   end
 
-  -- The follow-up box: one line docked under the answer, always there, as
-  -- in a chat (Improvment.md). It replaced a vim.ui.input prompt that 'a'
-  -- opened at the top of the screen and that went away after each question.
-  --   in the box     Enter sends; Esc goes up to the answer; <C-u> / <C-d>
-  --                  scroll the answer without leaving the box
-  --   in the answer  a or i go down to the box
-  -- The answer window gives up the box's 3 rows (the line and its border).
-  local cfg = vim.api.nvim_win_get_config(w.win)
-  local row = type(cfg.row) == 'table' and cfg.row[false] or cfg.row
-  local col = type(cfg.col) == 'table' and cfg.col[false] or cfg.col
-  local height = math.max(cfg.height - 3, 3)
-  vim.api.nvim_win_set_config(w.win, { relative = 'editor', row = row, col = col, height = height, width = cfg.width })
+  --- The first question of a new chat, typed in the box: asked with the
+  --- context of the buffer the chat was opened (or last shown) from.
+  local function startChat(q)
+    w.fresh = false
+    vim.api.nvim_buf_clear_namespace(w.buf, ns, 0, -1)
+    vim.api.nvim_buf_set_lines(w.buf, 0, -1, false, { '## ' .. q, '', '' })
+    w.thoughts, w.session, w.answer, w.index, w.total, w.tokens, w.model = {}, nil, nil, nil, nil, nil, nil
+    last = { kind = 'ask', instruction = q }
+    local prompt = ASK_RULES .. '\n\n' .. (w.ctx or '') .. '\n\nRequest: ' .. q
+    askInto(w, q, prompt, { cwd = w.cwd, kind = 'ask' })
+  end
+
+  --- n: a new chat in this same window; the conversation stays in the
+  --- history ([ / ] reach it).
+  local function newChat()
+    if running() then return vim.notify(m_label .. ': wait for the answer first') end
+    vim.api.nvim_buf_clear_namespace(w.buf, ns, 0, -1)
+    vim.api.nvim_buf_set_lines(w.buf, 0, -1, false, NEW_CHAT)
+    w.fresh, w.thoughts, w.session, w.answer, w.index = true, {}, nil, nil, nil
+    w.title('new chat')
+    w.focusInput()
+  end
+  vim.keymap.set('n', 'n', newChat, o)
+
+  -- The box's buffer lives as long as the chat, hidden with it.
   local ibuf = vim.api.nvim_create_buf(false, true)
-  vim.bo[ibuf].bufhidden = 'wipe'
+  vim.bo[ibuf].bufhidden = 'hide'
   -- No completion in the box: <CR> would take a suggestion instead of sending.
   vim.bo[ibuf].complete = ''
   vim.bo[ibuf].omnifunc = ''
-  local iwin = vim.api.nvim_open_win(ibuf, false, {
-    relative = 'editor', row = row + height + 2, col = col, width = cfg.width, height = 1,
-    style = 'minimal', border = 'rounded',
-    title = ' Follow up · Enter: send · Esc: to the answer ', title_pos = 'left',
+  w.input = { buf = ibuf }
+
+  --- Put the chat on screen: the answer window, and under it the box (one
+  --- line docked below, as in a chat; the answer gives up its 3 rows).
+  function w.show()
+    if w.visible() then return end
+    local height = math.ceil(vim.o.lines * 0.7)
+    local width = math.ceil(vim.o.columns * 0.7)
+    local row = math.ceil((vim.o.lines - height) / 2)
+    local col = math.ceil((vim.o.columns - width) / 2)
+    local h = math.max(height - 3, 3)
+    w.win = vim.api.nvim_open_win(w.buf, true, {
+      relative = 'editor', row = row, col = col, width = width, height = h,
+      style = 'minimal', border = 'rounded', title = ' ' .. modelLabel(w.model) .. ' · ' .. w.title_text .. ' ',
+    })
+    vim.wo[w.win].wrap, vim.wo[w.win].linebreak = true, true
+    vim.wo[w.win].conceallevel = 2
+    w.input.win = vim.api.nvim_open_win(ibuf, false, {
+      relative = 'editor', row = row + h + 2, col = col, width = width, height = 1,
+      style = 'minimal', border = 'rounded', title_pos = 'left',
+      title = w.fresh and ' Ask · Enter: send · Esc: to the answer ' or ' Follow up · Enter: send · Esc: to the answer ',
+    })
+    -- One goes, both go (hidden: the buffers stay).
+    local a, b = w.win, w.input.win
+    vim.api.nvim_create_autocmd('WinClosed', { pattern = tostring(a), once = true,
+      callback = function() vim.schedule(function() pcall(vim.api.nvim_win_close, b, true) end) end })
+    vim.api.nvim_create_autocmd('WinClosed', { pattern = tostring(b), once = true,
+      callback = function() vim.schedule(function() pcall(vim.api.nvim_win_close, a, true) end) end })
+  end
+  --- Off screen, kept: <leader>aa shows it again.
+  function w.hide()
+    for _, win in ipairs({ w.input.win, w.win }) do
+      if win and vim.api.nvim_win_is_valid(win) then pcall(vim.api.nvim_win_close, win, true) end
+    end
+  end
+  --- Gone for good (q).
+  function w.destroy()
+    w.hide()
+    for _, b in ipairs({ ibuf, w.buf }) do
+      if vim.api.nvim_buf_is_valid(b) then pcall(vim.api.nvim_buf_delete, b, { force = true }) end
+    end
+    if chat == w then chat = nil end
+  end
+  -- A request still running when the chat is closed for good is stopped:
+  -- nobody would see it. Hiding does not stop it.
+  vim.api.nvim_create_autocmd('BufWipeout', {
+    buffer = w.buf, once = true,
+    callback = function() if running() and w.stop then w.stop() end end,
   })
-  w.input = { win = iwin, buf = ibuf }
+  vim.keymap.set('n', 'q', w.destroy, o)
+  vim.keymap.set('n', '<Esc>', w.hide, o)
+
   local iopts = { buffer = ibuf, nowait = true, silent = true }
   local function send()
     local q = vim.trim(vim.api.nvim_buf_get_lines(ibuf, 0, 1, false)[1] or '')
     if q == '' then return end
-    if not w.session then return vim.notify(m_label .. ': wait for the answer first') end
+    if not w.fresh and not w.session then return vim.notify(m_label .. ': wait for the answer first') end
     vim.api.nvim_buf_set_lines(ibuf, 0, -1, false, { '' })
-    followUp(q)
+    if w.input.win and vim.api.nvim_win_is_valid(w.input.win) then
+      pcall(vim.api.nvim_win_set_config, w.input.win, { title = ' Follow up · Enter: send · Esc: to the answer ' })
+    end
+    if w.fresh then startChat(q) else followUp(q) end
   end
   vim.keymap.set({ 'i', 'n' }, '<CR>', send, iopts)
   vim.keymap.set('i', '<Esc>', function()
     vim.cmd('stopinsert')
-    if w.valid() then vim.api.nvim_set_current_win(w.win) end
+    if w.visible() then vim.api.nvim_set_current_win(w.win) end
   end, iopts)
-  vim.keymap.set('n', '<Esc>', function() if w.valid() then vim.api.nvim_set_current_win(w.win) end end, iopts)
+  vim.keymap.set('n', '<Esc>', function() if w.visible() then vim.api.nvim_set_current_win(w.win) end end, iopts)
   local function scroll(keys)
     return function()
-      if w.valid() then
+      if w.visible() then
         vim.api.nvim_win_call(w.win, function() vim.cmd('normal! ' .. vim.keycode(keys)) end)
       end
     end
@@ -1664,22 +1977,13 @@ local function openAnswer(kind, question, prompt, cwd, preset, extra)
   vim.keymap.set({ 'i', 'n' }, '<C-d>', scroll('<C-d>'), iopts)
   --- Into the box, typing.
   function w.focusInput()
-    if vim.api.nvim_win_is_valid(iwin) then
-      vim.api.nvim_set_current_win(iwin)
+    if w.input.win and vim.api.nvim_win_is_valid(w.input.win) then
+      vim.api.nvim_set_current_win(w.input.win)
       vim.cmd('startinsert!')
     end
   end
   vim.keymap.set('n', 'a', w.focusInput, o)
   vim.keymap.set('n', 'i', w.focusInput, o)
-  -- One goes, both go.
-  vim.api.nvim_create_autocmd('WinClosed', {
-    pattern = tostring(iwin), once = true,
-    callback = function() vim.schedule(function() pcall(vim.api.nvim_win_close, w.win, true) end) end,
-  })
-  vim.api.nvim_create_autocmd('WinClosed', {
-    pattern = tostring(w.win), once = true,
-    callback = function() vim.schedule(function() pcall(vim.api.nvim_win_close, iwin, true) end) end,
-  })
 
   -- [ / ]: the previous / next answer of this session's history, in this
   -- same window, without going through <leader>ah (Improvment.md). A follow-up
@@ -1687,15 +1991,15 @@ local function openAnswer(kind, question, prompt, cwd, preset, extra)
   local function showEntry(i)
     local h = history[i]
     if not h then return end
-    if w.stop and not w.answer then return vim.notify(m_label .. ': wait for the answer first') end
+    if running() then return vim.notify(m_label .. ': wait for the answer first') end
     vim.api.nvim_buf_clear_namespace(w.buf, ns, 0, -1)
-    w.thoughts = {}
+    w.thoughts, w.fresh = {}, false
     local lines = { '## ' .. (h.question:gsub('\n', ' ')), '' }
     vim.list_extend(lines, vim.split(h.answer or '', '\n', { plain = true }))
     vim.api.nvim_buf_set_lines(w.buf, 0, -1, false, lines)
-    pcall(vim.api.nvim_win_set_cursor, w.win, { 1, 0 })
+    if w.visible() then pcall(vim.api.nvim_win_set_cursor, w.win, { 1, 0 }) end
     w.index, w.session, w.answer, w.model, w.total = i, h.session, h.answer, h.spec, nil
-    w.title(('%s %d/%d · %s · [ ]: older/newer, %sy: copy, q: close'):format(h.kind, i, #history,
+    w.title(('%s %d/%d · %s · [ ]: older/newer, %sn: new chat, q: close'):format(h.kind, i, #history,
       os.date('%H:%M', h.time), h.session and 'a: follow up, ' or ''))
   end
   vim.keymap.set('n', '[', function()
@@ -1709,36 +2013,36 @@ local function openAnswer(kind, question, prompt, cwd, preset, extra)
     showEntry(i)
   end, o)
   w.showEntry = showEntry
-  -- Closing the window stops a request still running: nobody would see it.
-  vim.api.nvim_create_autocmd('WinClosed', {
-    pattern = tostring(w.win),
-    once = true,
-    callback = function() if w.stop and not w.answer then w.stop() end end,
-  })
 
+  w.show()
   if prompt then askInto(w, question, prompt, { cwd = cwd, kind = kind, extra = extra }) end
+  if w.fresh then w.focusInput() end
   return w
 end
 
---- Ask about the buffer; the answer shows in a window.
+--- <leader>aa, like <leader>tt for the terminal: the chat is shown, or
+--- hidden (kept, with an answer still coming), or opened empty with the
+--- cursor in its box, where the question is typed. The vim.ui.input prompt
+--- at the top of the screen is gone (Improvment.md). In visual mode the
+--- selection is the context of the chat's next new conversation.
+--- `question` given (repeatLast): a new chat asking it at once.
 function M.ask(question, range)
   local buf = vim.api.nvim_get_current_buf()
   range = range or selection()
-  local function go(q)
-    if q == nil then return end -- cancelled
-    if vim.trim(q) == '' then
-      -- Enter on an empty question: the last answer again, where [ / ]
-      -- reach the ones before it (no need for <leader>ah).
-      if #history == 0 then return vim.notify(modelLabel() .. ': no answers yet') end
-      local w = openAnswer(history[#history].kind, history[#history].question, nil, workdir(buf))
-      return w.showEntry(#history)
-    end
-    last = { kind = 'ask', instruction = q }
-    local prompt = ASK_RULES .. '\n\n' .. context(buf, range) .. '\n\nRequest: ' .. q
-    openAnswer('ask', q, prompt, workdir(buf))
+  if question then
+    if vim.trim(question) == '' then return end
+    last = { kind = 'ask', instruction = question }
+    local prompt = ASK_RULES .. '\n\n' .. context(buf, range) .. '\n\nRequest: ' .. question
+    return openAnswer('ask', question, prompt, workdir(buf))
   end
-  if question then return go(question) end
-  vim.ui.input({ prompt = range and ' Ask about the selection: ' or ' Ask Claude: ' }, go)
+  if chat and chat.valid() then
+    if chat.visible() and not range then return chat.hide() end
+    -- Shown again from here: a new chat in it (n) is about this buffer.
+    chat.ctx, chat.cwd = context(buf, range), workdir(buf)
+    chat.show()
+    return chat.focusInput()
+  end
+  openAnswer('ask', nil, nil, workdir(buf), nil, nil, { ctx = context(buf, range) })
 end
 
 local REVIEW = 'Review this code. Point out bugs, risky cases and clear simplifications, each with its line '
@@ -1820,8 +2124,36 @@ function M.write(instruction, range, extra)
     -- see statusMark), then the thinking or the text as it comes.
     local ghost = statusMark(buf, ghost_row, m_label .. ' is waiting…')
     local streamed, thought = '', ''
+    -- The ghost lines under the status: the thinking (its last lines while
+    -- it thinks, one "▸ thought" line once the text comes, all of it when
+    -- opened with <leader>at, see M.toggleThinking), then the text so far.
+    local open = false
+    local function redraw()
+      local lines = {}
+      if thought ~= '' and (open or vim.g.pure_llm_thinking ~= 'hide') then
+        if open then
+          lines = thinkingLines(thought)
+          table.insert(lines, 1, { { '  ▾ thinking (<leader>at: hide)', 'Comment' } })
+        elseif streamed == '' then
+          lines = thinkingLines(thought, 8)
+        else
+          lines = { { { '  ▸ thought (<leader>at: show)', 'Comment' } } }
+        end
+      end
+      if streamed ~= '' then
+        for _, l in ipairs(vim.split(streamed, '\n', { plain = true })) do
+          table.insert(lines, { { l == '' and ' ' or l, 'Comment' } })
+        end
+      end
+      ghost.extra = lines
+      ghost.draw()
+    end
+    writing[buf] = { toggle = function() open = not open; redraw() end }
     local function clear()
       ghost.stop()
+      writing[buf] = nil
+      -- Kept, so <leader>at can still show it once the text is in.
+      if thought ~= '' then last_thought[buf] = { text = thought, model = m_label } end
       for _, id in ipairs({ a_mark, hl }) do
         if id then pcall(vim.api.nvim_buf_del_extmark, buf, ns, id) end
       end
@@ -1839,24 +2171,17 @@ function M.write(instruction, range, extra)
         ghost.state = m_label .. (name == 'Read' and ' is reading…' or ' is searching…')
         ghost.draw()
       end,
-      -- Thinking only in the ghost lines while no answer has come: it is never
-      -- written into the buffer (on_done inserts the answer text only).
+      -- Thinking only in the ghost lines: it is never written into the
+      -- buffer (on_done inserts the answer text only).
       on_thinking = function(s)
         thought = thought .. s
-        if streamed ~= '' then return end
-        ghost.state = m_label .. ' is thinking…'
-        ghost.extra = vim.g.pure_llm_thinking ~= 'hide' and thinkingLines(thought, 8) or nil
-        ghost.draw()
+        if streamed == '' then ghost.state = m_label .. ' is thinking…' end
+        redraw()
       end,
       on_text = function(s)
         streamed = streamed .. s
-        local shown = {}
-        for _, l in ipairs(vim.split(streamed, '\n', { plain = true })) do
-          table.insert(shown, { { l == '' and ' ' or l, 'Comment' } })
-        end
         ghost.state = m_label .. ' is writing…'
-        ghost.extra = shown
-        ghost.draw()
+        redraw()
       end,
       on_done = function(err, text, _, usage)
         if not vim.api.nvim_buf_is_valid(buf) then return end
