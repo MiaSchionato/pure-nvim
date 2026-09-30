@@ -117,6 +117,9 @@ local function render(buf, win)
   for _ = 1, math.max(0, math.floor((height - #lines) / 2)) do table.insert(out, '') end
   for _, l in ipairs(lines) do
     if l:match('%[%a%]') then
+      -- Centred without the spaces the art puts before it: counted, they
+      -- pushed the menu a few columns right of the middle (Improvment.md).
+      l = vim.trim(l)
       local pad = math.max(0, math.floor((width - vim.fn.strdisplaywidth(l)) / 2))
       table.insert(out, string.rep(' ', pad) .. l)
       menu_row = #out
