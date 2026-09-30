@@ -2035,4 +2035,54 @@ end, {
   desc = 'Todoist tasks as a checkbox table (optional filter, e.g. :Todoist today)',
 })
 
+-- -----------------------------------------------------------------------------
+--  For the LLM actions: context: todoist
+-- -----------------------------------------------------------------------------
+--  The tasks straight from Todoist, one plain line each, subtasks indented
+--  under their parent, for the Claude / Ollama actions that ask for them
+--  (`context: todoist`, pure/claude.lua). Added for the vault's daily note
+--  action: the note's synced list is ~10 KB, mostly a long task URL on every
+--  line, which the model paid for on every step.
+--
+--    - [ ] Revisar roteiro · 2026-09-30 · P1 · Vídeos
+
+--- The tasks of `filter` (default "today | overdue | no date", as the daily note's blocks). Waits for Todoist (up
+--- to 15 s); an error comes back as the text, so the action still runs.
+function M.text(filter)
+  filter = (filter and filter ~= '') and filter or 'today | overdue | no date'
+  local tasks, projects, err, done
+  fetch(filter, function(e, t, p) err, tasks, projects, done = e, t, p, true end)
+  vim.wait(15000, function() return done end, 50)
+  if err then return 'Todoist: ' .. err end
+  if not done then return 'Todoist did not answer in time.' end
+
+  local names = {}
+  for _, p in ipairs(projects or {}) do names[p.id] = p.name end
+  local children, roots, ids = {}, {}, {}
+  for _, t in ipairs(tasks or {}) do ids[t.id] = true end
+  for _, t in ipairs(tasks or {}) do
+    if t.parent_id and ids[t.parent_id] then
+      children[t.parent_id] = children[t.parent_id] or {}
+      table.insert(children[t.parent_id], t)
+    else
+      table.insert(roots, t)
+    end
+  end
+  sortTasks(roots)
+  local out = { ('Todoist, "%s" (%d tasks):'):format(filter, #(tasks or {})) }
+  local function add(t, depth)
+    local f = taskFields(t, names)
+    local meta = {}
+    if f.d ~= '' then table.insert(meta, f.d) end
+    if f.p > 1 then table.insert(meta, priorityLabel(f.p)) end
+    if f.j ~= '' then table.insert(meta, f.j) end
+    table.insert(out, ('%s- [ ] %s%s'):format(string.rep('  ', depth), f.c,
+      #meta > 0 and (' · ' .. table.concat(meta, ' · ')) or ''))
+    for _, c in ipairs(children[t.id] or {}) do add(c, depth + 1) end
+  end
+  for _, t in ipairs(roots) do add(t, 0) end
+  if #roots == 0 then table.insert(out, '- nothing') end
+  return table.concat(out, '\n')
+end
+
 return M

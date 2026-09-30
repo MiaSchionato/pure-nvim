@@ -135,6 +135,14 @@ added at the end of the request, between tags named after it (`<stats>`),
 so the action works from real data without needing `Bash`. A source that
 fails puts one line saying so in its place, and the action still runs.
 
+Two modules give their data this way, straight from their APIs, one plain
+line per item (much less than the blocks they write into notes):
+
+- `context: todoist`: the tasks of `today | overdue | no date`, subtasks
+  indented, `- [ ] Task · date · P1 · Project`;
+- `context: calendar`: today's and tomorrow's appointments of every calendar
+  shown in Google Calendar, `- 10:00-11:00 Dentista (calendar)`.
+
 A Lua file of the actions folder is the place for a personal script: it
 lives and syncs with the vault, out of this configuration, and is read
 again each time the action runs. It runs with Neovim's rights, like any
@@ -279,7 +287,10 @@ directly:
   (actions with `Edit` / `Write`), edit and write files. Only inside the
   request's folders, never a file with unsaved changes in Neovim. A model
   that writes its tool call as text (qwen2.5-coder) is understood too; one
-  without tool support answers without them.
+  without tool support answers without them. A note read this way has the
+  regions Neovim writes into it (the Todoist list, the calendar grid, block
+  answers) collapsed to one line each; they are most of a daily note, and
+  never to be edited by a model.
 - **Thinking** is off: models answer straight away
   (`vim.g.pure_ollama_think = true` turns it on). Measured with qwen3.5:9b on
   an 8 GB card, thinking took 30–54 s per answer against 1.4–6 s without,
@@ -290,6 +301,16 @@ directly:
   (8192 tokens, doubled as needed, up to `vim.g.pure_ollama_num_ctx`,
   32768): with 8 GB of VRAM a 9B model runs half as fast at 32K. There is
   no cap on the answer's length.
+
+- **Nothing left behind.** When Neovim quits, requests still running are
+  stopped with their process trees, the Ollama models used are unloaded from
+  the GPU (also from an Ollama not started here, such as the tray app) and
+  the Ollama started here is stopped.
+- **Which model.** Measured on an 8 GB card: `gemma4:e4b` for chat and
+  writing (right on everyday tasks, tools without thinking, ~1 s); JetBrains'
+  Mellum2 for code (the one that edited a file right). Actions that read a
+  lot and edit several places with detailed rules (a daily note) are for
+  Claude: no local model that fits did them right.
 
 ### agy
 

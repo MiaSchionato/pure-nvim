@@ -198,6 +198,15 @@ vim.g.pure_todoist_sync = false
 The tasks are drawn under the block as virtual lines (not in the file). They
 are cached for 5 minutes; `:TodoistRefresh` reloads them.
 
+## For the LLM actions: `context: todoist`
+
+`require('pure.todoist').text(filter)` returns the tasks of `filter` (default
+`today | overdue | no date`, as a daily note's blocks), straight from Todoist,
+one plain line each, subtasks indented: `- [ ] Task · 2026-09-30 · P1 ·
+Project`. A Claude / Ollama action gets them with `context: todoist`
+([claude.md](claude.md)): much less than the synced list, whose every task
+carries its link.
+
 ## 3. Archive
 
 ```lua

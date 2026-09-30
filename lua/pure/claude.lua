@@ -721,6 +721,41 @@ local function clip(s)
   return s:sub(1, TOOL_LIMIT) .. '\n[... cut: ' .. (#s - TOOL_LIMIT) .. ' more characters ...]'
 end
 
+--- The regions Neovim writes into notes (the Todoist, calendar and Claude
+--- blocks' output, between their HTML comment markers) collapsed to one line
+--- each: "[42 lines written by Neovim (todoist): not shown, never edit
+--- them]". Numbered as in the file (`numbered`), so line numbers stay true.
+---
+--- Added for the vault's daily note action: ~90% of a daily note was these
+--- regions (the Todoist list 9.9 KB, the calendar grid 6.6 KB, against 1.5 KB
+--- written by hand), which the action must not touch anyway, and a local
+--- model paid for them on every step. The data itself comes cleaner from
+--- `context: todoist, calendar` (M.text of those modules).
+--- @param lines string[]
+--- @param numbered boolean|nil
+--- @return string
+local function collapseGenerated(lines, numbered)
+  local out, i = {}, 1
+  local function put(n, l) table.insert(out, numbered and ('%d\t%s'):format(n, l) or l) end
+  while i <= #lines do
+    local name = lines[i]:match('^%s*<!%-%- (%a+) %-%->%s*$')
+    local close = name and ('<!-- /' .. name .. ' -->')
+    local j = close and i + 1
+    while j and j <= #lines and not lines[j]:find(close, 1, true) do j = j + 1 end
+    if close and j <= #lines then
+      put(i, lines[i])
+      table.insert(out, ('[%d lines written by Neovim (%s): not shown, never edit them]'):format(j - i - 1, name))
+      put(j, lines[j])
+      i = j + 1
+    else
+      put(i, lines[i])
+      i = i + 1
+    end
+  end
+  return table.concat(out, '\n')
+end
+M.collapseGenerated = collapseGenerated
+
 --- Whether `abs` is open in Neovim with unsaved changes.
 local function dirtyBuffer(abs)
   local b = vim.fn.bufnr(abs)
@@ -735,6 +770,8 @@ local function runTool(name, args, opts)
     if not abs then return 'Error: ' .. why end
     local ok, lines = pcall(vim.fn.readfile, abs)
     if not ok then return 'Error: cannot read ' .. tostring(args.path) end
+    -- A note without the regions Neovim writes into it (collapseGenerated).
+    if abs:lower():match('%.md$') then return clip(collapseGenerated(lines, true)) end
     for i, l in ipairs(lines) do lines[i] = ('%d\t%s'):format(i, l) end
     return clip(table.concat(lines, '\n'))
   elseif name == 'list_files' or name == 'grep' then
