@@ -9,8 +9,11 @@
 --                                              never init.lua: that would
 --                                              overwrite the real one)
 --
---  The branch single-file holds the result as init.lua, so cloning that
---  branch into the config folder is a working configuration:
+--  The branch single-file holds the result as init.lua, committed by the
+--  GitHub Action .github/workflows/single-file.yml on every push to
+--  windows. Never commit it by hand (see CLAUDE.md): run this only to check
+--  the bundle builds. Cloning that branch into the config folder is a
+--  working configuration:
 --
 --    git clone -b single-file --depth 1 https://github.com/MiaSchionato/pure-nvim ~/.config/nvim
 --
