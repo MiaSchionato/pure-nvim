@@ -211,7 +211,11 @@ end
 local function agyModels(cb)
   local cached = readAgyCache()
   if cached then
-    fetchAgyModels(function() end)
+    -- Refreshed at most once a day: `agy models` starts helper processes of
+    -- its own whose console window flashed on screen at every <leader>am
+    -- (Neovim hides only the window of the process it starts itself).
+    local stat = vim.uv.fs_stat(agy_cache_file)
+    if not stat or os.time() - stat.mtime.sec > 24 * 3600 then fetchAgyModels(function() end) end
     return cb(cached)
   end
   fetchAgyModels(cb)
@@ -347,9 +351,14 @@ local function tokens(usage)
 end
 
 --- Stop a running process. On Windows kills the whole process tree.
+--- Set while Neovim quits (VimLeavePre, below): kill() then waits for
+--- taskkill, or Neovim is gone before it runs and the request lives on.
+local exiting = false
+
 local function kill(obj)
   if vim.fn.has('win32') == 1 and obj.pid then
-    pcall(vim.system, { 'taskkill', '/T', '/F', '/PID', tostring(obj.pid) })
+    local ok, proc = pcall(vim.system, { 'taskkill', '/T', '/F', '/PID', tostring(obj.pid) })
+    if ok and exiting then pcall(function() proc:wait(3000) end) end
   else
     pcall(function() obj:kill(15) end)
   end
@@ -791,6 +800,8 @@ end
 
 --- Models Ollama said have no tool support: asked without tools from then on.
 local no_tools = {}
+--- The same for thinking (vim.g.pure_ollama_think).
+local no_think = {}
 
 -- -----------------------------------------------------------------------------
 --  Starting Ollama on demand
@@ -873,12 +884,34 @@ end
 -- For <leader>am's "(offline) start Ollama" line, defined above this.
 M.startOllama = startOllama
 
--- The Ollama started here goes with this Neovim. The whole process tree:
--- the models run in runner processes of their own. Synchronous (:wait),
--- or Neovim is gone before taskkill runs.
+--- Ollama models this Neovim asked for, to unload when it quits.
+local ollama_used = {}
+
+-- Nothing of this Neovim's LLM work outlives it (asked for in the vault's
+-- Improvment.md: no Ollama left using the GPU after quitting). On quit:
+--   1. requests still running are stopped, their whole process trees
+--      (Windows does not end children with their parent: an orphaned curl
+--      kept Ollama generating, an orphaned claude kept working);
+--   2. the Ollama models used here are unloaded from the GPU (keep_alive 0),
+--      also from an Ollama that was not started here (the tray app), which
+--      otherwise keeps them loaded for 5 more minutes;
+--   3. the Ollama started here goes, with its model processes.
+-- All synchronous (:wait), or Neovim is gone before they run.
 vim.api.nvim_create_autocmd('VimLeavePre', {
   group = vim.api.nvim_create_augroup('PureOllamaServer', { clear = true }),
   callback = function()
+    exiting = true
+    for _, stop in pairs(running) do pcall(stop) end
+
+    if not ollama_server and next(ollama_used) then
+      for model in pairs(ollama_used) do
+        pcall(function()
+          vim.system({ 'curl', '-s', '-m', '2', ollamaUrl() .. '/api/generate', '-d',
+            vim.json.encode({ model = model, keep_alive = 0 }) }):wait(2500)
+        end)
+      end
+    end
+
     if not ollama_server or not ollama_server.pid then return end
     if vim.fn.has('win32') == 1 then
       pcall(function() vim.system({ 'taskkill', '/T', '/F', '/PID', tostring(ollama_server.pid) }):wait(3000) end)
@@ -945,6 +978,7 @@ M._textToolCalls = textToolCalls
 --- it answers with text only.
 local function runOllama(opts, model)
   local url = vim.g.pure_ollama_url or 'http://localhost:11434'
+  ollama_used[model] = true -- unloaded from the GPU when Neovim quits
   local session_id = opts.resume or tostring(vim.uv.hrtime())
   local messages = {}
 
@@ -1122,10 +1156,17 @@ local function runOllama(opts, model)
       end
     end
 
+    -- Thinking off unless vim.g.pure_ollama_think: measured with qwen3.5:9b
+    -- on an 8 GB card, thinking took 30-54 s per answer (1.4-3k tokens of
+    -- reasoning) against 1.4-6 s without, with answers as good, and one it
+    -- got wrong while thinking right without. Sent only to models that
+    -- can think: `think: true` to one that cannot is an error.
+    local think = vim.g.pure_ollama_think == true and not no_think[model]
     local payload = vim.json.encode({
       model = model,
       messages = messages,
       stream = true,
+      think = think,
       tools = #tools > 0 and tools or nil,
       -- num_ctx: without it Ollama runs with its small default context and
       -- silently drops the start of a long prompt (the rules, the file),
@@ -1165,6 +1206,13 @@ local function runOllama(opts, model)
         if pending ~= '' then event(pending) end
         if stopped then return finish('stopped') end
 
+        -- A model that cannot think, asked to (vim.g.pure_ollama_think):
+        -- asked again without it, and not asked to think from then on.
+        if ollama_err and tostring(ollama_err):lower():find('does not support thinking', 1, true) then
+          no_think[model] = true
+          rounds = rounds - 1
+          return request()
+        end
         -- A model without tool support: asked again, once, without tools.
         if ollama_err and #tools > 0
             and tostring(ollama_err):lower():find('does not support tools', 1, true) then

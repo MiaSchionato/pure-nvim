@@ -280,9 +280,12 @@ directly:
   request's folders, never a file with unsaved changes in Neovim. A model
   that writes its tool call as text (qwen2.5-coder) is understood too; one
   without tool support answers without them.
-- **Thinking** is kept out of the answer (Ollama's `thinking` field and
-  `<think>…</think>` in the text alike) and shown dimmed instead
-  (`vim.g.pure_llm_thinking = 'hide'` hides it).
+- **Thinking** is off: models answer straight away
+  (`vim.g.pure_ollama_think = true` turns it on). Measured with qwen3.5:9b on
+  an 8 GB card, thinking took 30–54 s per answer against 1.4–6 s without,
+  with answers as good. When on, it is kept out of the answer (Ollama's
+  `thinking` field and `<think>…</think>` in the text alike) and shown dimmed
+  instead (`vim.g.pure_llm_thinking = 'hide'` hides it).
 - **Context size.** Each request gets the smallest context that holds it
   (8192 tokens, doubled as needed, up to `vim.g.pure_ollama_num_ctx`,
   32768): with 8 GB of VRAM a 9B model runs half as fast at 32K. There is
@@ -320,6 +323,7 @@ vim.g.pure_llm_user_context = nil     -- the user context file (false: none)
 vim.g.pure_llm_memory = true          -- false: models never write to it
 vim.g.pure_ollama_url = 'http://localhost:11434'
 vim.g.pure_ollama_num_ctx = 32768     -- largest context a request may get
+vim.g.pure_ollama_think = false       -- true: models think before answering (slower)
 vim.g.pure_ollama_autostart = 'ask'   -- true / false
 vim.g.pure_ollama_models = nil        -- models folder for the Ollama started here
 ```

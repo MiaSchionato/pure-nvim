@@ -123,6 +123,7 @@ where to change them.
 | `vim.g.pure_llm_memory` | on | [claude](claude.md) |
 | `vim.g.pure_ollama_url` | `'http://localhost:11434'` | [claude](claude.md) |
 | `vim.g.pure_ollama_num_ctx` | `32768` (the largest; each request gets the smallest that holds it) | [claude](claude.md) |
+| `vim.g.pure_ollama_think` | off | [claude](claude.md) |
 | `vim.g.pure_ollama_autostart` | `'ask'` | [claude](claude.md) |
 | `vim.g.pure_ollama_models` | `OLLAMA_MODELS`, else `~/.ollama/models` | [claude](claude.md) |
 | `vim.g.pure_indentscope_disable` | off | [editing](editing.md) |

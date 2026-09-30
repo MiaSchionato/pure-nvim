@@ -306,6 +306,12 @@ vim.g.pure_ollama_url = 'http://localhost:11434'
 -- 9B model with a 32K context runs half as fast. Default: 32768.
 vim.g.pure_ollama_num_ctx = 32768
 
+-- Let Ollama models think before answering (qwen3.5, deepseek-r1...).
+-- false (default): they answer straight away, which on an 8 GB card was 5 to
+-- 30 times faster with answers as good for everyday requests. true: for hard
+-- problems; models that cannot think just answer.
+vim.g.pure_ollama_think = false
+
 -- Ollama found down when a request needs it: 'ask' to start it (default),
 -- true to start it without asking, false never. Started from here, it stops
 -- when Neovim quits.
