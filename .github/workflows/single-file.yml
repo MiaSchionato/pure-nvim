@@ -1,0 +1,65 @@
+# Rebuild the one-file version on every push to `windows`.
+#
+# scripts/bundle.lua turns the whole configuration into one file; this
+# commits it to the `single-file` branch as init.lua (see docs/README.md,
+# "One-file version"). Nothing is committed when the file comes out the same.
+# It can also be started by hand: Actions > Rebuild single-file > Run workflow.
+name: Rebuild single-file
+
+on:
+  push:
+    branches: [windows]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Two pushes close together: the second waits for the first, so both
+# commits land on single-file in order.
+concurrency:
+  group: single-file
+  cancel-in-progress: false
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out windows (and single-file)
+        uses: actions/checkout@v4
+        with:
+          ref: windows
+          fetch-depth: 0
+
+      - name: Install Neovim
+        run: |
+          curl -sSfL https://github.com/neovim/neovim/releases/download/stable/nvim-linux-x86_64.tar.gz \
+            | tar xz -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/nvim-linux-x86_64/bin" >> "$GITHUB_PATH"
+
+      # The bundle embeds this theme (Apache-2.0) from Neovim's plugin folder.
+      - name: Get the vendored theme
+        run: |
+          git clone --depth 1 https://github.com/Tsuzat/NeoSolarized.nvim \
+            "$HOME/.local/share/nvim/site/pack/core/opt/NeoSolarized"
+
+      - name: Build
+        run: |
+          nvim --version | head -1
+          nvim -l scripts/bundle.lua
+
+      - name: Commit to single-file
+        run: |
+          short=$(git rev-parse --short HEAD)
+          # What changed, in words: the last commit that is not a merge.
+          subject=$(git log -1 --no-merges --format=%s)
+          git worktree add -B single-file ../single-file origin/single-file
+          cp pure.lua ../single-file/init.lua
+          cd ../single-file
+          if git diff --quiet; then
+            echo "init.lua is unchanged"
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -am "Rebuild from windows @ $short: $subject"
+          git push origin single-file
