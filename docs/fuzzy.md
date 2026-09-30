@@ -24,7 +24,7 @@ split and make fzf quit.)
 | `<leader>fc` | colorschemes | the choice is remembered across restarts |
 | `<leader>fe` | explorer | walk folders; type a new name to create a file, or `name/` for a folder |
 | `<leader>gl` | git log | shows the picked commit in a split (`q` closes) |
-| `<leader>n…` | new file | same targets as `<leader>f…`: type the name |
+| `<leader>n…` | new file | straight into its folder, asking only the name (`nh` home, `n.` ~/.config, `nn` nvim, `ne` here; `vim.g.pure_new_file_ask_name = false`: an unnamed buffer there instead). `nf` picks the folder first; `nv` is a note in the vault's inbox; `nd` a new folder here |
 
 **Live grep** (`<leader>fg`): nothing is listed until you type; ripgrep runs
 again on every change of the query (a regular expression; case-sensitive

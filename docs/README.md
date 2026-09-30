@@ -82,8 +82,9 @@ becomes a `package.preload` entry with its code unchanged; `colors/`,
 
 ## Settings in one place
 
-All of these are optional and set in `lua/configs/configs.lua` (or anywhere
-before use).
+All of these are optional. `lua/configs/configs.lua` lists every one of
+them with its default and what it does, in a section per plugin: that file is
+where to change them.
 
 | Setting | Default | Page |
 |---|---|---|
@@ -100,7 +101,7 @@ before use).
 | `vim.g.pure_calendar_duration` | `60` minutes | [calendar](calendar.md) |
 | `vim.g.pure_calendar_confirm` | `'delete'` | [calendar](calendar.md) |
 | `vim.g.pure_calendar_sync` | `{ interval = 15 }` | [calendar](calendar.md) |
-| `vim.g.pure_claude_model` | the `claude` command's default | [claude](claude.md) |
+| `vim.g.pure_claude_model` | `'claude:default'` (a pick with `<leader>am` wins) | [claude](claude.md) |
 | `vim.g.pure_claude_cmd` | `'claude'` | [claude](claude.md) |
 | `vim.g.pure_claude_actions` | `'claude'` (folder of the vault) | [claude](claude.md) |
 | `vim.g.pure_claude_blocks` | on | [claude](claude.md) |
@@ -112,6 +113,19 @@ before use).
 | `vim.g.pure_dashboard_scale` | `'auto'` | [ui](ui.md) |
 | `vim.g.pure_terminal_shell` | nu, pwsh or powershell on Windows; `'shell'` elsewhere | [ui](ui.md) |
 | `vim.b.pure_indentscope_disable` | off | [editing](editing.md) |
+| `vim.g.pure_inbox` | `'0-Inbox'` | [zettelkasten](zettelkasten.md) |
+| `vim.g.pure_new_file_ask_name` | on | [fuzzy](fuzzy.md) |
+| `vim.g.pure_spelllang` | `{ 'pt_br', 'en', 'it' }` | [markdown](markdown.md) |
+| `vim.g.pure_md_bullets` | `{ '•', '◦', '▪', '▫' }` | [markdown](markdown.md) |
+| `vim.g.pure_tasks_done` | `'xX-'` | [editing](editing.md) |
+| `vim.g.pure_llm_thinking` | `'show'` | [claude](claude.md) |
+| `vim.g.pure_llm_user_context` | `stdpath('data')/llm_user.md` | [claude](claude.md) |
+| `vim.g.pure_llm_memory` | on | [claude](claude.md) |
+| `vim.g.pure_ollama_url` | `'http://localhost:11434'` | [claude](claude.md) |
+| `vim.g.pure_ollama_num_ctx` | `32768` (the largest; each request gets the smallest that holds it) | [claude](claude.md) |
+| `vim.g.pure_ollama_autostart` | `'ask'` | [claude](claude.md) |
+| `vim.g.pure_ollama_models` | `OLLAMA_MODELS`, else `~/.ollama/models` | [claude](claude.md) |
+| `vim.g.pure_indentscope_disable` | off | [editing](editing.md) |
 
 ## What is stored outside the repository
 
@@ -130,8 +144,11 @@ folder (`:echo stdpath('data')`: `~/.local/share/nvim`, or
 | `todoist_sync.json` | the same for the Todoist sync |
 | `obsidian_vault` | the vault folder (`:ZettelVault` writes it) |
 | `obsidian_vault_no_prompt` | "never ask for the vault" |
+| `llm_user.md` | what the LLMs know about you (`<leader>au`; they may add to it) |
 
-Undo history is in `stdpath('state')/undo`.
+Undo history is in `stdpath('state')/undo`; the model picked with `<leader>am` in
+`stdpath('state')/pure_claude_model`, and agy's list of models in
+`stdpath('state')/pure_agy_models`.
 
 ## Commands
 

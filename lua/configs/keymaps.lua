@@ -584,7 +584,7 @@ vim.schedule(function()
       return "<cmd>lua vim.snippet.jump(1)<cr>"
     end
     return "<tab>"
-  end, { expr = true, replace_keycodes = true, desc = "Past closing pair / next suggestion / snippet jump" })
+  end, { expr = true, replace_keycodes = true, desc = "Indent an empty list item / past closing pair / next suggestion / snippet jump" })
 
   --  Mirrors Tab backwards: previous suggestion, snippet back; else the builtin.
   map('i', '<S-tab>', function()
@@ -598,7 +598,7 @@ vim.schedule(function()
       return "<cmd>lua vim.snippet.jump(-1)<cr>"
     end
     return "<S-tab>"
-  end, { expr = true, replace_keycodes = true, desc = "Previous suggestion / snippet jump back" })
+  end, { expr = true, replace_keycodes = true, desc = "Outdent an empty list item / previous suggestion / snippet jump back" })
 
   --  Esc with the completion menu open closes only the menu and stays in
   --  insert mode (Improvment.md): then Tab steps past the pair. A suggestion

@@ -179,7 +179,7 @@ opens it too. Other tasks keep the usual form, their text as the link.
 
 **Folded on open.** When a note with a synced list opens in a window, each
 task with subtasks starts folded to its own line (the fold shows just the
-task, without the link, date or project). `<leader>zz` opens one,
+task, without the link, date or project). `zz` (or `<leader>zz`) opens one,
 `<leader>za` opens all. It happens once per window, so a fold you opened
 stays open when a sync rewrites the list.
 

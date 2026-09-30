@@ -4,9 +4,15 @@ Claude Code from keys, not a chat. Each request goes with its context: the
 file (path, type, content), the cursor line, the selection and the LSP
 diagnostics. Claude runs in the file's git root (or its folder).
 
-Needs [Claude Code](https://claude.com/claude-code) installed and logged in
-on that machine: `claude` in the PATH (run `claude` once in a terminal to
-log in). Every request uses your Claude plan.
+Three backends, picked with `<leader>am` (see "Models" below):
+
+- **Claude** – [Claude Code](https://claude.com/claude-code) installed and
+  logged in on that machine: `claude` in the PATH (run `claude` once in a
+  terminal to log in). Every request uses your Claude plan.
+- **Ollama** – local models, free and offline. Started on demand if it is
+  not running.
+- **agy** – Antigravity's CLI (Gemini, Claude and GPT-OSS models of that
+  service), when `agy` is installed.
 
 ## Write into the buffer: `<leader>ai`
 
@@ -18,36 +24,67 @@ the buffer**:
 - visual mode: **in place of the selection** ("turn this into a table",
   "fix this", "translate").
 
-While Claude writes, the text shows dimmed where it will go; you can keep
-working meanwhile (the place is kept even if lines change above). Then it
-becomes real text, as **one change: `u` takes it all back**.
+While it works, a dimmed line under the place says what the model is doing
+and for how long (`qwen3.5:9b is thinking… 3s`, then `is writing… 7s`), and
+the text shows dimmed where it will go; you can keep working meanwhile (the
+place is kept even if lines change above). Then it becomes real text, as
+**one change: `u` takes it all back**. The same status line with its seconds
+shows for ```` ```claude ```` blocks and for actions working on their own.
 
-Claude is told to write only the text itself (no explanation, no code fence
-around it), in the file's language and style.
+The model is told to write only the text itself (no explanation, no code
+fence around it), in the file's language and style.
 
-## Ask, answer in a window: `<leader>aa`
+A model that thinks first (qwen3.5, deepseek-r1…) shows the last lines of its
+thinking in the dimmed lines while it thinks; it is never written into the
+buffer. `<leader>at` shows all of it (and hides it again) while it writes,
+and afterwards opens the last write's thinking in a window.
+
+## Chat: `<leader>aa`
 
 For questions that write nothing: "what does this do?", "why this error?",
-"how do I…". The answer comes in a floating window, drawn as markdown, as it
-is written. In visual mode the question is about the selection.
+"how do I…". `<leader>aa` works like `<leader>tt` for the terminal:
 
-The title shows what Claude is doing and the seconds since you asked
-(`thinking… 3s`). Each answer ends with its time and tokens, small and
-grey on the right (not copied with `y`): `5.4s · 5.2k↑ 40↓`, tokens sent
-(the note and the instructions included, which is most of it) and
-received. When done, the title has the window's totals, follow-ups
-included. Writing into the buffer and actions that notify say their tokens
-in the notification.
+- no chat yet: an empty one opens, with the cursor in the **box at its
+  bottom**; type the question there and `Enter`;
+- the chat on screen: it is **hidden**, with its conversation kept (an answer
+  still coming keeps coming);
+- the chat hidden: it is shown again as it was.
 
-In the window:
+The answer comes as it is written, drawn as markdown. The question goes with
+the context of the buffer the chat was opened (or last shown) from; in visual
+mode, the selection.
+
+The title shows what the model is doing and the seconds since you asked
+(`thinking… 3s`). Each answer ends with its time and tokens, small and grey
+on the right (not copied with `y`): `5.4s · 5.2k↑ 40↓`, tokens sent (the note
+and the instructions included, which is most of it) and received. When done,
+the title has the chat's totals, follow-ups included. Writing into the
+buffer and actions that notify say their tokens in the notification.
+
+A model's thinking shows dimmed above its answer while it thinks, then folds
+into one line, `▸ thought for 6s`.
+
+In the box (it takes the cursor when an answer is in):
 
 | Key | What |
 |---|---|
-| `a` | ask a follow-up (Claude remembers the conversation) |
-| `y` | copy the answer (also to the system clipboard) |
-| `q` / `<Esc>` | close (stops it, if still running) |
+| `Enter` | send (the first question, or a follow-up: the model remembers the conversation) |
+| `<C-u>` / `<C-d>` | scroll the answer |
+| `Esc` | up to the answer |
 
-Here Claude may read other files of the project (Read, Grep, Glob) to
+In the answer:
+
+| Key | What |
+|---|---|
+| `a` / `i` | down to the box |
+| `[` / `]` | the previous / next answer of this session, in the same window (the title says which, `2/5`); a follow-up then continues that one |
+| `n` | a new chat (the old one stays reachable with `[`) |
+| `t` | show / hide the thinking of every answer |
+| `y` | copy the answer (also to the system clipboard) |
+| `Esc` | hide the chat (`<leader>aa` shows it again) |
+| `q` | close it for good (stops an answer still coming) |
+
+Here the model may read other files of the project (Read, Grep, Glob) to
 answer, never change them.
 
 ## Other keys
@@ -57,7 +94,9 @@ answer, never change them.
 | `<leader>ac` | review the code (or the selection) in the window: bugs, risky cases, simplifications, with line numbers |
 | `<leader>ar` | the last request again, with the context of now (another selection, another file) |
 | `<leader>ah` | past answers of this session, in the picker; opening one allows follow-ups |
-| `<leader>am` | select model: switch on the fly between Ollama (local) and Claude (cloud) |
+| `<leader>am` | select model: Ollama (local), Claude, agy (see "Models") |
+| `<leader>at` | the thinking of `<leader>ai`: show / hide it while it writes, or open the last one |
+| `<leader>au` | open the user context file (see "What the models know about you") |
 | `<leader>as` | stop everything running |
 | `<leader>ax` | the actions of the vault's `claude` folder (below) |
 | `<leader>ab` | run the ```` ```claude ```` or ```` ```llm ```` block under the cursor (again) |
@@ -207,38 +246,93 @@ It never runs:
 The note is saved after the answer is written, unless it had other unsaved
 changes by then.
 
-## Switch models on the fly: `<leader>am`
+## Models: `<leader>am`
 
-Press `<leader>am` (or run `:ClaudeModel` / `:LLMModel`) to open the model selector.
-It lists:
-- **Local Ollama models**: automatically discovered from your running Ollama instance (`http://localhost:11434`), such as `qwen2.5-coder:14b` or `gemma4:26b`;
-- **Claude cloud models**: `default`, `sonnet`, `haiku`, `opus`;
-- **Custom model**: type any model name.
+`<leader>am` (or `:ClaudeModel` / `:LLMModel`) opens the model picker:
 
-Your selection is remembered across Neovim sessions (saved in Neovim's state cache).
-You can also set a model directly with arguments:
+- **Ollama**: the models of the running Ollama (`http://localhost:11434`),
+  such as `qwen3.5:9b`. With Ollama down, the line "(offline) start Ollama"
+  starts it and lists them.
+- **Claude**: `default`, `sonnet`, `haiku`, `opus`.
+- **agy**: its default and every model `agy models` lists (kept in a cache,
+  refreshed in the background: the listing takes a few seconds).
+- **Custom model**: type any name (`ollama:…`, `claude:…`, `agy:…`).
+
+The pick is remembered across sessions (in Neovim's state folder). Or
+directly:
+
 ```vim
-:ClaudeModel ollama:qwen2.5-coder:14b
+:ClaudeModel ollama:qwen3.5:9b
 :ClaudeModel claude:sonnet
+:ClaudeModel agy:gemini-3.1-pro-high
 ```
+
+### Local models (Ollama)
+
+- **Started on demand.** A request that finds Ollama down asks whether to
+  start it; started from here, `ollama serve` belongs to this Neovim and is
+  stopped (with the model processes) when Neovim quits. An Ollama already
+  running is never stopped. `vim.g.pure_ollama_autostart`: `'ask'`, `true`
+  (without asking), `false`.
+- **Tools.** Local models get the same tools as Claude in the same request:
+  read a file, list files, grep and, only where the request allows it
+  (actions with `Edit` / `Write`), edit and write files. Only inside the
+  request's folders, never a file with unsaved changes in Neovim. A model
+  that writes its tool call as text (qwen2.5-coder) is understood too; one
+  without tool support answers without them.
+- **Thinking** is kept out of the answer (Ollama's `thinking` field and
+  `<think>…</think>` in the text alike) and shown dimmed instead
+  (`vim.g.pure_llm_thinking = 'hide'` hides it).
+- **Context size.** Each request gets the smallest context that holds it
+  (8192 tokens, doubled as needed, up to `vim.g.pure_ollama_num_ctx`,
+  32768): with 8 GB of VRAM a 9B model runs half as fast at 32K. There is
+  no cap on the answer's length.
+
+### agy
+
+Requests that only read run in agy's default mode, where edits are refused
+(print mode has nobody to approve them); requests that change files use
+`accept-edits`. The prompt goes on stdin as a stream-json event.
+
+## What the models know about you: `<leader>au`
+
+A markdown file about you that every request reads, whatever the model:
+`stdpath('data')/llm_user.md`, outside every git repository (another path with
+`vim.g.pure_llm_user_context`). `<leader>au` opens it to edit.
+
+A model may add to it: when you tell it something lasting (a preference, your
+work), it puts `<remember>…</remember>` at the end of its answer; that is
+saved to the file with its date and never shown or written into a buffer.
+A fact the file already holds, in other words or another language, is not
+written again. `vim.g.pure_llm_memory = false`: the file is only read.
 
 ## Settings
 
+All in `lua/configs/configs.lua`, section "LLMs":
+
 ```lua
-vim.g.pure_claude_model = nil              -- startup fallback if no state saved (e.g. 'ollama:qwen2.5-coder:14b' or 'sonnet')
-vim.g.pure_ollama_url = 'http://localhost:11434' -- Ollama API endpoint
-vim.g.pure_claude_cmd = 'claude'           -- Claude CLI command, if not in the PATH
-vim.g.pure_claude_blocks = false           -- blocks run only with <leader>ab
+vim.g.pure_claude_model = nil         -- model when none was picked ('ollama:qwen3.5:9b', 'sonnet', 'agy:')
+vim.g.pure_claude_cmd = 'claude'      -- Claude Code command, if not in the PATH
+vim.g.pure_claude_blocks = true       -- false: blocks run only with <leader>ab
+vim.g.pure_claude_actions = 'claude'  -- folder of the actions, in the vault
+vim.g.pure_llm_thinking = 'show'      -- 'hide': never show a model's thinking
+vim.g.pure_llm_user_context = nil     -- the user context file (false: none)
+vim.g.pure_llm_memory = true          -- false: models never write to it
+vim.g.pure_ollama_url = 'http://localhost:11434'
+vim.g.pure_ollama_num_ctx = 32768     -- largest context a request may get
+vim.g.pure_ollama_autostart = 'ask'   -- true / false
+vim.g.pure_ollama_models = nil        -- models folder for the Ollama started here
 ```
 
 ## Notes
 
 - Claude requests use `claude -p` (no interactive session). The prompt goes on
   stdin; the answer is read as it streams (`--output-format stream-json`).
-- Ollama requests stream via Ollama's `/api/chat` endpoint using `curl`.
-  Conversation history is kept per window session so follow-ups with `a` work
-  seamlessly with local models too.
+- Ollama requests stream via Ollama's `/api/chat` endpoint using `curl`; each
+  round of tool calls is one more request. Conversation history is kept per
+  chat, so follow-ups work with local models too.
 - Writes into the buffer run without tools (faster); asks, reviews and
   blocks may read files, never write them or run commands.
 - On Windows, an npm install (`claude.cmd`) is run through `cmd.exe`; the
-  native install (`claude.exe`) directly. Process trees are cleaned up reliably on stop.
+  native install (`claude.exe`) directly. Process trees are cleaned up
+  reliably on stop.

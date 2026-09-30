@@ -11,7 +11,7 @@ so a `-` inside a code block is never taken for a bullet.
 | In the file | On screen |
 |---|---|
 | `# Heading` | icon instead of the `#`s and a coloured band (colour from the theme) |
-| `- item` | bullet per level: ● ○ ◆ ◇ |
+| `- item` | bullet per level: • ◦ ▪ ▫ (`vim.g.pure_md_bullets`); a sub-item keeps its indentation |
 | `- [ ]` / `- [x]` | checkbox icons; done items dimmed |
 | `- [~]` `[!]` `[>]` `[-]` | Obsidian's extra states: in progress (blue), important (red), deferred (purple), cancelled (grey) – fixed colours in every theme |
 | `> quote` | a bar instead of `>` |
@@ -47,13 +47,20 @@ so a `-` inside a code block is never taken for a bullet.
 ## Other markdown settings (`render-md.lua`)
 
 For every markdown buffer: `textwidth` 110, spell checking in the languages
-whose word lists are installed (pt_br, en, it), conceal on.
+whose word lists are installed (pt_br, en, it; `vim.g.pure_spelllang`),
+suggestions ranked across them, conceal on.
+
+Treesitter parses markdown synchronously (`vim.g._ts_force_sync_parsing`,
+only while a markdown buffer is current): parsing in the background, as
+Neovim does once a parse takes over 3 ms, let `**bold**` and `` `code` ``
+flash back to their raw marks for one key while typing.
 
 | Key (markdown only) | What |
 |---|---|
 | `<leader>tx` | tick / untick the checkbox on the line |
 | `<leader>x` | cycle `[ ] [~] [!] [>] [-] [x]` (notes only, not the Todoist list) |
 | `<leader>ft` | format the table around the cursor (`column -t`) |
+| `<C-l>` (insert) | fix the last misspelled word before the cursor, on this line, with the first suggestion; the cursor stays; `u` undoes just the fix |
 | `<leader>ds` | spelling suggestions (`z=`) |
 | `<leader>dg` / `<leader>dw` | mark word good / wrong |
 | `<leader>dp` / `<leader>dn` | previous / next misspelled word |
