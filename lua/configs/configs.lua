@@ -268,22 +268,22 @@ vim.g.pure_calendar_confirm = 'delete'
 vim.g.pure_calendar_sync = { interval = 15 }
 
 -- -----------------------------------------------------------------------------
---  LLMs: Claude, Ollama, agy  (pure/claude.lua, <leader>a)
+--  LLMs: Claude, Ollama, agy  (pure/llm.lua, <leader>a)
 -- -----------------------------------------------------------------------------
 -- The model when none was picked with <leader>am (a pick is remembered and
 -- wins): 'claude:default', 'claude:sonnet', 'ollama:qwen3.5:9b', 'agy:', ...
 -- Unset (default): 'claude:default'.
--- vim.g.pure_claude_model = 'ollama:qwen3.5:9b'
+-- vim.g.pure_llm_model = 'ollama:gemma4:e4b'
 
--- The Claude Code command. Default: 'claude'.
+-- Claude's command (Claude Code). Default: 'claude'.
 vim.g.pure_claude_cmd = 'claude'
 
 -- ```claude blocks in notes run by themselves when due. false: only with
 -- <leader>ab. Default: true.
-vim.g.pure_claude_blocks = true
+vim.g.pure_llm_blocks = true
 
 -- Folder of the actions (<leader>ax), inside the vault. Default: 'claude'.
-vim.g.pure_claude_actions = 'claude'
+vim.g.pure_llm_actions = 'claude'
 
 -- A model's thinking: 'show' (dimmed while it thinks, folded after: t in the
 -- chat, <leader>at for <leader>ai) or 'hide'. Default: 'show'.

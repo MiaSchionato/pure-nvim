@@ -78,7 +78,7 @@ the **day under the cursor**; outside they are the usual ones:
 the next days (default 2), from every calendar shown in Google Calendar, one
 line each under its day: `- 10:00-11:00 Dentista · Clínica (calendar)`. A
 Claude / Ollama action gets them with `context: calendar`
-([claude.md](claude.md)): the grid itself, box-drawing characters in ~200
+([llm.md](llm.md)): the grid itself, box-drawing characters in ~200
 columns, is a poor read for a model.
 
 ## Google Calendar (two-way)

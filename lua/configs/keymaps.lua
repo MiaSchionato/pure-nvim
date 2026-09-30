@@ -3,7 +3,7 @@
 -- =============================================================================
 --  Leader is <Space>. The second key groups the action:
 --
---    a  claude
+--    a  llms (ai)
 --    b  buffers        e  explore (pickers)   l  lsp             u  undotree
 --    c  code           f  find (pickers)      n  new file/folder v  vault (notes)
 --    d  diagnostics    g  git                 o  toggles         w  tabs, window view (wv_)
@@ -36,7 +36,7 @@ vim.g.mapleader = ' '
 
 -- Group names shown by the key hint window (pure/keyhint.lua) after <leader>.
 vim.g.pure_keyhint_groups = {
-  ['<leader>a'] = 'Claude',
+  ['<leader>a'] = 'AI (LLMs)',
   ['<leader>b'] = 'Buffers',
   ['<leader>c'] = 'Code',
   ['<leader>d'] = 'Diagnostics',
@@ -361,28 +361,28 @@ map('n', '<leader>vg', inDir(fzf.fuzzyGrep, dirs.v), func.getOpts(opts, "Grep th
 map('n', '<leader>vs', "<cmd>VaultSync<cr>", func.getOpts(opts, "Sync the vault (git)"))
 
 -- =============================================================================
---  Claude  (<leader>a, pure/claude.lua)
+--  LLMs: Claude, Ollama, agy  (<leader>a, pure/llm.lua)
 -- =============================================================================
-local function claude(fn)
-  return function() require('pure.claude')[fn]() end
+local function llm(fn)
+  return function() require('pure.llm')[fn]() end
 end
-map({ 'n', 'x' }, '<leader>ai', claude('write'), func.getOpts(opts, "Write here (visual: rewrite)"))
-map({ 'n', 'x' }, '<leader>aa', claude('ask'), func.getOpts(opts, "Chat: show / hide (like <leader>tt)"))
-map({ 'n', 'x' }, '<leader>ac', claude('review'), func.getOpts(opts, "Review the code"))
-map({ 'n', 'x' }, '<leader>ar', claude('repeatLast'), func.getOpts(opts, "Repeat the last request"))
-map('n', '<leader>ah', claude('history'), func.getOpts(opts, "Past answers"))
-map('n', '<leader>as', claude('stop'), func.getOpts(opts, "Stop"))
-map('n', '<leader>am', claude('selectModel'), func.getOpts(opts, "Select model (Ollama / Claude / agy)"))
-map('n', '<leader>at', claude('toggleThinking'), func.getOpts(opts, "Thinking of <leader>ai (show / hide)"))
+map({ 'n', 'x' }, '<leader>ai', llm('write'), func.getOpts(opts, "Write here (visual: rewrite)"))
+map({ 'n', 'x' }, '<leader>aa', llm('ask'), func.getOpts(opts, "Chat: show / hide (like <leader>tt)"))
+map({ 'n', 'x' }, '<leader>ac', llm('review'), func.getOpts(opts, "Review the code"))
+map({ 'n', 'x' }, '<leader>ar', llm('repeatLast'), func.getOpts(opts, "Repeat the last request"))
+map('n', '<leader>ah', llm('history'), func.getOpts(opts, "Past answers"))
+map('n', '<leader>as', llm('stop'), func.getOpts(opts, "Stop"))
+map('n', '<leader>am', llm('selectModel'), func.getOpts(opts, "Select model (Ollama / Claude / agy)"))
+map('n', '<leader>at', llm('toggleThinking'), func.getOpts(opts, "Thinking of <leader>ai (show / hide)"))
 -- The file about you that every request reads (outside any git repository).
 map('n', '<leader>au', function()
-  local path = require('pure.claude').userContextFile()
+  local path = require('pure.llm').userContextFile()
   if not path then return vim.notify('User context is off (vim.g.pure_llm_user_context = false)') end
   vim.cmd('edit ' .. vim.fn.fnameescape(path))
 end, func.getOpts(opts, "User context file (what the LLMs know about you)"))
-map({ 'n', 'x' }, '<leader>ax', claude('pickAction'), func.getOpts(opts, "Actions (claude/ folder of the vault)"))
-map('n', '<leader>ab', claude('runBlockAtCursor'), func.getOpts(opts, "Run the ```claude block"))
-map('n', '<leader>ad', function() require('pure.claude').runNamed('Nota do dia') end,
+map({ 'n', 'x' }, '<leader>ax', llm('pickAction'), func.getOpts(opts, "Actions (claude/ folder of the vault)"))
+map('n', '<leader>ab', llm('runBlockAtCursor'), func.getOpts(opts, "Run the ```llm block under the cursor"))
+map('n', '<leader>ad', function() require('pure.llm').runNamed('Nota do dia') end,
   func.getOpts(opts, "Daily note: next step and the measured day"))
 
 -- =============================================================================

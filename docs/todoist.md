@@ -204,7 +204,7 @@ are cached for 5 minutes; `:TodoistRefresh` reloads them.
 `today | overdue | no date`, as a daily note's blocks), straight from Todoist,
 one plain line each, subtasks indented: `- [ ] Task · 2026-09-30 · P1 ·
 Project`. A Claude / Ollama action gets them with `context: todoist`
-([claude.md](claude.md)): much less than the synced list, whose every task
+([llm.md](llm.md)): much less than the synced list, whose every task
 carries its link.
 
 ## 3. Archive

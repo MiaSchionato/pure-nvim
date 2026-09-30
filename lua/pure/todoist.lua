@@ -2040,7 +2040,7 @@ end, {
 -- -----------------------------------------------------------------------------
 --  The tasks straight from Todoist, one plain line each, subtasks indented
 --  under their parent, for the Claude / Ollama actions that ask for them
---  (`context: todoist`, pure/claude.lua). Added for the vault's daily note
+--  (`context: todoist`, pure/llm.lua). Added for the vault's daily note
 --  action: the note's synced list is ~10 KB, mostly a long task URL on every
 --  line, which the model paid for on every step.
 --

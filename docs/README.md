@@ -15,7 +15,7 @@ When a module changes, update its page here in the same commit.
 | [keymaps.md](keymaps.md) | Every mapping, by group (also shown live: press `<Space>` and wait) |
 | [todoist.md](todoist.md) | Todoist: the editable task list, blocks in notes, sync into notes, archive |
 | [calendar.md](calendar.md) | The month as a grid in a note: one box per day, edited in place |
-| [claude.md](claude.md) | Claude Code from keys: write into the buffer, ask in a window, requests in notes |
+| [llm.md](llm.md) | LLMs (Claude, Ollama, agy) from keys: write into the buffer, the chat, actions, requests in notes |
 | [notes.md](notes.md) | Links between notes: follow, complete `[[`, rename without breaking links, backlinks |
 | [zettelkasten.md](zettelkasten.md) | Obsidian vault, note templates, daily / weekly / monthly notes |
 | [markdown.md](markdown.md) | How markdown is drawn: headings, tasks, tables, wikilinks, frontmatter, footnotes |
@@ -101,10 +101,10 @@ where to change them.
 | `vim.g.pure_calendar_duration` | `60` minutes | [calendar](calendar.md) |
 | `vim.g.pure_calendar_confirm` | `'delete'` | [calendar](calendar.md) |
 | `vim.g.pure_calendar_sync` | `{ interval = 15 }` | [calendar](calendar.md) |
-| `vim.g.pure_claude_model` | `'claude:default'` (a pick with `<leader>am` wins) | [claude](claude.md) |
-| `vim.g.pure_claude_cmd` | `'claude'` | [claude](claude.md) |
-| `vim.g.pure_claude_actions` | `'claude'` (folder of the vault) | [claude](claude.md) |
-| `vim.g.pure_claude_blocks` | on | [claude](claude.md) |
+| `vim.g.pure_llm_model` | `'claude:default'` (a pick with `<leader>am` wins) | [llm](llm.md) |
+| `vim.g.pure_claude_cmd` | `'claude'` | [llm](llm.md) |
+| `vim.g.pure_llm_actions` | `'claude'` (folder of the vault) | [llm](llm.md) |
+| `vim.g.pure_llm_blocks` | on | [llm](llm.md) |
 | `vim.g.pure_keyhint_delay` | `1000` ms | [keyhint](keyhint.md) |
 | `vim.g.pure_keyhint_groups` | set in keymaps.lua | [keyhint](keyhint.md) |
 | `vim.g.pure_keyhint_triggers` | `<leader>` in normal and visual | [keyhint](keyhint.md) |
@@ -118,14 +118,14 @@ where to change them.
 | `vim.g.pure_spelllang` | `{ 'pt_br', 'en', 'it' }` | [markdown](markdown.md) |
 | `vim.g.pure_md_bullets` | `{ '•', '◦', '▪', '▫' }` | [markdown](markdown.md) |
 | `vim.g.pure_tasks_done` | `'xX-'` | [editing](editing.md) |
-| `vim.g.pure_llm_thinking` | `'show'` | [claude](claude.md) |
-| `vim.g.pure_llm_user_context` | `stdpath('data')/llm_user.md` | [claude](claude.md) |
-| `vim.g.pure_llm_memory` | on | [claude](claude.md) |
-| `vim.g.pure_ollama_url` | `'http://localhost:11434'` | [claude](claude.md) |
-| `vim.g.pure_ollama_num_ctx` | `32768` (the largest; each request gets the smallest that holds it) | [claude](claude.md) |
-| `vim.g.pure_ollama_think` | off | [claude](claude.md) |
-| `vim.g.pure_ollama_autostart` | `'ask'` | [claude](claude.md) |
-| `vim.g.pure_ollama_models` | `OLLAMA_MODELS`, else `~/.ollama/models` | [claude](claude.md) |
+| `vim.g.pure_llm_thinking` | `'show'` | [llm](llm.md) |
+| `vim.g.pure_llm_user_context` | `stdpath('data')/llm_user.md` | [llm](llm.md) |
+| `vim.g.pure_llm_memory` | on | [llm](llm.md) |
+| `vim.g.pure_ollama_url` | `'http://localhost:11434'` | [llm](llm.md) |
+| `vim.g.pure_ollama_num_ctx` | `32768` (the largest; each request gets the smallest that holds it) | [llm](llm.md) |
+| `vim.g.pure_ollama_think` | off | [llm](llm.md) |
+| `vim.g.pure_ollama_autostart` | `'ask'` | [llm](llm.md) |
+| `vim.g.pure_ollama_models` | `OLLAMA_MODELS`, else `~/.ollama/models` | [llm](llm.md) |
 | `vim.g.pure_indentscope_disable` | off | [editing](editing.md) |
 
 ## What is stored outside the repository
@@ -148,7 +148,7 @@ folder (`:echo stdpath('data')`: `~/.local/share/nvim`, or
 | `llm_user.md` | what the LLMs know about you (`<leader>au`; they may add to it) |
 
 Undo history is in `stdpath('state')/undo`; the model picked with `<leader>am` in
-`stdpath('state')/pure_claude_model`, and agy's list of models in
+`stdpath('state')/pure_llm_model`, and agy's list of models in
 `stdpath('state')/pure_agy_models`.
 
 ## Commands
@@ -161,9 +161,9 @@ Undo history is in `stdpath('state')/undo`; the model picked with `<leader>am` i
 | `:CalendarRefresh` | draw and tidy the ```` ```calendar ```` grids of the note |
 | `:CalendarSync` | sync the calendar grids with Google now |
 | `:CalendarAuth` | connect Google Calendar (OAuth, once) |
-| `:ClaudeActions` | pick one of the vault's Claude actions and run it ([claude](claude.md)) |
-| `:ClaudeActionsExamples` | write the example actions into the vault's `claude` folder |
-| `:ClaudeBlock` | run the ```` ```claude ```` block under the cursor (again) |
+| `:LLMActions` | pick one of the vault's LLM actions and run it ([llm](llm.md)) |
+| `:LLMActionsExamples` | write the example actions into the vault's `claude` folder |
+| `:LLMBlock` | run the ```` ```llm ```` block under the cursor (again); `:Claude…` names still work |
 | `:NoteRename [name]` | rename the note and fix the links to it ([notes](notes.md)) |
 | `:NoteBacklinks` | the notes that link to this one |
 | `:TodoistToken` | set the Todoist token (hidden input) |

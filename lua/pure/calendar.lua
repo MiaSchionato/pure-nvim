@@ -1268,7 +1268,7 @@ end, { desc = 'Draw and tidy the ```calendar grids of this note' })
 -- -----------------------------------------------------------------------------
 --  The appointments of today and the next days, straight from Google, one
 --  plain line each ("10:00-11:00 Dentista · Clínica"), for the Claude / Ollama
---  actions that ask for them (`context: calendar`, pure/claude.lua). Added for
+--  actions that ask for them (`context: calendar`, pure/llm.lua). Added for
 --  the vault's daily note action: reading the note's ```calendar grid gave
 --  the model ~7 KB of box-drawing characters it reads badly, for a handful
 --  of appointments.

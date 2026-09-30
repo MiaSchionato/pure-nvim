@@ -19,22 +19,22 @@ Generated from the running config; the source is `lua/configs/keymaps.lua`.
 | `<leader>h` | n | Toggle word highlight (short form) |
 | `<leader>in` | n, x | Inspect highlight under cursor |
 | `<leader>n` | x | Run normal command on selection |
-| `<leader>p` | n | Paste from clipboard |
 | `<leader>p` | x | Paste over without yanking |
+| `<leader>p` | n | Paste from clipboard |
 | `<leader>r` | n | Rename word under cursor |
 | `<leader>s` | x | Substitute inside selection |
 | `<leader>u` | n | Undotree |
 | `<leader>v` | x | Substitute, very magic |
 | `<leader>y` | n, x | Yank to clipboard |
 
-## `<leader>a` – Claude
+## `<leader>a` – AI (LLMs)
 
-See [claude.md](claude.md).
+See [llm.md](llm.md).
 
 | Key | Mode | What |
 |---|---|---|
 | `<leader>aa` | n, x | Chat: show / hide (like <leader>tt) |
-| `<leader>ab` | n | Run the ```` ```claude ```` block |
+| `<leader>ab` | n | Run the ```` ```llm ```` block under the cursor |
 | `<leader>ac` | n, x | Review the code |
 | `<leader>ad` | n | Daily note: next step and the measured day (the vault action `Nota do dia`) |
 | `<leader>ah` | n | Past answers |

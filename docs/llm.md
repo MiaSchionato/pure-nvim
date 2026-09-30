@@ -1,8 +1,9 @@
-# Claude (`lua/pure/claude.lua`)
+# LLMs: Claude, Ollama, agy (`lua/pure/llm.lua`)
 
-Claude Code from keys, not a chat. Each request goes with its context: the
+Language models from keys. (It was `pure/claude.lua` while Claude was its
+only model; that name still works as an alias.) Each request goes with its context: the
 file (path, type, content), the cursor line, the selection and the LSP
-diagnostics. Claude runs in the file's git root (or its folder).
+diagnostics. The request runs in the file's git root (or its folder).
 
 Three backends, picked with `<leader>am` (see "Models" below):
 
@@ -29,7 +30,7 @@ and for how long (`qwen3.5:9b is thinking… 3s`, then `is writing… 7s`), and
 the text shows dimmed where it will go; you can keep working meanwhile (the
 place is kept even if lines change above). Then it becomes real text, as
 **one change: `u` takes it all back**. The same status line with its seconds
-shows for ```` ```claude ```` blocks and for actions working on their own.
+shows for ```` ```llm ```` blocks and for actions working on their own.
 
 The model is told to write only the text itself (no explanation, no code
 fence around it), in the file's language and style.
@@ -105,7 +106,7 @@ answer, never change them.
 
 The requests you make often, one markdown file each, in the `claude` folder
 of the vault (any case: `Claude/` works; another folder with
-`vim.g.pure_claude_actions = 'Pasta'`, or an absolute path). `<leader>ax`
+`vim.g.pure_llm_actions = 'Pasta'`, or an absolute path). `<leader>ax`
 lists them in the fzf picker by title (the file name, as Obsidian shows
 it), with the file as preview; the one you pick
 runs with the context of now (the note, the selection, the cursor).
@@ -171,8 +172,8 @@ return M
 | Key | What | Default |
 |---|---|---|
 | `description` | the name in the list (required) | |
-| `output` | `insert`: into the buffer below the cursor · `replace`: over the selection, or the whole note without one · `window`: the answer window (follow-ups with `a`) · `notify`: Claude works on its own and sends a short summary of what it did as a notification | `notify` when it may change files, else `window` |
-| `tools` | what Claude may use: `Read`, `Grep`, `Glob` read; `Edit`, `Write`, `Bash` change files (accepted without asking) | none for insert/replace; reading for window |
+| `output` | `insert`: into the buffer below the cursor · `replace`: over the selection, or the whole note without one · `window`: the answer window (follow-ups with `a`) · `notify`: the model works on its own and sends a short summary of what it did as a notification | `notify` when it may change files, else `window` |
+| `tools` | what the model may use: `Read`, `Grep`, `Glob` read; `Edit`, `Write`, `Bash` change files (accepted without asking) | none for insert/replace; reading for window |
 | `dirs` | where it may change files: `vault`, `file` (the note's folder), or paths (`~/Downloads`); the first is where it runs | `vault` |
 | `confirm` | `auto`: ask before running only when one of the `dirs` is not in a git repository · `always` · `never` | `auto` |
 | `model` | the model for this action (`haiku`, `sonnet`, `opus`) | the usual one |
@@ -187,7 +188,7 @@ are in `<leader>ah`.
 It is the format of Claude Code's own commands (`.claude/commands/*.md`),
 whose other keys are ignored here.
 
-**Examples.** `:ClaudeActionsExamples` (or `<leader>ax` while the folder has
+**Examples.** `:LLMActionsExamples` (or `<leader>ax` while the folder has
 no actions) writes five into the folder, never over an existing file:
 
 | File | What |
@@ -198,13 +199,14 @@ no actions) writes five into the folder, never over an existing file:
 | Resumir | the note or the selection in topics (`window`) |
 | Nota permanente | the selection becomes its own note in `3-Resources`, replaced by a sentence and its `[[link]]` (`replace`, with `Write`) |
 
-## Requests in notes: ```` ```claude ```` blocks
+## Requests in notes: ```` ```llm ```` blocks
 
-A request that runs on its own, written in a note. The answer is written
+A request that runs on its own, written in a note (```` ```claude ```` blocks, from
+before the rename, work the same). The answer is written
 under it, between two markers (HTML comments, which Obsidian does not show):
 
 ````
-```claude
+```llm
 Resuma a daily de ontem e liste as tarefas que ficaram abertas.
 ```
 <!-- claude -->
@@ -215,8 +217,8 @@ Resuma a daily de ontem e liste as tarefas que ficaram abertas.
 It runs when the note is shown (or saved) and **has no answer yet**, so it
 runs once. In Neovim the request and the markers are hidden once there is an
 answer; move the cursor onto it to see them. `<leader>ab` (or
-`:ClaudeBlock`) on the block runs it again and replaces the answer. For
-these requests Claude may read the whole vault (Read, Grep, Glob), never
+`:LLMBlock`) on the block runs it again and replaces the answer. For
+these requests the model may read the whole vault (Read, Grep, Glob), never
 change it; it is told where the daily / weekly / monthly notes live and
 today's date.
 
@@ -227,7 +229,7 @@ Put the block in a template and every note made from it gets its answer:
 - **Weekly** (`Templates/Weekly.md`), a review at the end of the week:
 
   ````
-  ```claude
+  ```llm
   when: sunday
   Review this week: read its dailies and write what was done, what is
   left and what to focus on next week.
@@ -256,7 +258,7 @@ changes by then.
 
 ## Models: `<leader>am`
 
-`<leader>am` (or `:ClaudeModel` / `:LLMModel`) opens the model picker:
+`<leader>am` (or `:LLMModel`) opens the model picker:
 
 - **Ollama**: the models of the running Ollama (`http://localhost:11434`),
   such as `qwen3.5:9b`. With Ollama down, the line "(offline) start Ollama"
@@ -270,10 +272,13 @@ The pick is remembered across sessions (in Neovim's state folder). Or
 directly:
 
 ```vim
-:ClaudeModel ollama:qwen3.5:9b
-:ClaudeModel claude:sonnet
-:ClaudeModel agy:gemini-3.1-pro-high
+:LLMModel ollama:gemma4:e4b
+:LLMModel claude:sonnet
+:LLMModel agy:gemini-3.1-pro-high
 ```
+
+The `:Claude…` names of these commands (`:ClaudeModel`, `:ClaudeActions`,
+`:ClaudeBlock`) still work.
 
 ### Local models (Ollama)
 
@@ -335,10 +340,10 @@ written again. `vim.g.pure_llm_memory = false`: the file is only read.
 All in `lua/configs/configs.lua`, section "LLMs":
 
 ```lua
-vim.g.pure_claude_model = nil         -- model when none was picked ('ollama:qwen3.5:9b', 'sonnet', 'agy:')
+vim.g.pure_llm_model = nil            -- model when none was picked ('ollama:gemma4:e4b', 'sonnet', 'agy:')
 vim.g.pure_claude_cmd = 'claude'      -- Claude Code command, if not in the PATH
-vim.g.pure_claude_blocks = true       -- false: blocks run only with <leader>ab
-vim.g.pure_claude_actions = 'claude'  -- folder of the actions, in the vault
+vim.g.pure_llm_blocks = true          -- false: blocks run only with <leader>ab
+vim.g.pure_llm_actions = 'claude'     -- folder of the actions, in the vault
 vim.g.pure_llm_thinking = 'show'      -- 'hide': never show a model's thinking
 vim.g.pure_llm_user_context = nil     -- the user context file (false: none)
 vim.g.pure_llm_memory = true          -- false: models never write to it
