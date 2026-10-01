@@ -16,6 +16,7 @@ When a module changes, update its page here in the same commit.
 | [todoist.md](todoist.md) | Todoist: the editable task list, blocks in notes, sync into notes, archive |
 | [calendar.md](calendar.md) | The month as a grid in a note: one box per day, edited in place |
 | [claude.md](claude.md) | Claude Code from keys: write into the buffer, ask in a window, requests in notes |
+| [manim.md](manim.md) | Manim: the scene you are writing plays in a window, again on every save |
 | [notes.md](notes.md) | Links between notes: follow, complete `[[`, rename without breaking links, backlinks |
 | [zettelkasten.md](zettelkasten.md) | Obsidian vault, note templates, daily / weekly / monthly notes |
 | [markdown.md](markdown.md) | How markdown is drawn: headings, tasks, tables, wikilinks, frontmatter, footnotes |
@@ -104,6 +105,9 @@ before use).
 | `vim.g.pure_claude_cmd` | `'claude'` | [claude](claude.md) |
 | `vim.g.pure_claude_actions` | `'claude'` (folder of the vault) | [claude](claude.md) |
 | `vim.g.pure_claude_blocks` | on | [claude](claude.md) |
+| `vim.g.pure_manim_cmd` | `'manim'` | [manim](manim.md) |
+| `vim.g.pure_manim_quality` | `'l'` | [manim](manim.md) |
+| `vim.g.pure_manim_viewer_args` | none | [manim](manim.md) |
 | `vim.g.pure_keyhint_delay` | `1000` ms | [keyhint](keyhint.md) |
 | `vim.g.pure_keyhint_groups` | set in keymaps.lua | [keyhint](keyhint.md) |
 | `vim.g.pure_keyhint_triggers` | `<leader>` in normal and visual | [keyhint](keyhint.md) |
@@ -146,6 +150,9 @@ Undo history is in `stdpath('state')/undo`.
 | `:ClaudeActions` | pick one of the vault's Claude actions and run it ([claude](claude.md)) |
 | `:ClaudeActionsExamples` | write the example actions into the vault's `claude` folder |
 | `:ClaudeBlock` | run the ```` ```claude ```` block under the cursor (again) |
+| `:ManimPreview [Scene]` | preview a Manim scene, again on every save ([manim](manim.md)) |
+| `:ManimLog` | the output of the last Manim render |
+| `:ManimStop` | stop the Manim preview |
 | `:NoteRename [name]` | rename the note and fix the links to it ([notes](notes.md)) |
 | `:NoteBacklinks` | the notes that link to this one |
 | `:TodoistToken` | set the Todoist token (hidden input) |

@@ -7,6 +7,7 @@
 --    b  buffers        e  explore (pickers)   l  lsp             u  undotree
 --    c  code           f  find (pickers)      n  new file        v  window focus
 --    d  diagnostics    g  git                 o  toggles         w  tabs
+--    m  manim
 --    j  jumps          s  split               t  term, todoist   x  checkbox state (notes)
 --    z  folds
 --
@@ -42,6 +43,7 @@ vim.g.pure_keyhint_groups = {
   ['<leader>g'] = 'Git',
   ['<leader>j'] = 'Jumps',
   ['<leader>l'] = 'LSP',
+  ['<leader>m'] = 'Manim',
   ['<leader>n'] = 'New file',
   ['<leader>o'] = 'Toggles',
   ['<leader>s'] = 'Split',
@@ -320,6 +322,13 @@ map("n", "<leader>nn", inDir(fzf.NewFile, dirs.n), func.getOpts(opts, "New file 
 map("n", "<leader>nv", inDir(fzf.NewFile, dirs.v), func.getOpts(opts, "New file in Obsidian vault"))
 map('n', '<leader>nt', zet.insertTemplate, func.getOpts(opts, "Insert zettel template"))
 map('n', '<leader>nr', function() require('pure.notes').rename() end, func.getOpts(opts, "Rename note, fix links to it"))
+
+-- =============================================================================
+--  Manim  (<leader>m, pure/manim.lua)
+-- =============================================================================
+map('n', '<leader>mm', function() require('pure.manim').toggle() end,
+  func.getOpts(opts, "Preview the scene, again on every save (toggle)"))
+map('n', '<leader>ms', function() require('pure.manim').pick() end, func.getOpts(opts, "Preview another scene"))
 
 -- =============================================================================
 --  Claude  (<leader>a, pure/claude.lua)

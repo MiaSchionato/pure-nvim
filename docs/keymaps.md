@@ -134,6 +134,15 @@ See [claude.md](claude.md).
 | `<leader>lr` | n | LSP rename |
 | `<leader>ls` | n | LSP workspace symbols |
 
+## `<leader>m` – Manim
+
+See [manim.md](manim.md).
+
+| Key | Mode | What |
+|---|---|---|
+| `<leader>mm` | n | Preview the scene, again on every save (toggle) |
+| `<leader>ms` | n | Preview another scene |
+
 ## `<leader>n` – New file
 
 | Key | Mode | What |
