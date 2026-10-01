@@ -107,9 +107,27 @@ local function lsPreview()
   return isGnuLs() and "ls -apF --color=always" or "CLICOLOR_FORCE=1 ls -apFG"
 end
 
+-- fzf starts its child processes (--preview above all) through its own shell,
+-- which on Windows is cmd.exe -- not Neovim's 'shell'. The preview commands in
+-- this file are POSIX ("if [ -d {} ]; then ... fi"), so cmd.exe answered with
+-- "-d was unexpected at this time." and the picker closed the instant it opened.
+--
+-- Point fzf at the same bash Neovim already validated in init.lua. Set through
+-- FZF_DEFAULT_OPTS so every picker in this file inherits it. Needs fzf >= 0.52
+-- for --with-shell; older builds ignore the unknown option in the env var.
 local function appendFzfOpts(extra)
   local existing = vim.env.FZF_DEFAULT_OPTS
   vim.env.FZF_DEFAULT_OPTS = existing and (existing .. " " .. extra) or extra
+end
+
+if vim.fn.has("win32") == 1 then
+  local sh = vim.o.shell
+  if not sh:lower():find("bash", 1, true) then
+    sh = vim.fn.exepath("bash")
+  end
+  if sh ~= "" then
+    appendFzfOpts('--with-shell "' .. vim.fs.normalize(sh) .. ' -c"')
+  end
 end
 
 -- These pickers already run inside a dedicated floating window, so fzf must not
@@ -212,17 +230,30 @@ end
 --- Five pickers (jumps, buffers, oldfiles, colorschemes, vim.ui.select) each
 --- wrote their list to a fixed temp file and piped it into fzf by hand. The
 --- file is now unique per call and always removed, picked or cancelled.
+---
+--- Added for the backlinks picker (pure/notes.lua), which wanted the note
+--- shown as you move, like fuzzyGrep:
+---   cwd      run fzf in this folder, so relative paths in `lines` resolve
+---   preview  true: lines are "path:line:text"; the file is previewed with
+---            that line highlighted, as in fuzzyGrep
 --- @param lines string[]
---- @param opts { title: string, ratio: number?, fzf: string? }  fzf: extra flags
+--- @param opts { title: string, ratio: number?, fzf: string?, cwd: string?, preview: boolean? }  fzf: extra flags
 local pick_count = 0
 local function pickList(lines, opts, on_pick, on_cancel)
   pick_count = pick_count + 1
   local temp = vim.fn.stdpath("cache") .. "/pick_" .. pick_count
   vim.fn.writefile(lines, temp)
+  local flags = opts.fzf or ""
+  if opts.preview then
+    flags = flags .. " --delimiter : --preview '" .. tool("bat", "batcat")
+      .. " --style=numbers --color=always --highlight-line {2} {1}' --preview-window 'up,60\\%,border-bottom,+{2}+3/3'"
+  end
+  local cmd = string.format("cat %s | fzf %s", vim.fn.shellescape(temp), flags)
+  if opts.cwd then cmd = string.format("cd %s && %s", vim.fn.shellescape(opts.cwd), cmd) end
   M.fuzzyLogic({
     title = opts.title,
-    ratio = opts.ratio or 0.7,
-    cmd = string.format("cat %s | fzf %s", vim.fn.shellescape(temp), opts.fzf or ""),
+    ratio = opts.ratio or (opts.preview and 0.8 or 0.7),
+    cmd = cmd,
     callback = function(selection)
       os.remove(temp)
       on_pick(selection)
@@ -564,6 +595,48 @@ function M.NewFile(path)
       end)
     end
   })
+end
+
+--- A new file straight in `path`, with no folder to pick: the key already
+--- says where (<leader>n. is ~/.config). Added because NewFile above asked
+--- for a folder even then. Only <leader>nf still picks one.
+---
+--- vim.g.pure_new_file_ask_name (default true) asks for the name. false opens
+--- an unnamed buffer whose window works in `path`, so ":w name" saves there.
+--- @param path string
+function M.NewFileIn(path)
+  path = asDir(path)
+  if vim.g.pure_new_file_ask_name == false then
+    vim.cmd('enew')
+    -- Window-local, so other windows keep their directory. 'autochdir' leaves
+    -- an unnamed buffer alone, so this holds until the file gets a name.
+    vim.cmd('lcd ' .. vim.fn.fnameescape(path))
+    return vim.notify('New buffer in ' .. path .. '  (:w name saves it there)')
+  end
+  vim.ui.input({ prompt = 'New file in ' .. vim.fn.fnamemodify(path, ':~') .. ': ' }, function(input)
+    if input == nil then return end -- cancelled: nothing made
+    if input == '' then input = 'Untitled' end
+    local target = path .. input
+    -- A name with folders in it ("notes/idea.md") makes them.
+    vim.fn.mkdir(vim.fs.dirname(target), 'p')
+    vim.cmd('edit ' .. vim.fn.fnameescape(target))
+  end)
+end
+
+--- A new folder inside `path`, asked for by name. Added with <leader>nd:
+--- new files and new folders both live under <leader>n.
+--- @param path string
+function M.NewFolder(path)
+  path = asDir(path)
+  vim.ui.input({ prompt = 'New folder in ' .. vim.fn.fnamemodify(path, ':~') .. ': ' }, function(input)
+    if not input or vim.trim(input) == '' then return end
+    local dir = path .. vim.trim(input)
+    if vim.fn.isdirectory(dir) == 1 then
+      return vim.notify('Already exists: ' .. dir, vim.log.levels.WARN)
+    end
+    vim.fn.mkdir(dir, 'p')
+    vim.notify('Created ' .. dir)
+  end)
 end
 
 function M.CompilerCommand()
