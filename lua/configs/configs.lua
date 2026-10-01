@@ -314,7 +314,8 @@ vim.g.pure_claude_cmd = 'claude'
 vim.g.pure_llm_blocks = true
 
 -- Folder of the actions (<leader>ax), inside the vault. Default: 'claude'.
-vim.g.pure_llm_actions = 'claude'
+-- Changed: 'AI' (the vault's Claude/ folder was renamed on 2026-10-01).
+vim.g.pure_llm_actions = 'AI'
 
 -- A model's thinking: 'show' (dimmed while it thinks, folded after: t in the
 -- chat, <leader>at for <leader>ai) or 'hide'. Default: 'show'.
