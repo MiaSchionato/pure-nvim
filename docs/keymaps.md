@@ -145,6 +145,8 @@ See [manim.md](manim.md).
 |---|---|---|
 | `<leader>mm` | n | Preview the scene, again on every save (toggle) |
 | `<leader>ms` | n | Preview another scene |
+| `<leader>mp` | n, x | Preview only this part (selection, or the block under the cursor) |
+| `<leader>mf` | n | Picture of the scene at this line |
 
 ## `<leader>n` – New file / folder
 

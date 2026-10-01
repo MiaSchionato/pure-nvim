@@ -349,6 +349,9 @@ map("n", "<leader>nd", function() fzf.NewFolder(here()) end, func.getOpts(opts, 
 map('n', '<leader>mm', function() require('pure.manim').toggle() end,
   func.getOpts(opts, "Preview the scene, again on every save (toggle)"))
 map('n', '<leader>ms', function() require('pure.manim').pick() end, func.getOpts(opts, "Preview another scene"))
+map({ 'n', 'x' }, '<leader>mp', function() require('pure.manim').part() end,
+  func.getOpts(opts, "Preview only this part (selection, or the block under the cursor)"))
+map('n', '<leader>mf', function() require('pure.manim').frame() end, func.getOpts(opts, "Picture of the scene at this line"))
 
 -- =============================================================================
 --  Vault  (<leader>v, pure/zettelkasten.lua and pure/notes.lua)

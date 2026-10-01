@@ -1,12 +1,15 @@
 # Manim preview (`lua/pure/manim.lua`)
 
 A window that plays the [Manim](https://www.manim.community) scene you are
-writing, and plays it again every time you save.
+writing, and plays it again every time you save; also only a part of it,
+or a picture of one moment.
 
 | Key | What |
 |---|---|
 | `<leader>mm` | start the preview of the scene under the cursor (the `class X(Scene)` above it; asked when the cursor is on none). Again: stop it |
 | `<leader>ms` | preview another scene of the file |
+| `<leader>mp` | preview **only a part**: the selected lines, or the block the cursor is in (below) |
+| `<leader>mf` | a **picture** of the scene as it is at the cursor line |
 | `:ManimPreview [Scene]` | the same, with the scene by name (completes the file's scenes) |
 | `:ManimLog` | the whole output of the last render |
 | `:ManimStop` | stop the preview and close the window |
@@ -28,6 +31,47 @@ renders.
 
 The videos go to Neovim's cache folder (`stdpath('cache')/manim`), never
 into the project, and the old ones are removed as new ones come.
+
+## Only a part: `<leader>mp`, `<leader>mf`
+
+Testing one moment of a long scene without watching it all from the
+start. Split `construct()` into blocks with a comment line each, like the
+cells of a notebook:
+
+```python
+def construct(self):
+    # Cria o quadrado
+    a = Square(color=BLUE)
+    self.play(Create(a))
+
+    # Move para a esquerda          <- cursor anywhere in here, <leader>mp
+    self.play(a.animate.shift(LEFT))
+    self.wait(0.5)
+
+    # Fica vermelho
+    self.play(a.animate.set_color(RED))
+```
+
+`<leader>mp` there renders only "Move para a esquerda": animations 1 and 2.
+The ones before are applied without being rendered, so the part starts
+with the square already made, and the scene stops after the part. In
+visual mode it takes the selected lines instead. Without comment lines,
+the block is the whole `construct()`.
+
+`<leader>mf` renders no video, only the last frame after the animations
+up to the cursor line: how everything looks at that point, in about a
+second. The window shows the picture.
+
+Either keeps going on every save, for the same lines: edits above them
+move them along. `<leader>mm` goes back to the whole scene.
+
+How it works: Manim numbers the animations as it plays them, every
+`self.play(...)` and `self.wait(...)` from 0, and `manim -n A,B` renders
+only A to B (`-s -n 0,B` for the picture). The lines become those numbers
+by counting the calls written in `construct()` above them. A `self.play`
+inside a loop or in another method counts once there, so in such scenes
+the numbers can be off. The notification says which animations were
+rendered ("Blocos, animations 1-2 ready").
 
 ## The window: mpv
 
