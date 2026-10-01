@@ -1653,6 +1653,18 @@ local ASK_RULES = 'You are called from inside Neovim with the user\'s current bu
   .. 'Markdown is fine; the answer is shown in a small floating window. '
   .. 'You may read other files of the project, never change them.'
 
+-- An action shown in the window whose tools may change files (`output:
+-- window` with Edit or Write): a chat that can also write. ASK_RULES' "never
+-- change them" contradicted the action's own tools, so the model refused.
+local ASK_WRITE_RULES = 'You are called from inside Neovim with the user\'s current buffer as context. '
+  .. 'Answer the request directly and briefly, in the language the request is written in. '
+  .. 'Markdown is fine; the answer is shown in a chat window, and the user may follow up. '
+  .. 'You may read files of the project and, when the user asks for it or it clearly helps, '
+  .. 'change files in the folders you were given; say in your answer which files you changed.'
+
+-- What the window's title says while the model uses a tool.
+local TOOL_STATES = { Read = 'reading…', Edit = 'editing…', MultiEdit = 'editing…', Write = 'writing a file…' }
+
 local function addHistory(kind, question, answer, session, model_spec)
   table.insert(history, {
     kind = kind,
@@ -1849,7 +1861,7 @@ local function askInto(w, question, prompt, opts)
     cwd = opts.cwd,
     resume = opts.session,
     keep = true,
-    on_tool = function(name) setState(name == 'Read' and 'reading…' or 'searching…') end,
+    on_tool = function(name) setState(TOOL_STATES[name] or 'searching…') end,
     on_thinking = function(s)
       if th then th.add(s) end
     end,
@@ -2543,7 +2555,8 @@ function M.runAction(a, ctx)
       local range = ctx.range or { 1, vim.api.nvim_buf_line_count(buf) }
       return M.write(body, range, extra)
     elseif a.output == 'window' then
-      local prompt = ASK_RULES .. '\n\n' .. context(buf, ctx.range) .. '\n\nRequest: ' .. body
+      local rules = a.writes and ASK_WRITE_RULES or ASK_RULES
+      local prompt = rules .. '\n\n' .. context(buf, ctx.range) .. '\n\nRequest: ' .. body
       return openAnswer(a.description, a.description, prompt, extra.cwd, nil, extra)
     end
 

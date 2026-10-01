@@ -172,7 +172,7 @@ return M
 | Key | What | Default |
 |---|---|---|
 | `description` | the name in the list (required) | |
-| `output` | `insert`: into the buffer below the cursor · `replace`: over the selection, or the whole note without one · `window`: the answer window (follow-ups with `a`) · `notify`: the model works on its own and sends a short summary of what it did as a notification | `notify` when it may change files, else `window` |
+| `output` | `insert`: into the buffer below the cursor · `replace`: over the selection, or the whole note without one · `window`: the answer window, a chat (follow-ups with `a`); with `Edit` or `Write` in `tools` it may also change files in `dirs` when you ask or it clearly helps, and says which · `notify`: the model works on its own and sends a short summary of what it did as a notification | `notify` when it may change files, else `window` |
 | `tools` | what the model may use: `Read`, `Grep`, `Glob` read; `Edit`, `Write`, `Bash` change files (accepted without asking) | none for insert/replace; reading for window |
 | `dirs` | where it may change files: `vault`, `file` (the note's folder), or paths (`~/Downloads`); the first is where it runs | `vault` |
 | `confirm` | `auto`: ask before running only when one of the `dirs` is not in a git repository · `always` · `never` | `auto` |
