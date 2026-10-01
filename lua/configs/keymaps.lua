@@ -7,6 +7,7 @@
 --    b  buffers        e  explore (pickers)   l  lsp             u  undotree
 --    c  code           f  find (pickers)      n  new file/folder v  vault (notes)
 --    d  diagnostics    g  git                 o  toggles         w  tabs, window view (wv_)
+--    m  manim
 --    j  jumps          s  split               t  term, todoist   x  checkbox state (notes)
 --    z  folds
 --
@@ -45,6 +46,7 @@ vim.g.pure_keyhint_groups = {
   ['<leader>g'] = 'Git',
   ['<leader>j'] = 'Jumps',
   ['<leader>l'] = 'LSP',
+  ['<leader>m'] = 'Manim',
   ['<leader>n'] = 'New file / folder',
   ['<leader>o'] = 'Toggles',
   ['<leader>s'] = 'Split',
@@ -340,6 +342,13 @@ map("n", "<leader>nv", zet.newNote, func.getOpts(opts, "New note in the vault's 
 map("n", "<leader>nd", function() fzf.NewFolder(here()) end, func.getOpts(opts, "New folder here"))
 -- <leader>nt (template) and <leader>nr (rename note) moved to <leader>vt and
 -- <leader>vr: they act on a note, they do not make a new file.
+
+-- =============================================================================
+--  Manim  (<leader>m, pure/manim.lua)
+-- =============================================================================
+map('n', '<leader>mm', function() require('pure.manim').toggle() end,
+  func.getOpts(opts, "Preview the scene, again on every save (toggle)"))
+map('n', '<leader>ms', function() require('pure.manim').pick() end, func.getOpts(opts, "Preview another scene"))
 
 -- =============================================================================
 --  Vault  (<leader>v, pure/zettelkasten.lua and pure/notes.lua)
