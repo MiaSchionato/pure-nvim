@@ -44,6 +44,7 @@ See [llm.md](llm.md).
 | `<leader>as` | n | Stop |
 | `<leader>at` | n | Thinking of <leader>ai (show / hide) |
 | `<leader>au` | n | User context file (what the LLMs know about you) |
+| `<leader>aw` | n | Weekly note: the week in one place (the vault action `Nota da semana`) |
 | `<leader>ax` | n, x | Actions (claude/ folder of the vault) |
 
 ## `<leader>b` – Buffers
