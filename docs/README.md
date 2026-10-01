@@ -15,7 +15,7 @@ When a module changes, update its page here in the same commit.
 | [keymaps.md](keymaps.md) | Every mapping, by group (also shown live: press `<Space>` and wait) |
 | [todoist.md](todoist.md) | Todoist: the editable task list, blocks in notes, sync into notes, archive |
 | [calendar.md](calendar.md) | The month as a grid in a note: one box per day, edited in place |
-| [claude.md](claude.md) | Claude Code from keys: write into the buffer, ask in a window, requests in notes |
+| [llm.md](llm.md) | LLMs (Claude, Ollama, agy) from keys: write into the buffer, the chat, actions, requests in notes |
 | [manim.md](manim.md) | Manim: the scene you are writing plays in a window, again on every save |
 | [notes.md](notes.md) | Links between notes: follow, complete `[[`, rename without breaking links, backlinks |
 | [zettelkasten.md](zettelkasten.md) | Obsidian vault, note templates, daily / weekly / monthly notes |
@@ -83,8 +83,9 @@ becomes a `package.preload` entry with its code unchanged; `colors/`,
 
 ## Settings in one place
 
-All of these are optional and set in `lua/configs/configs.lua` (or anywhere
-before use).
+All of these are optional. `lua/configs/configs.lua` lists every one of
+them with its default and what it does, in a section per plugin: that file is
+where to change them.
 
 | Setting | Default | Page |
 |---|---|---|
@@ -101,10 +102,10 @@ before use).
 | `vim.g.pure_calendar_duration` | `60` minutes | [calendar](calendar.md) |
 | `vim.g.pure_calendar_confirm` | `'delete'` | [calendar](calendar.md) |
 | `vim.g.pure_calendar_sync` | `{ interval = 15 }` | [calendar](calendar.md) |
-| `vim.g.pure_claude_model` | the `claude` command's default | [claude](claude.md) |
-| `vim.g.pure_claude_cmd` | `'claude'` | [claude](claude.md) |
-| `vim.g.pure_claude_actions` | `'claude'` (folder of the vault) | [claude](claude.md) |
-| `vim.g.pure_claude_blocks` | on | [claude](claude.md) |
+| `vim.g.pure_llm_model` | `'claude:default'` (a pick with `<leader>am` wins) | [llm](llm.md) |
+| `vim.g.pure_claude_cmd` | `'claude'` | [llm](llm.md) |
+| `vim.g.pure_llm_actions` | `'claude'` (folder of the vault) | [llm](llm.md) |
+| `vim.g.pure_llm_blocks` | on | [llm](llm.md) |
 | `vim.g.pure_manim_cmd` | `'manim'` | [manim](manim.md) |
 | `vim.g.pure_manim_quality` | `'l'` | [manim](manim.md) |
 | `vim.g.pure_manim_viewer_args` | none | [manim](manim.md) |
@@ -116,6 +117,23 @@ before use).
 | `vim.g.pure_dashboard_scale` | `'auto'` | [ui](ui.md) |
 | `vim.g.pure_terminal_shell` | nu, pwsh or powershell on Windows; `'shell'` elsewhere | [ui](ui.md) |
 | `vim.b.pure_indentscope_disable` | off | [editing](editing.md) |
+| `vim.g.pure_inbox` | `'0-Inbox'` | [zettelkasten](zettelkasten.md) |
+| `vim.g.pure_periodic_folders` | `9-Archive/Periodic/{Daily,Weekly,Monthly}` | [zettelkasten](zettelkasten.md) |
+| `vim.g.pure_quotes` | `'9-Archive/Periodic/Quotes.md'` | [zettelkasten](zettelkasten.md) |
+| `vim.g.pure_template_destinations` | see the Destinations table | [zettelkasten](zettelkasten.md) |
+| `vim.g.pure_new_file_ask_name` | on | [fuzzy](fuzzy.md) |
+| `vim.g.pure_spelllang` | `{ 'pt_br', 'en', 'it' }` | [markdown](markdown.md) |
+| `vim.g.pure_md_bullets` | `{ '•', '◦', '▪', '▫' }` | [markdown](markdown.md) |
+| `vim.g.pure_tasks_done` | `'xX-'` | [editing](editing.md) |
+| `vim.g.pure_llm_thinking` | `'show'` | [llm](llm.md) |
+| `vim.g.pure_llm_user_context` | `stdpath('data')/llm_user.md` | [llm](llm.md) |
+| `vim.g.pure_llm_memory` | on | [llm](llm.md) |
+| `vim.g.pure_ollama_url` | `'http://localhost:11434'` | [llm](llm.md) |
+| `vim.g.pure_ollama_num_ctx` | `32768` (the largest; each request gets the smallest that holds it) | [llm](llm.md) |
+| `vim.g.pure_ollama_think` | off | [llm](llm.md) |
+| `vim.g.pure_ollama_autostart` | `'ask'` | [llm](llm.md) |
+| `vim.g.pure_ollama_models` | `OLLAMA_MODELS`, else `~/.ollama/models` | [llm](llm.md) |
+| `vim.g.pure_indentscope_disable` | off | [editing](editing.md) |
 
 ## What is stored outside the repository
 
@@ -134,8 +152,11 @@ folder (`:echo stdpath('data')`: `~/.local/share/nvim`, or
 | `todoist_sync.json` | the same for the Todoist sync |
 | `obsidian_vault` | the vault folder (`:ZettelVault` writes it) |
 | `obsidian_vault_no_prompt` | "never ask for the vault" |
+| `llm_user.md` | what the LLMs know about you (`<leader>au`; they may add to it) |
 
-Undo history is in `stdpath('state')/undo`.
+Undo history is in `stdpath('state')/undo`; the model picked with `<leader>am` in
+`stdpath('state')/pure_llm_model`, and agy's list of models in
+`stdpath('state')/pure_agy_models`.
 
 ## Commands
 
@@ -147,9 +168,9 @@ Undo history is in `stdpath('state')/undo`.
 | `:CalendarRefresh` | draw and tidy the ```` ```calendar ```` grids of the note |
 | `:CalendarSync` | sync the calendar grids with Google now |
 | `:CalendarAuth` | connect Google Calendar (OAuth, once) |
-| `:ClaudeActions` | pick one of the vault's Claude actions and run it ([claude](claude.md)) |
-| `:ClaudeActionsExamples` | write the example actions into the vault's `claude` folder |
-| `:ClaudeBlock` | run the ```` ```claude ```` block under the cursor (again) |
+| `:LLMActions` | pick one of the vault's LLM actions and run it ([llm](llm.md)) |
+| `:LLMActionsExamples` | write the example actions into the vault's `claude` folder |
+| `:LLMBlock` | run the ```` ```llm ```` block under the cursor (again); `:Claude…` names still work |
 | `:ManimPreview [Scene]` | preview a Manim scene, again on every save ([manim](manim.md)) |
 | `:ManimLog` | the output of the last Manim render |
 | `:ManimStop` | stop the Manim preview |

@@ -511,25 +511,90 @@ function M.omnifunc(findstart, base)
     return items
   end
 
-  local names, by = {}, {}
+  -- Improved for Improvment.md in the vault ("the [[links]] and folders
+  -- completion"). It only offered notes by name, so:
+  --   [[3-Zett/         a path: the folders and files inside that folder,
+  --                     matched by what follows the last '/'
+  --   [[zett            folders match too ("3-Zettelkasten/", no ]]: you
+  --                     keep typing into it)
+  --   ![[photo  [[doc   attachments (images, PDFs...) as well, after the
+  --                     notes, with their extension, as Obsidian links them
+  -- Each item says what it is in the menu's kind column: note, folder, file.
+  local function isNote(f) return f:match('%.md$') or f:match('%.canvas$') end
+
+  local folders, seen_dir = {}, {}
   for _, f in ipairs(idx.files) do
-    if f:match('%.md$') or f:match('%.canvas$') then
-      local name = linkName(idx, f)
-      if not by[name] then
-        by[name] = f
-        table.insert(names, name)
-      end
+    local d = dirOf(f)
+    while d ~= '' and not seen_dir[d] do
+      seen_dir[d] = true
+      table.insert(folders, d)
+      d = dirOf(d)
     end
   end
-  if base ~= '' then
-    names = vim.fn.matchfuzzy(names, base)
-  else
-    table.sort(names)
+
+  local dir_typed, rest = base:match('^(.*)/([^/]*)$')
+  if dir_typed then
+    -- By path: what sits directly in the typed folder (case-blind, as
+    -- Obsidian resolves links).
+    local want = lower(dir_typed)
+    local cands, info = {}, {}
+    for _, d in ipairs(folders) do
+      if lower(dirOf(d)) == want then
+        local label = d:match('[^/]*$') .. '/'
+        table.insert(cands, label)
+        info[label] = { word = d .. '/', kind = 'folder' }
+      end
+    end
+    for _, f in ipairs(idx.files) do
+      if lower(dirOf(f)) == want then
+        local label = f:match('[^/]*$')
+        local link = isNote(f) and f:match('%.md$') and (f:gsub('%.md$', '')) or f
+        if isNote(f) then label = label:gsub('%.md$', '') end
+        table.insert(cands, label)
+        info[label] = { word = link .. close, kind = isNote(f) and 'note' or 'file' }
+      end
+    end
+    cands = rest ~= '' and vim.fn.matchfuzzy(cands, rest) or cands
+    if rest == '' then table.sort(cands) end
+    for i, label in ipairs(cands) do
+      if i > 200 then break end
+      local it = info[label]
+      table.insert(items, { word = it.word, abbr = label, kind = it.kind, menu = dir_typed, equal = 1 })
+    end
+    return items
   end
-  for i, name in ipairs(names) do
-    if i > 200 then break end
-    local dir = dirOf(by[name])
-    table.insert(items, { word = name .. close, abbr = name, menu = dir ~= '' and dir or '/', equal = 1 })
+
+  -- By name: notes first, then folders, then other files.
+  local groups = { note = {}, folder = {}, file = {} }
+  local by = {}
+  for _, f in ipairs(idx.files) do
+    local kind = isNote(f) and 'note' or 'file'
+    local name = linkName(idx, f)
+    if not by[name] then
+      by[name] = { word = name .. close, kind = kind, dir = dirOf(f) }
+      table.insert(groups[kind], name)
+    end
+  end
+  for _, d in ipairs(folders) do
+    local name = d .. '/'
+    if not by[name] then
+      by[name] = { word = name, kind = 'folder', dir = dirOf(d) }
+      table.insert(groups.folder, name)
+    end
+  end
+  for _, kind in ipairs({ 'note', 'folder', 'file' }) do
+    local names = groups[kind]
+    if base ~= '' then
+      names = vim.fn.matchfuzzy(names, base)
+    else
+      table.sort(names)
+    end
+    for _, name in ipairs(names) do
+      if #items >= 200 then break end
+      local it = by[name]
+      table.insert(items, { word = it.word, abbr = name, kind = it.kind,
+        menu = it.dir ~= '' and it.dir or '/', equal = 1 })
+    end
   end
   return items
 end
@@ -878,7 +943,10 @@ function M.backlinks()
     end
   end
   if #hits == 0 then return vim.notify('No note links to ' .. stem) end
-  require('pure.fuzzyUtils').pickList(hits, { title = ' Links to ' .. stem .. ' ', fzf = "--delimiter=: --nth=1,3.." },
+  -- preview + cwd: the linking note is shown as you move, with the line of
+  -- the link highlighted (asked for in Improvment.md, "like the grep").
+  require('pure.fuzzyUtils').pickList(hits, { title = ' Links to ' .. stem .. ' ', fzf = "--nth=1,3..",
+    preview = true, cwd = root },
     function(selection)
       local file, lnum = (selection or ''):match('^(.-):(%d+):')
       if not file then return end

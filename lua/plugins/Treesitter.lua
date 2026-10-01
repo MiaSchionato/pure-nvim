@@ -88,7 +88,12 @@ vim.api.nvim_create_autocmd('FileType', {
     -- start() throws when the language has no parser; that is the cheapest and
     -- most accurate availability check.
     if pcall(vim.treesitter.start, args.buf, lang) then
-      vim.bo[args.buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+      -- Only for a language with indent rules. Without them (markdown) its
+      -- indentexpr guessed: Enter under an indented list item went back to
+      -- column 0, and splitting a line indented the rest by 4.
+      if #vim.treesitter.query.get_files(lang, 'indents') > 0 then
+        vim.bo[args.buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+      end
     elseif vim.fn.executable('tree-sitter') == 0 then
       warnMissingParser(lang)
     end

@@ -3,13 +3,16 @@
 -- =============================================================================
 --  Leader is <Space>. The second key groups the action:
 --
---    a  claude
+--    a  llms (ai)
 --    b  buffers        e  explore (pickers)   l  lsp             u  undotree
---    c  code           f  find (pickers)      n  new file        v  window focus
---    d  diagnostics    g  git                 o  toggles         w  tabs
+--    c  code           f  find (pickers)      n  new file/folder v  vault (notes)
+--    d  diagnostics    g  git                 o  toggles         w  tabs, window view (wv_)
 --    m  manim
 --    j  jumps          s  split               t  term, todoist   x  checkbox state (notes)
 --    z  folds
+--
+--  <leader>v was window focus; it became the vault's group (Improvment.md in
+--  the vault asked for it) and window focus moved to <leader>wv h/j/k/l.
 --
 --  No mapping may be a prefix of another one: Neovim then waits 'timeoutlen'
 --  (500 ms) after the shorter key to see whether the longer one follows. That
@@ -34,7 +37,7 @@ vim.g.mapleader = ' '
 
 -- Group names shown by the key hint window (pure/keyhint.lua) after <leader>.
 vim.g.pure_keyhint_groups = {
-  ['<leader>a'] = 'Claude',
+  ['<leader>a'] = 'AI (LLMs)',
   ['<leader>b'] = 'Buffers',
   ['<leader>c'] = 'Code',
   ['<leader>d'] = 'Diagnostics',
@@ -44,12 +47,13 @@ vim.g.pure_keyhint_groups = {
   ['<leader>j'] = 'Jumps',
   ['<leader>l'] = 'LSP',
   ['<leader>m'] = 'Manim',
-  ['<leader>n'] = 'New file',
+  ['<leader>n'] = 'New file / folder',
   ['<leader>o'] = 'Toggles',
   ['<leader>s'] = 'Split',
   ['<leader>t'] = 'Terminal, Todoist',
-  ['<leader>v'] = 'Window focus',
-  ['<leader>w'] = 'Tabs',
+  ['<leader>v'] = 'Vault',
+  ['<leader>w'] = 'Tabs, window view',
+  ['<leader>wv'] = 'Window focus',
   ['<leader>x'] = 'Checkbox state',
   ['<leader>z'] = 'Folds',
 }
@@ -163,6 +167,12 @@ map('v', "J", '5j', func.getOpts(opts, "Down 5 lines"))
 map('v', "K", '5k', func.getOpts(opts, "Up 5 lines"))
 map('v', "<", "<gv", func.getOpts(opts, "Outdent and reselect"))
 map('v', ">", ">gv", func.getOpts(opts, "Indent and reselect"))
+-- Tab indents in visual mode only (Improvment.md: indenting belongs to
+-- normal / visual, never insert). Not in normal mode: a terminal sends the
+-- same key for <Tab> and <C-i>, so it would take away "jump forward". There
+-- >> and << indent.
+map('x', "<Tab>", ">gv", func.getOpts(opts, "Indent and reselect"))
+map('x', "<S-Tab>", "<gv", func.getOpts(opts, "Outdent and reselect"))
 
 -- Move lines
 --
@@ -253,10 +263,13 @@ map("n", "<leader>cx", "<cmd>!chmod +x %<CR>", func.getOpts(opts, "Make file exe
 -- =============================================================================
 --  Windows, splits and tabs
 -- =============================================================================
-map('n', "<leader>vh", "<C-w>h", func.getOpts(opts, "Focus window left"))
-map('n', "<leader>vj", "<C-w>j", func.getOpts(opts, "Focus window below"))
-map('n', "<leader>vk", "<C-w>k", func.getOpts(opts, "Focus window above"))
-map('n', "<leader>vl", "<C-w>l", func.getOpts(opts, "Focus window right"))
+-- Window view: <leader>wv + direction. Moved from <leader>v_, which is now the
+-- vault's group. Under <leader>w beside the tabs; no bare <leader>wv mapping,
+-- so wvh/wvj/... never wait on a shorter key.
+map('n', "<leader>wvh", "<C-w>h", func.getOpts(opts, "Focus window left"))
+map('n', "<leader>wvj", "<C-w>j", func.getOpts(opts, "Focus window below"))
+map('n', "<leader>wvk", "<C-w>k", func.getOpts(opts, "Focus window above"))
+map('n', "<leader>wvl", "<C-w>l", func.getOpts(opts, "Focus window right"))
 
 map('n', "<leader>sv", "<cmd>vsplit<CR>", func.getOpts(opts, "Split vertically"))
 map('n', "<leader>sh", "<cmd>split<CR>", func.getOpts(opts, "Split horizontally"))
@@ -308,20 +321,27 @@ map('n', "<leader>f/", fzf.fuzzyOldfiles, func.getOpts(opts, "Recent files"))
 map('n', "<leader>fh", fzf.fuzzyHelp, func.getOpts(opts, "Help tags"))
 map('n', "<leader>fb", fzf.fuzzyBuffers, func.getOpts(opts, "Buffers"))
 map('n', "<leader>fj", fzf.fuzzyJump, func.getOpts(opts, "Jump list"))
-map('n', '<leader>fl', function() require('pure.notes').backlinks() end, func.getOpts(opts, "Notes linking here (backlinks)"))
+map('n', '<leader>fl', function() require('pure.notes').backlinks() end, func.getOpts(opts, "Notes linking here (backlinks, also <leader>vb)"))
 map('n', '<leader>fc', fzf.fuzzyColorscheme, func.getOpts(opts, "Colorschemes"))
 
 -- =============================================================================
---  New file  (<leader>n)
+--  New file / folder  (<leader>n)
 -- =============================================================================
+--  Only <leader>nf asks for a folder. The others already name it, so they
+--  go straight there: they ask for the file name, or, with
+--  vim.g.pure_new_file_ask_name = false (configs.lua), open an unnamed buffer
+--  working in that folder. They used to open a folder picker every time.
 map("n", "<leader>nf", function() fzf.NewFile(vim.fn.expand('%:p:h:h') .. '/') end,
-  func.getOpts(opts, "New file, two levels up"))
-map("n", "<leader>nh", inDir(fzf.NewFile, dirs['~']), func.getOpts(opts, "New file in home"))
-map("n", "<leader>n.", inDir(fzf.NewFile, dirs['.']), func.getOpts(opts, "New file in ~/.config"))
-map("n", "<leader>nn", inDir(fzf.NewFile, dirs.n), func.getOpts(opts, "New file in nvim config"))
-map("n", "<leader>nv", inDir(fzf.NewFile, dirs.v), func.getOpts(opts, "New file in Obsidian vault"))
-map('n', '<leader>nt', zet.insertTemplate, func.getOpts(opts, "Insert zettel template"))
-map('n', '<leader>nr', function() require('pure.notes').rename() end, func.getOpts(opts, "Rename note, fix links to it"))
+  func.getOpts(opts, "New file, pick the folder (from two levels up)"))
+map("n", "<leader>ne", function() fzf.NewFileIn(here()) end, func.getOpts(opts, "New file here"))
+map("n", "<leader>nh", inDir(fzf.NewFileIn, dirs['~']), func.getOpts(opts, "New file in home"))
+map("n", "<leader>n.", inDir(fzf.NewFileIn, dirs['.']), func.getOpts(opts, "New file in ~/.config"))
+map("n", "<leader>nn", inDir(fzf.NewFileIn, dirs.n), func.getOpts(opts, "New file in nvim config"))
+-- The same as <leader>vn: a note in the vault's inbox, asking only its name.
+map("n", "<leader>nv", zet.newNote, func.getOpts(opts, "New note in the vault's inbox"))
+map("n", "<leader>nd", function() fzf.NewFolder(here()) end, func.getOpts(opts, "New folder here"))
+-- <leader>nt (template) and <leader>nr (rename note) moved to <leader>vt and
+-- <leader>vr: they act on a note, they do not make a new file.
 
 -- =============================================================================
 --  Manim  (<leader>m, pure/manim.lua)
@@ -331,22 +351,52 @@ map('n', '<leader>mm', function() require('pure.manim').toggle() end,
 map('n', '<leader>ms', function() require('pure.manim').pick() end, func.getOpts(opts, "Preview another scene"))
 
 -- =============================================================================
---  Claude  (<leader>a, pure/claude.lua)
+--  Vault  (<leader>v, pure/zettelkasten.lua and pure/notes.lua)
 -- =============================================================================
-local function claude(fn)
-  return function() require('pure.claude')[fn]() end
+--  Everything that works on the Obsidian vault, in one group. <leader>ev,
+--  <leader>fv, <leader>fl and <leader>gv stay too, beside the other folders
+--  of their group.
+local function notes(fn)
+  return function() require('pure.notes')[fn]() end
 end
-map({ 'n', 'x' }, '<leader>ai', claude('write'), func.getOpts(opts, "Write here (visual: rewrite)"))
-map({ 'n', 'x' }, '<leader>aa', claude('ask'), func.getOpts(opts, "Ask (answer in a window)"))
-map({ 'n', 'x' }, '<leader>ac', claude('review'), func.getOpts(opts, "Review the code"))
-map({ 'n', 'x' }, '<leader>ar', claude('repeatLast'), func.getOpts(opts, "Repeat the last request"))
-map('n', '<leader>ah', claude('history'), func.getOpts(opts, "Past answers"))
-map('n', '<leader>as', claude('stop'), func.getOpts(opts, "Stop"))
-map('n', '<leader>am', claude('selectModel'), func.getOpts(opts, "Select model (Ollama / Claude)"))
-map({ 'n', 'x' }, '<leader>ax', claude('pickAction'), func.getOpts(opts, "Actions (claude/ folder of the vault)"))
-map('n', '<leader>ab', claude('runBlockAtCursor'), func.getOpts(opts, "Run the ```claude block"))
-map('n', '<leader>ad', function() require('pure.claude').runNamed('Nota do dia') end,
+map('n', '<leader>vn', zet.newNote, func.getOpts(opts, "New note (inbox, asks the name only)"))
+map('n', '<leader>vt', zet.insertTemplate, func.getOpts(opts, "Apply a template"))
+map('n', '<leader>vd', zet.trashNote, func.getOpts(opts, "Delete note (to the vault's trash)"))
+map('n', '<leader>vr', notes('rename'), func.getOpts(opts, "Rename note, fix links to it"))
+map('n', '<leader>vb', notes('backlinks'), func.getOpts(opts, "Backlinks (notes linking here)"))
+map('n', '<leader>ve', explore(dirs.v), func.getOpts(opts, "Explore the vault"))
+map('n', '<leader>vf', inDir(fzf.fuzzySearch, dirs.v), func.getOpts(opts, "Find a note"))
+map('n', '<leader>vg', inDir(fzf.fuzzyGrep, dirs.v), func.getOpts(opts, "Grep the vault"))
+map('n', '<leader>vs', "<cmd>VaultSync<cr>", func.getOpts(opts, "Sync the vault (git)"))
+
+-- =============================================================================
+--  LLMs: Claude, Ollama, agy  (<leader>a, pure/llm.lua)
+-- =============================================================================
+local function llm(fn)
+  return function() require('pure.llm')[fn]() end
+end
+map({ 'n', 'x' }, '<leader>ai', llm('write'), func.getOpts(opts, "Write here (visual: rewrite)"))
+map({ 'n', 'x' }, '<leader>aa', llm('ask'), func.getOpts(opts, "Chat: show / hide (like <leader>tt)"))
+map({ 'n', 'x' }, '<leader>ac', llm('review'), func.getOpts(opts, "Review the code"))
+map({ 'n', 'x' }, '<leader>ar', llm('repeatLast'), func.getOpts(opts, "Repeat the last request"))
+map('n', '<leader>ah', llm('history'), func.getOpts(opts, "Past answers"))
+map('n', '<leader>as', llm('stop'), func.getOpts(opts, "Stop"))
+map('n', '<leader>am', llm('selectModel'), func.getOpts(opts, "Select model (Ollama / Claude / agy)"))
+map('n', '<leader>at', llm('toggleThinking'), func.getOpts(opts, "Thinking of <leader>ai (show / hide)"))
+-- The file about you that every request reads (outside any git repository).
+map('n', '<leader>au', function()
+  local path = require('pure.llm').userContextFile()
+  if not path then return vim.notify('User context is off (vim.g.pure_llm_user_context = false)') end
+  vim.cmd('edit ' .. vim.fn.fnameescape(path))
+end, func.getOpts(opts, "User context file (what the LLMs know about you)"))
+map({ 'n', 'x' }, '<leader>ax', llm('pickAction'), func.getOpts(opts, "Actions (claude/ folder of the vault)"))
+map('n', '<leader>ab', llm('runBlockAtCursor'), func.getOpts(opts, "Run the ```llm block under the cursor"))
+map('n', '<leader>ad', function() require('pure.llm').runNamed('Nota do dia') end,
   func.getOpts(opts, "Daily note: next step and the measured day"))
+map('n', '<leader>aw', function() require('pure.llm').runNamed('Nota da semana') end,
+  func.getOpts(opts, "Weekly note: the week in one place"))
+map('n', '<leader>aj', function() require('pure.llm').runNamed('Assistente de trabalho') end,
+  func.getOpts(opts, "Job assistant: what to do now (chat)"))
 
 -- =============================================================================
 --  Git
@@ -384,7 +434,15 @@ map('n', 'gd', lsp.definition, func.getOpts(opts, "LSP definition"))
 map('n', '<leader>la', lsp.code_action, func.getOpts(opts, "LSP code action"))
 map('n', '<leader>lr', lsp.rename, func.getOpts(opts, "LSP rename"))
 map('n', '<leader>ls', lsp.workspace_symbol, func.getOpts(opts, "LSP workspace symbols"))
-map('i', '<up>', lsp.signature_help, func.getOpts(opts, "LSP signature help"))
+-- Only where a language server can answer: in markdown (no such server) it
+-- raised 'method "textDocument/signatureHelp" is not supported' on every
+-- press (Improvment.md). Elsewhere <Up> moves up, as it would unmapped.
+map('i', '<up>', function()
+  if #vim.lsp.get_clients({ bufnr = 0, method = 'textDocument/signatureHelp' }) > 0 then
+    return "<Cmd>lua vim.lsp.buf.signature_help()<CR>"
+  end
+  return "<Up>"
+end, { expr = true, replace_keycodes = true, silent = true, desc = "LSP signature help, else up" })
 
 -- =============================================================================
 --  Diagnostics
@@ -422,7 +480,24 @@ end, func.getOpts(opts, "Toggle line numbers"))
 map('n', '<leader>jl', '<C-i>', func.getOpts(opts, "Jump forward"))
 map('n', '<leader>jh', '<C-o>', func.getOpts(opts, "Jump back"))
 
-map('n', '<leader>zz', 'za', func.getOpts(opts, "Toggle fold"))
+-- Only a fold that starts on this line (pure/folding.lua): za closed the fold
+-- around the line, which in a markdown list was the whole section.
+map('n', '<leader>zz', function() require('pure.folding').toggleHere() end,
+  func.getOpts(opts, "Toggle the fold starting here"))
+-- Tasks by state (Improvment.md); the same key again, or <leader>zr, goes back.
+map('n', '<leader>zt', function() require('pure.folding').tasks('done') end,
+  func.getOpts(opts, "Fold done tasks (see what is left)"))
+map('n', '<leader>zT', function() require('pure.folding').tasks('open') end,
+  func.getOpts(opts, "Fold open tasks (see what is done)"))
+-- The same on Vim's own z prefix, without <leader> (Improvment.md). They
+-- replace Vim's zt / zz ("scroll this line to the top / middle"), which the
+-- owner of this configuration does not use and asked to give up.
+map('n', 'zt', function() require('pure.folding').tasks('done') end,
+  func.getOpts(opts, "Fold done tasks (see what is left)"))
+map('n', 'zT', function() require('pure.folding').tasks('open') end,
+  func.getOpts(opts, "Fold open tasks (see what is done)"))
+map('n', 'zz', function() require('pure.folding').toggleHere() end,
+  func.getOpts(opts, "Toggle the fold starting here"))
 -- Folds are made automatically (treesitter, or indentation), and those
 -- methods refuse zf. Folding a selection by hand switches the window to manual
 -- folds -- the automatic ones stay -- and <leader>zr goes back to automatic.
@@ -480,37 +555,101 @@ map('n', '<leader>tD', '<cmd>Todoist today | overdue<cr>', func.getOpts(opts, "T
 --  Deferred: the <CR> mapping needs copilot.vim's autoload on the runtimepath,
 --  which vim.pack only guarantees after this file has run.
 vim.schedule(function()
+  --  Tab in insert mode (as asked in the vault's Improvment.md, second
+  --  round: Tab must not indent, and walks the suggestions). In order:
+  --    the completion menu open           next suggestion (<CR> takes it)
+  --    closers right after the cursor     step past all of them: "[[a|]]" -> "[[a]]|"
+  --    a snippet with a next field        jump to it
+  --    anything else                      a plain Tab, the one way left to
+  --                                       type one (<C-v><Tab> works too)
+  --  Tab never opens the menu itself ('autocomplete' opens it as you type):
+  --  returning <C-n> from this mapping with the menu closed crashed Neovim
+  --  0.12.5 (segfault) together with 'lazyredraw' and 'autocomplete'; it
+  --  reproduces with --clean, so it is Neovim's bug, not this config's.
+  --  The menu wins over a closer (third round, "option b"): inside [[...]]
+  --  the ]] is always there, so with the closer first Tab could never pick a
+  --  link. Esc closes the menu (below), then Tab steps past the pair.
+  --  The first version of this indented a markdown list item (<C-t>); that
+  --  was taken out on request. >> and << in normal mode still indent.
+  local closers = "[%)%]}>\"'`]"
+  local function closersAhead()
+    local col = vim.api.nvim_win_get_cursor(0)[2]
+    local ahead = vim.api.nvim_get_current_line():sub(col + 1)
+    return #(ahead:match('^' .. closers .. '+') or '')
+  end
+
+  -- Right after a list item's marker ("- [ ] |", "- |", "1. |"), where the
+  -- item is still empty: Tab / S-Tab make it a sub-item / take it back out
+  -- (Improvment.md, fourth round). Anywhere else Tab never indents.
+  local function atItemStart()
+    local it = require('pure.lists').item()
+    return it ~= nil and vim.api.nvim_win_get_cursor(0)[2] == it.start
+  end
+
   map('i', '<tab>', function()
-    if vim.fn.pumvisible() == 1 then
-      return "<C-n>"
+    if atItemStart() then
+      return (vim.fn.pumvisible() == 1 and "<C-e>" or "") .. "<C-t>"
     end
-    if func.isBlank() then
-      return "<tab>"
-    end
+    if vim.fn.pumvisible() == 1 then return "<C-n>" end
+    local n = closersAhead()
+    if n > 0 then return string.rep("<right>", n) end
     if vim.snippet.active({ direction = 1 }) then
       return "<cmd>lua vim.snippet.jump(1)<cr>"
     end
-    return "<right>"
-  end, { expr = true, replace_keycodes = true, desc = "Complete / jump forward" })
+    return "<tab>"
+  end, { expr = true, replace_keycodes = true, desc = "Indent an empty list item / past closing pair / next suggestion / snippet jump" })
 
+  --  Mirrors Tab backwards: previous suggestion, snippet back; else the builtin.
   map('i', '<S-tab>', function()
-    if vim.fn.pumvisible() == 1 then
-      return "<C-p>"
+    if atItemStart() then
+      return (vim.fn.pumvisible() == 1 and "<C-e>" or "") .. "<C-d>"
     end
-    if func.isBlank() then
-      return "<S-tab>"
-    end
+    if vim.fn.pumvisible() == 1 then return "<C-p>" end
     -- was `direction = 1` here too, so the backward jump asked whether a
     -- *forward* jump was possible.
     if vim.snippet.active({ direction = -1 }) then
       return "<cmd>lua vim.snippet.jump(-1)<cr>"
     end
-    return "<left>"
-  end, { expr = true, replace_keycodes = true, desc = "Complete / jump back" })
+    return "<S-tab>"
+  end, { expr = true, replace_keycodes = true, desc = "Outdent an empty list item / previous suggestion / snippet jump back" })
 
-  map('i', '<CR>', 'copilot#Accept("\\<CR>")', {
+  --  Esc with the completion menu open closes only the menu and stays in
+  --  insert mode (Improvment.md): then Tab steps past the pair. A suggestion
+  --  picked with Tab is kept (<C-y>); with none picked the typed text stays
+  --  (<C-e>). A second Esc leaves insert mode as always.
+  map('i', '<Esc>', function()
+    if vim.fn.pumvisible() == 0 then return "<Esc>" end
+    return vim.fn.complete_info({ 'selected' }).selected ~= -1 and "<C-y>" or "<C-e>"
+  end, { expr = true, replace_keycodes = true, desc = "Close the completion menu, else leave insert mode" })
+
+  -- <CR>: a Copilot suggestion on screen is accepted. With the completion menu
+  -- open the suggestion is taken: the selected item, or the first one when
+  -- none is (completeopt has noselect, so usually none is). Only when the
+  -- word typed already is that first item (nothing left to complete) does
+  -- <CR> close the menu and make the new line. Otherwise, in a markdown list,
+  -- the next item starts (pure/lists.lua), else a plain new line.
+  map('i', '<CR>', function()
+    local ok, shown = pcall(vim.fn['copilot#GetDisplayedSuggestion'])
+    if ok and type(shown) == 'table' and (shown.text or '') ~= '' then
+      return vim.fn['copilot#Accept']('')
+    end
+    local cr = vim.keycode('<CR>')
+    if vim.fn.pumvisible() == 1 then
+      local info = vim.fn.complete_info({ 'selected', 'items' })
+      if info.selected ~= -1 then return vim.keycode('<C-y>') end
+      local first = info.items[1] and info.items[1].word or ''
+      local col = vim.api.nvim_win_get_cursor(0)[2]
+      local before = vim.api.nvim_get_current_line():sub(1, col)
+      if first ~= '' and before:sub(-#first) ~= first then
+        return vim.keycode('<C-n><C-y>')
+      end
+      local list = require('pure.lists').enter()
+      return vim.keycode('<C-e>') .. (list or cr)
+    end
+    return require('pure.lists').enter() or cr
+  end, {
     expr = true,
     replace_keycodes = false,
-    desc = "Accept Copilot suggestion",
+    desc = "Accept Copilot suggestion / next list item / new line",
   })
 end)

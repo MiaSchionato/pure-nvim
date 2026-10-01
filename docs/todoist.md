@@ -179,7 +179,7 @@ opens it too. Other tasks keep the usual form, their text as the link.
 
 **Folded on open.** When a note with a synced list opens in a window, each
 task with subtasks starts folded to its own line (the fold shows just the
-task, without the link, date or project). `<leader>zz` opens one,
+task, without the link, date or project). `zz` (or `<leader>zz`) opens one,
 `<leader>za` opens all. It happens once per window, so a fold you opened
 stays open when a sync rewrites the list.
 
@@ -198,10 +198,19 @@ vim.g.pure_todoist_sync = false
 The tasks are drawn under the block as virtual lines (not in the file). They
 are cached for 5 minutes; `:TodoistRefresh` reloads them.
 
+## For the LLM actions: `context: todoist`
+
+`require('pure.todoist').text(filter)` returns the tasks of `filter` (default
+`today | overdue | no date`, as a daily note's blocks), straight from Todoist,
+one plain line each, subtasks indented: `- [ ] Task · 2026-09-30 · P1 ·
+Project`. A Claude / Ollama action gets them with `context: todoist`
+([llm.md](llm.md)): much less than the synced list, whose every task
+carries its link.
+
 ## 3. Archive
 
 ```lua
-vim.g.pure_todoist_archive = '9-Archive/Todoist/'
+vim.g.pure_todoist_archive = '7-Archive/Todoist/'
 ```
 
 A relative folder is inside the Obsidian vault (see [zettelkasten](zettelkasten.md)),

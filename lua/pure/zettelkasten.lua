@@ -41,20 +41,46 @@ local no_prompt_file = vim.fn.stdpath('data') .. '/obsidian_vault_no_prompt'
 ---
 --- `name` is an os.date format; %G-W%V is the ISO week, which Windows' strftime
 --- does support (checked: 2026-09-25 gives 2026-W39).
-local periodic = {
+---
+--- The folders, the quotes file and the destinations below used to be fixed
+--- here, so reorganising the vault meant editing this module. They are now
+--- defaults that vim.g.pure_periodic_folders, vim.g.pure_quotes and
+--- vim.g.pure_template_destinations (configs.lua) override. The options are
+--- read on every use, not once at load: configs.lua may run after this file,
+--- and a change made with :let takes effect without restarting.
+local default_periodic = {
   Daily   = { folder = '9-Archive/Periodic/Daily',   name = '%Y-%m-%d', step = 86400,  unit = 'day' },
   Weekly  = { folder = '9-Archive/Periodic/Weekly',  name = '%G-W%V',   step = 604800, unit = 'week' },
   Monthly = { folder = '9-Archive/Periodic/Monthly', name = '%Y-%m',    step = nil,    unit = 'month' },
 }
 
+--- A vault-relative folder from an option, without slashes at either end.
+local function relFolder(path)
+  return (tostring(path):gsub('\\', '/'):gsub('^/+', ''):gsub('/+$', ''))
+end
+
+--- `periodic.Daily` etc.: the default entry with the folder from
+--- vim.g.pure_periodic_folders when it names one.
+local periodic = setmetatable({}, {
+  __index = function(_, period)
+    local entry = default_periodic[period]
+    local folder = entry and (vim.g.pure_periodic_folders or {})[period]
+    if not folder or folder == '' then return entry end
+    return vim.tbl_extend('force', entry, { folder = relFolder(folder) })
+  end,
+})
+
 --- Where the quote of the day lives, relative to the vault. The resurfaced
 --- notes come from destinations.Permanent.
-local QUOTES = '9-Archive/Periodic/Quotes.md'
+local function quotesFile()
+  local path = vim.g.pure_quotes
+  return (path and path ~= '') and relFolder(path) or '9-Archive/Periodic/Quotes.md'
+end
 
 --- Folder each template sends its note to, relative to the vault root.
 --- "{{title}}" is expanded, which is what puts a project in its own folder.
 --- A template missing here simply leaves the note where it is.
-local destinations = {
+local default_destinations = {
   Delete     = '0-Inbox/Trash',
   Literature = '3-Zettelkasten/Literature',
   MOC        = '4-Maps',
@@ -63,6 +89,19 @@ local destinations = {
   Tester     = '2-Areas/Audiovisual/YouTube/Tester channel',
   VideoIdeas = '2-Areas/Audiovisual/Ideas',
 }
+
+--- `destinations[name]`: vim.g.pure_template_destinations first, then the
+--- default. `false` there leaves that template's note where it is, except for
+--- Delete and Permanent: the trash and the resurfaced notes always need a
+--- folder, so those fall back to the default.
+local destinations = setmetatable({}, {
+  __index = function(_, name)
+    local value = (vim.g.pure_template_destinations or {})[name]
+    if value == false and name ~= 'Delete' and name ~= 'Permanent' then return nil end
+    if type(value) == 'string' and value ~= '' then return relFolder(value) end
+    return default_destinations[name]
+  end,
+})
 
 --- Day and month names per locale. os.date's %A / %B always gave English
 --- (the C locale), whatever language Obsidian renders the same template in.
@@ -351,7 +390,9 @@ end
 --- @param stem string
 --- @return boolean
 local function isGeneratedName(stem)
-  return stem == 'Untitled' or stem:match('^%d+%-%a+$') ~= nil
+  -- "Untitled 2" too: newNote() numbers a second nameless note that way.
+  return stem == 'Untitled' or stem:match('^Untitled %d+$') ~= nil
+    or stem:match('^%d+%-%a+$') ~= nil
 end
 
 --- A title made safe as a file or folder name: Windows rejects \ / : * ? " < > |
@@ -409,7 +450,7 @@ end
 local function quoteOfTheDay(when)
   local root = vaultPath()
   if not root then return '' end
-  local file = io.open(root .. '/' .. QUOTES, 'r')
+  local file = io.open(root .. '/' .. quotesFile(), 'r')
   if not file then return '' end
 
   local quotes = {}
@@ -858,6 +899,85 @@ function M.pickTemplate(callback)
   local files = templateNames(true)
   if not files then return callback(nil) end
   vim.ui.select(files, { prompt = 'Template' }, callback)
+end
+
+--- Folder new notes go to (<leader>vn / <leader>nv), relative to the vault.
+--- Added so a new note asks for its name only: every new note starts in the
+--- inbox and a template (<leader>vt) moves it to its place later.
+local function inboxFolder()
+  local folder = vim.g.pure_inbox
+  if folder == nil or folder == '' then folder = '0-Inbox' end
+  return (tostring(folder):gsub('^[/\\]+', ''):gsub('[/\\]+$', ''))
+end
+
+--- A new note in the vault's inbox: asks for its name only, never the path.
+--- An existing note of that name is opened instead of overwritten.
+function M.newNote()
+  local root = vaultPath()
+  if not root then
+    vim.notify('No Obsidian vault set: run :ZettelVault', vim.log.levels.WARN)
+    return M.setVault()
+  end
+  vim.ui.input({ prompt = 'New note: ' }, function(input)
+    if input == nil then return end -- cancelled
+    -- A typed ".md" is dropped first, so "idea.md" does not become "idea.md.md".
+    local name = safeName((input:gsub('%.md$', '')))
+    local dir = root .. '/' .. inboxFolder()
+    vim.fn.mkdir(dir, 'p')
+    -- No name: the same fallback the templates recognise as "not a title yet",
+    -- so <leader>vt asks for one later (see isGeneratedName).
+    if name == '' then name = M.noteId('Untitled', dir) end
+    vim.cmd('edit ' .. vim.fn.fnameescape(dir .. '/' .. name .. '.md'))
+  end)
+end
+
+--- Move the current note to the vault's trash (the Delete template's folder,
+--- emptied by cleanTrash), then show the previous buffer. Added as a key of
+--- its own (<leader>vd): the Delete template did the same but first asked for
+--- a template and inserted its text into a note about to be thrown away.
+function M.trashNote()
+  local root = vaultPath()
+  local path = vim.api.nvim_buf_get_name(0)
+  if not root or path == '' or vim.bo.buftype ~= '' then
+    return vim.notify('Not a note of the vault', vim.log.levels.WARN)
+  end
+  path = vim.fs.normalize(path)
+  local trash = root .. '/' .. destinations.Delete
+  if not isInside(path, root) then
+    return vim.notify('Not a note of the vault: ' .. path, vim.log.levels.WARN)
+  end
+  if isInside(path, trash) then
+    return vim.notify('Already in the trash', vim.log.levels.INFO)
+  end
+  local name = vim.fs.basename(path)
+  if vim.fn.confirm('Move "' .. name .. '" to the trash?', '&Yes\n&No', 2) ~= 1 then return end
+
+  local old = vim.api.nvim_get_current_buf()
+  local stat = vim.uv.fs_stat(path)
+  if stat and stat.type == 'file' then
+    -- Unsaved changes go to the trash with the note, not lost with the buffer.
+    if vim.bo[old].modified then vim.cmd('silent write') end
+    vim.fn.mkdir(trash, 'p')
+    -- Never over a note already in the trash: "Idea 2.md", as noteId names them.
+    local stem = name:gsub('%.md$', '')
+    local target = trash .. '/' .. M.noteId(stem, trash) .. '.md'
+    local ok, err = os.rename(path, target)
+    if not ok then
+      return vim.notify('Could not move the note: ' .. tostring(err), vim.log.levels.ERROR)
+    end
+  end
+
+  -- The window shows the previous buffer rather than closing with the note.
+  local alt = vim.fn.bufnr('#')
+  if alt > 0 and alt ~= old and vim.fn.buflisted(alt) == 1 then
+    vim.cmd('buffer ' .. alt)
+  else
+    vim.cmd('enew')
+  end
+  if vim.api.nvim_buf_is_valid(old) then
+    vim.api.nvim_buf_delete(old, { force = true })
+  end
+  vim.notify('Moved to the trash: ' .. name)
 end
 
 --- Empty the vault's trash, the folder the Delete template sends notes to, as

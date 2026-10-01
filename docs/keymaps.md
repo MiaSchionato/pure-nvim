@@ -2,48 +2,50 @@
 
 Leader is `<Space>`. Press it and wait to see these live ([keyhint.md](keyhint.md)).
 Mode: n = normal, x = visual. Mappings that only exist in some buffers
-(markdown, the Todoist list, the git status buffer, oil) are on their own pages.
+(markdown, the Todoist list, the git status buffer, oil, the chat window) are on their own pages.
 Generated from the running config; the source is `lua/configs/keymaps.lua`.
 
 ## Leader, single keys
 
 | Key | Mode | What |
 |---|---|---|
-| `<leader><leader>` | n | Find files, four levels up |
 | `<leader>+` | n | Taller window |
 | `<leader>,` | n | Wider window |
 | `<leader>-` | n | Shorter window |
 | `<leader>.` | n | Narrower window |
-| `<leader>D` | n | Delete without yanking |
-| `<leader>D` | x | Delete without yanking |
+| `<leader><leader>` | n | Find files, four levels up |
+| `<leader>D` | n, x | Delete without yanking |
 | `<leader>E` | n | Explore home |
 | `<leader>h` | n | Toggle word highlight (short form) |
-| `<leader>in` | n | Inspect highlight under cursor |
-| `<leader>in` | x | Inspect highlight under cursor |
+| `<leader>in` | n, x | Inspect highlight under cursor |
 | `<leader>n` | x | Run normal command on selection |
-| `<leader>p` | n | Paste from clipboard |
 | `<leader>p` | x | Paste over without yanking |
+| `<leader>p` | n | Paste from clipboard |
 | `<leader>r` | n | Rename word under cursor |
 | `<leader>s` | x | Substitute inside selection |
 | `<leader>u` | n | Undotree |
 | `<leader>v` | x | Substitute, very magic |
-| `<leader>y` | n | Yank to clipboard |
-| `<leader>y` | x | Yank to clipboard |
+| `<leader>y` | n, x | Yank to clipboard |
 
-## `<leader>a` – Claude
+## `<leader>a` – AI (LLMs)
 
-See [claude.md](claude.md).
+See [llm.md](llm.md).
 
 | Key | Mode | What |
 |---|---|---|
-| `<leader>aa` | n, x | Ask (answer in a window) |
-| `<leader>ab` | n | Run the ```` ```claude ```` block |
+| `<leader>aa` | n, x | Chat: show / hide (like <leader>tt) |
+| `<leader>ab` | n | Run the ```` ```llm ```` block under the cursor |
 | `<leader>ac` | n, x | Review the code |
 | `<leader>ad` | n | Daily note: next step and the measured day (the vault action `Nota do dia`) |
 | `<leader>ah` | n | Past answers |
 | `<leader>ai` | n, x | Write here (visual: rewrite) |
+| `<leader>aj` | n | Job assistant: what to do now, in the chat (the vault action `Assistente de trabalho`) |
+| `<leader>am` | n | Select model (Ollama / Claude / agy) |
 | `<leader>ar` | n, x | Repeat the last request |
 | `<leader>as` | n | Stop |
+| `<leader>at` | n | Thinking of <leader>ai (show / hide) |
+| `<leader>au` | n | User context file (what the LLMs know about you) |
+| `<leader>aw` | n | Weekly note: the week in one place (the vault action `Nota da semana`) |
 | `<leader>ax` | n, x | Actions (claude/ folder of the vault) |
 
 ## `<leader>b` – Buffers
@@ -78,9 +80,9 @@ See [claude.md](claude.md).
 |---|---|---|
 | `<leader>e.` | n | Explore ~/.config |
 | `<leader>ee` | n | Explore current directory |
-| `<leader>ev` | n | Explore Obsidian vault |
 | `<leader>en` | n | Explore nvim config |
 | `<leader>eo` | n | Oil Float |
+| `<leader>ev` | n | Explore Obsidian vault |
 
 ## `<leader>f` – Find
 
@@ -88,7 +90,6 @@ See [claude.md](claude.md).
 |---|---|---|
 | `<leader>f.` | n | Find in ~/.config |
 | `<leader>f/` | n | Recent files |
-| `<leader>fv` | n | Find in Atlas, the Obsidian vault |
 | `<leader>fb` | n | Buffers |
 | `<leader>fc` | n | Colorschemes |
 | `<leader>fe` | n | fzf explorer, current directory |
@@ -96,8 +97,9 @@ See [claude.md](claude.md).
 | `<leader>fg` | n | Grep |
 | `<leader>fh` | n | Help tags |
 | `<leader>fj` | n | Jump list |
-| `<leader>fl` | n | Notes linking here (backlinks) |
+| `<leader>fl` | n | Notes linking here (backlinks, also <leader>vb) |
 | `<leader>fn` | n | Find in nvim config |
+| `<leader>fv` | n | Find in Atlas, the Obsidian vault |
 | `<leader>f~` | n | Find in home |
 
 ## `<leader>g` – Git
@@ -117,6 +119,7 @@ See [claude.md](claude.md).
 | `<leader>gr` | n | Git discard changes to current file |
 | `<leader>gs` | n | Git status (interactive) |
 | `<leader>gu` | n | Git unstage current file |
+| `<leader>gv` | n | Git Vault Sync |
 
 ## `<leader>j` – Jumps
 
@@ -143,17 +146,17 @@ See [manim.md](manim.md).
 | `<leader>mm` | n | Preview the scene, again on every save (toggle) |
 | `<leader>ms` | n | Preview another scene |
 
-## `<leader>n` – New file
+## `<leader>n` – New file / folder
 
 | Key | Mode | What |
 |---|---|---|
 | `<leader>n.` | n | New file in ~/.config |
-| `<leader>nf` | n | New file, two levels up |
+| `<leader>nd` | n | New folder here |
+| `<leader>ne` | n | New file here |
+| `<leader>nf` | n | New file, pick the folder (from two levels up) |
 | `<leader>nh` | n | New file in home |
-| `<leader>nv` | n | New file in Obsidian vault |
 | `<leader>nn` | n | New file in nvim config |
-| `<leader>nr` | n | Rename note, fix links to it |
-| `<leader>nt` | n | Insert zettel template |
+| `<leader>nv` | n | New note in the vault's inbox |
 
 ## `<leader>o` – Toggles
 
@@ -164,11 +167,9 @@ See [manim.md](manim.md).
 | `<leader>oh` | n | Toggle word highlight |
 | `<leader>oi` | n | Toggle inlay hints |
 | `<leader>om` | n | Toggle markdown rendering |
-| `<leader>on` | n | Toggle line numbers |
-| `<leader>on` | x | Toggle line numbers |
+| `<leader>on` | n, x | Toggle line numbers |
 | `<leader>op` | n | Toggle Copilot |
-| `<leader>or` | n | Toggle relativenumber |
-| `<leader>or` | x | Toggle relativenumber |
+| `<leader>or` | n, x | Toggle relativenumber |
 | `<leader>os` | n | Toggle statusline |
 | `<leader>ot` | n | Toggle tabline |
 | `<leader>ow` | n | Toggle wrap |
@@ -191,16 +192,21 @@ See [manim.md](manim.md).
 | `<leader>tg` | n | Toggle Gemini terminal |
 | `<leader>tt` | n | Toggle terminal |
 
-## `<leader>v` – Window focus
+## `<leader>v` – Vault
 
 | Key | Mode | What |
 |---|---|---|
-| `<leader>vh` | n | Focus window left |
-| `<leader>vj` | n | Focus window below |
-| `<leader>vk` | n | Focus window above |
-| `<leader>vl` | n | Focus window right |
+| `<leader>vb` | n | Backlinks (notes linking here) |
+| `<leader>vd` | n | Delete note (to the vault's trash) |
+| `<leader>ve` | n | Explore the vault |
+| `<leader>vf` | n | Find a note |
+| `<leader>vg` | n | Grep the vault |
+| `<leader>vn` | n | New note (inbox, asks the name only) |
+| `<leader>vr` | n | Rename note, fix links to it |
+| `<leader>vs` | n | Sync the vault (git) |
+| `<leader>vt` | n | Apply a template |
 
-## `<leader>w` – Tabs
+## `<leader>w` – Tabs, window view
 
 | Key | Mode | What |
 |---|---|---|
@@ -209,16 +215,22 @@ See [manim.md](manim.md).
 | `<leader>wn` | n | New tab |
 | `<leader>wo` | n | Close other tabs |
 | `<leader>wq` | n | Close tab |
+| `<leader>wvh` | n | Focus window left |
+| `<leader>wvj` | n | Focus window below |
+| `<leader>wvk` | n | Focus window above |
+| `<leader>wvl` | n | Focus window right |
 
 ## `<leader>z` – Folds
 
 | Key | Mode | What |
 |---|---|---|
+| `<leader>zT` | n | Fold open tasks (see what is done) |
 | `<leader>za` | n | Toggle all folds |
 | `<leader>zd` | n | Delete fold |
 | `<leader>zf` | x | Fold selection |
 | `<leader>zr` | n | Reset folds to automatic |
-| `<leader>zz` | n | Toggle fold |
+| `<leader>zt` | n | Fold done tasks (see what is left) |
+| `<leader>zz` | n | Toggle the fold starting here |
 
 ## Normal mode, no leader
 
@@ -229,7 +241,7 @@ See [manim.md](manim.md).
 | `<Down>` | Move line down |
 | `<Up>` | Move line up |
 | `J` | Join lines, keep cursor |
-| `K` | Follow link under cursor, else LSP hover |
+| `K` | Follow link, else LSP hover |
 | `S` | Surround with function |
 | `U` | Redo |
 | `Y` | Yank to end of line |
@@ -252,14 +264,19 @@ See [manim.md](manim.md).
 | `gl` | End of line |
 | `s` | Surround word |
 | `vv` | Select word |
+| `zT` | Fold open tasks (see what is done) |
+| `zt` | Fold done tasks (see what is left) |
+| `zz` | Toggle the fold starting here |
 
 ## Visual mode
 
 | Key | What |
 |---|---|
-| `<Down>` | Move selection down |
-| `<Up>` | Move selection up |
 | `<` | Outdent and reselect |
+| `<Down>` | Move selection down |
+| `<S-Tab>` | Outdent and reselect |
+| `<Tab>` | Indent and reselect |
+| `<Up>` | Move selection up |
 | `>` | Indent and reselect |
 | `J` | Down 5 lines |
 | `K` | Up 5 lines |
@@ -291,10 +308,11 @@ See [manim.md](manim.md).
 
 | Key | What |
 |---|---|
-| `<CR>` | Accept Copilot suggestion |
-| `<S-Tab>` | Complete / jump back |
-| `<Tab>` | Complete / jump forward |
-| `<Up>` | LSP signature help |
+| `<CR>` | Accept Copilot suggestion / next list item / new line |
+| `<Esc>` | Close the completion menu, else leave insert mode |
+| `<S-Tab>` | Outdent an empty list item / previous suggestion / snippet jump back |
+| `<Tab>` | Indent an empty list item / past closing pair / next suggestion / snippet jump |
+| `<Up>` | LSP signature help, else up |
 
 ## Terminal mode
 

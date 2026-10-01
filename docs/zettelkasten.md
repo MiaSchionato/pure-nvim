@@ -14,12 +14,25 @@ precedence:
 2. the `OBSIDIAN_VAULT` environment variable;
 3. the saved answer.
 
-`:ZettelVault` asks again at any time. The vault is used by `<leader>ev`
-(explore), `<leader>fv` (find), `<leader>nv` (new note), the templates, the
-Todoist sync and the links between notes ([notes.md](notes.md)), which all
-follow a change at once.
+`:ZettelVault` asks again at any time. The vault is used by the `<leader>v`
+keys (below), the templates, the Todoist sync and the links between notes
+([notes.md](notes.md)), which all follow a change at once.
 
-## Templates: `<leader>nt`
+## The vault's keys: `<leader>v`
+
+| Key | What |
+|---|---|
+| `<leader>vn` | new note: asks its **name only** and makes it in the inbox (`0-Inbox/`, `vim.g.pure_inbox`); also `<leader>nv` |
+| `<leader>vt` | apply a template (below) |
+| `<leader>vd` | delete the note: asks, saves it, moves it to the vault's trash (`0-Inbox/Trash`, never over a note already there: "Idea 2") and shows the buffer before it |
+| `<leader>vr` | rename the note and fix the links to it ([notes.md](notes.md)) |
+| `<leader>vb` | backlinks, with the linking note as preview |
+| `<leader>ve` | explore the vault (oil); also `<leader>ev` |
+| `<leader>vf` | find a note; also `<leader>fv` |
+| `<leader>vg` | grep the vault |
+| `<leader>vs` | sync the vault with git (`:VaultSync`); also `<leader>gv` |
+
+## Templates: `<leader>vt`
 
 Picks a file from `<vault>/Templates` (`vim.g.pure_templates` renames the
 folder) and expands it:
@@ -46,7 +59,7 @@ folder) and expands it:
 | `{{worklogs}}` | each day's `Work log` section embedded, as the lines of a callout (`> …`) |
 | `{{weeks}}` | a list of links to the weekly note of each ISO week that touches the period |
 | `{{prev}}` / `{{next}}` | in a periodic note: the name of the previous / next day, week or month (for navigation links) |
-| `{{quote}}` | a line of `9-Archive/Periodic/Quotes.md` (lines starting with `- `), a different one each day |
+| `{{quote}}` | a line of `9-Archive/Periodic/Quotes.md` (`vim.g.pure_quotes`; lines starting with `- `), a different one each day |
 | `{{idea}}` | a `[[link]]` to one of your permanent notes, a different one each day |
 | `{{diary}}` | `2026-09-25, sex` (the diary file name format) |
 
@@ -58,10 +71,12 @@ same text in both.
 
 ### Destinations
 
-In the `destinations` table at the top of `zettelkasten.lua` (the templates
-themselves stay clean):
+Kept out of the templates themselves, so they stay clean. The defaults are
+below; `vim.g.pure_template_destinations` in `configs.lua` changes any of them
+by template name (`false` leaves that template's note where it is). Delete
+(the trash) and Permanent (the source of `{{idea}}`) always keep a folder.
 
-| Template | Folder |
+| Template | Default folder |
 |---|---|
 | Delete | `0-Inbox/Trash` |
 | Literature | `3-Zettelkasten/Literature` |
@@ -79,11 +94,14 @@ after the title, with `.md`.
 
 ## Periodic notes
 
-| Template | Folder | File name |
+| Template | Default folder | File name |
 |---|---|---|
 | `Daily.md` | `9-Archive/Periodic/Daily` | `2026-09-25.md` |
 | `Weekly.md` | `9-Archive/Periodic/Weekly` | `2026-W39.md` |
 | `Monthly.md` | `9-Archive/Periodic/Monthly` | `2026-09.md` |
+
+`vim.g.pure_periodic_folders` changes the folders, e.g.
+`{ Daily = 'Periodic/Daily' }` (periods left out keep their default).
 
 Picking one of these opens the note for the current period:
 
