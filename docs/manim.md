@@ -2,7 +2,7 @@
 
 A window that plays the [Manim](https://www.manim.community) scene you are
 writing, and plays it again every time you save; also only a part of it,
-or a picture of one moment.
+a picture of one moment, or the scene live with a camera you move.
 
 | Key | What |
 |---|---|
@@ -10,6 +10,7 @@ or a picture of one moment.
 | `<leader>ms` | preview another scene of the file |
 | `<leader>mp` | preview **only a part**: the selected lines, or the block the cursor is in (below) |
 | `<leader>mf` | a **picture** of the scene as it is at the cursor line |
+| `<leader>mi` | **live window** at the cursor line: move the camera with the mouse (3D), with a Python shell below. Again: close it |
 | `:ManimPreview [Scene]` | the same, with the scene by name (completes the file's scenes) |
 | `:ManimLog` | the whole output of the last render |
 | `:ManimStop` | stop the preview and close the window |
@@ -73,6 +74,40 @@ inside a loop or in another method counts once there, so in such scenes
 the numbers can be off. The notification says which animations were
 rendered ("Blocos, animations 1-2 ready").
 
+## Live, with the camera: `<leader>mi`
+
+For 3D scenes (`ThreeDScene`, `ThreeDAxes`, `Surface`…): looking at the
+scene from any side, not only from the camera the code sets. `<leader>mi`
+runs the scene up to the cursor line in Manim's **OpenGL renderer**, which
+draws it live in a window instead of making a video:
+
+| In the window | What |
+|---|---|
+| drag (left button) | orbit the camera around the scene |
+| drag (middle button) | move the camera sideways |
+| wheel | zoom in / out |
+| `r` | camera back to where it started |
+
+Below the code, a terminal opens with an **IPython shell** holding the
+scene as it is at that line: `self`, and `play(...)`, `add(...)`,
+`remove(...)`, `wait()` without the `self.`. Try an animation there and
+see it in the window. `exit` lets the scene play on to its end; the
+window and the terminal close. `<leader>mi` again stops it at once.
+
+The animations before the cursor are applied without being played, so the
+window opens at that point straight away. Your file is not changed: a
+copy with `self.interactive_embed()` added after the statement at the
+cursor is what runs (in Neovim's cache folder, from your file's folder, so
+imports and asset paths work). The cursor can be anywhere in a statement
+that spans lines; on a `for …:` line, the window opens inside the loop.
+
+It needs **IPython** (`pip install ipython`, which Manim does not install
+by itself) and OpenGL 3.3, which any recent computer has. The OpenGL
+renderer is still experimental in Manim: a few things (some text and
+effects) look different from the final video, and some animations do not
+work in it. Make the final video with the usual renderer (`<leader>mm` or
+`manim -qh`).
+
 ## The window: mpv
 
 The window is [mpv](https://mpv.io), on Linux, macOS and Windows. Neovim
@@ -90,6 +125,7 @@ Manim (Community Edition) and mpv, once per machine:
 | macOS | `brew install py3cairo pango pkg-config` then `pip install manim` | `brew install mpv` |
 | Windows | `pip install manim` (or `py -m pip install manim`) | `winget install mpv` (or `scoop install mpv`) |
 
+The live window (`<leader>mi`) also needs IPython: `pip install ipython`.
 Formulas (`MathTex`, `Tex`) also need LaTeX: TeX Live (Linux), MacTeX
 (macOS), MiKTeX (Windows). The rest of Manim works without it.
 
