@@ -40,6 +40,7 @@ See [llm.md](llm.md).
 | `<leader>ah` | n | Past answers |
 | `<leader>ai` | n, x | Write here (visual: rewrite) |
 | `<leader>am` | n | Select model (Ollama / Claude / agy) |
+| `<leader>ap` | n | Work partner: what to do now, in the chat (the vault action `Assistente de trabalho`) |
 | `<leader>ar` | n, x | Repeat the last request |
 | `<leader>as` | n | Stop |
 | `<leader>at` | n | Thinking of <leader>ai (show / hide) |
