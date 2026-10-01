@@ -7,6 +7,11 @@
 --    <leader>mm   start (or stop) the preview of the scene under the cursor
 --                 (the class above it; asked when the cursor is on none)
 --    <leader>ms   choose another scene of the file
+--    <leader>mp   only a part: the selection, or the block the cursor is in
+--                 (from the comment above it to the next one)
+--    <leader>mf   a picture of the scene at the cursor line
+--
+--  Each keeps going on every save: the same part, the same line.
 --
 --  On every :w of that file, Manim renders the scene in the background
 --  (`manim -ql`, low quality: fast) and the video replaces the one in the
@@ -81,6 +86,77 @@ local function chooseScene(buf, cb)
 end
 
 -- -----------------------------------------------------------------------------
+--  Parts of a scene
+-- -----------------------------------------------------------------------------
+--  Manim numbers the animations of a scene as it plays them: every
+--  self.play(...) and self.wait(...), from 0. `manim -n A,B` renders only
+--  animations A to B; the ones before are applied without being rendered,
+--  so the part starts from the right state, and the scene stops after B.
+--  Lines are turned into those numbers by counting the calls written in
+--  construct() above them: a play inside a loop or in another method
+--  counts once here, so there the numbers can be off (the notification
+--  says which ones were rendered).
+
+local ns = vim.api.nvim_create_namespace('pure_manim')
+
+--- construct() of `scene`: first and last line (1-based), and the indent of
+--- its body. nil when not found.
+local function constructOf(buf, scene)
+  local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+  local class_row, def_row, class_indent
+  for i, l in ipairs(lines) do
+    local ind, name = l:match('^(%s*)class%s+([%w_]+)')
+    if name == scene then class_row, class_indent = i, #ind end
+    if class_row and i > class_row and l:match('^%s*def%s+construct%s*%(') then def_row = i break end
+  end
+  if not def_row then return nil end
+  local def_indent = #lines[def_row]:match('^%s*')
+  local body_indent, last = nil, def_row
+  for i = def_row + 1, #lines do
+    local l = lines[i]
+    if l:match('%S') then
+      local ind = #l:match('^%s*')
+      if ind <= def_indent or (class_indent and ind <= class_indent) then break end
+      body_indent = body_indent or ind
+      last = i
+    end
+  end
+  return { first = def_row + 1, last = last, indent = body_indent or def_indent + 4 }
+end
+
+--- How many animations the lines `from`..`to` of the buffer start.
+local function countAnims(buf, from, to)
+  local n = 0
+  for _, l in ipairs(vim.api.nvim_buf_get_lines(buf, from - 1, to, false)) do
+    if not l:match('^%s*#') then
+      for _ in l:gmatch('self%.play%s*%(') do n = n + 1 end
+      for _ in l:gmatch('self%.wait%s*%(') do n = n + 1 end
+    end
+  end
+  return n
+end
+
+--- The block the cursor is in: from the comment line above it (in the
+--- body of construct) to the line before the next one, as in a notebook
+--- cell. Without such comments, the whole construct.
+local function blockAt(buf, c, row)
+  local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+  local function isMark(i)
+    local l = lines[i] or ''
+    return #l:match('^%s*') == c.indent and l:match('^%s*#') ~= nil
+  end
+  local first, last = c.first, c.last
+  for i = math.min(row, c.last), c.first, -1 do
+    if isMark(i) then first = i break end
+  end
+  for i = math.max(row, first) + 1, c.last do
+    if isMark(i) then last = i - 1 break end
+  end
+  while last > first and not (lines[last] or ''):match('%S') do last = last - 1 end
+  return first, last
+end
+
+-- -----------------------------------------------------------------------------
 --  The window (mpv)
 -- -----------------------------------------------------------------------------
 
@@ -108,6 +184,7 @@ local function startViewer(path)
   viewer.socket = socketPath()
   if not is_win then os.remove(viewer.socket) end
   local cmd = { 'mpv', '--loop-file=inf', '--keep-open=yes', '--force-window=yes', '--no-terminal',
+    '--image-display-duration=inf',
     '--title=Manim preview', '--input-ipc-server=' .. viewer.socket }
   vim.list_extend(cmd, vim.g.pure_manim_viewer_args or {})
   table.insert(cmd, path)
@@ -157,10 +234,10 @@ local function manimCmd()
   return nil
 end
 
---- The rendered video: the newest `name`.mp4 under `dir`.
-local function findVideo(dir, name)
+--- The rendered file: the newest `name`.`ext` under `dir`.
+local function findOutput(dir, name, ext)
   local best, best_time
-  for _, p in ipairs(vim.fn.globpath(dir, '**/' .. name .. '.mp4', false, true)) do
+  for _, p in ipairs(vim.fn.globpath(dir, '**/' .. name .. '.' .. ext, false, true)) do
     local st = vim.uv.fs_stat(p)
     if st and (not best_time or st.mtime.sec > best_time) then best, best_time = p, st.mtime.sec end
   end
@@ -209,10 +286,36 @@ local function render(buf)
   vim.list_extend(cmd, { '-q' .. (vim.g.pure_manim_quality or 'l'), '--media_dir', dir, '-o', name,
     '--progress_bar', 'none' })
   vim.list_extend(cmd, vim.g.pure_manim_args or {})
+
+  -- A part or a frame: which animations, from the marked lines as they are
+  -- now (edits above them move the marks along).
+  local what, ext = st.scene, 'mp4'
+  if st.mode ~= 'scene' then
+    local c = constructOf(buf, st.scene)
+    if not c then return notify('no construct() in ' .. st.scene, vim.log.levels.WARN) end
+    local a = vim.api.nvim_buf_get_extmark_by_id(buf, ns, st.marks[1], {})[1] + 1
+    local b = vim.api.nvim_buf_get_extmark_by_id(buf, ns, st.marks[2], {})[1] + 1
+    local before = countAnims(buf, c.first, a - 1)
+    if st.mode == 'part' then
+      local inside = countAnims(buf, a, b)
+      if inside == 0 then
+        return notify(('lines %d-%d play no animation (no self.play / self.wait)'):format(a, b), vim.log.levels.WARN)
+      end
+      vim.list_extend(cmd, { '-n', ('%d,%d'):format(before, before + inside - 1) })
+      what = inside == 1 and ('%s, animation %d'):format(st.scene, before)
+        or ('%s, animations %d-%d'):format(st.scene, before, before + inside - 1)
+    else
+      -- frame: the scene as it is after the animations up to this line.
+      local upto = before + countAnims(buf, a, a) - 1
+      if upto < 0 then return notify('no animation before line ' .. a .. ' yet', vim.log.levels.WARN) end
+      vim.list_extend(cmd, { '-s', '-n', ('0,%d'):format(upto) })
+      what, ext = ('%s after animation %d (line %d)'):format(st.scene, upto, a), 'png'
+    end
+  end
   vim.list_extend(cmd, { file, st.scene })
 
   local started = vim.uv.hrtime()
-  notify(('rendering %s…'):format(st.scene))
+  notify(('rendering %s…'):format(what))
   local job
   local ok, obj = pcall(vim.system, cmd, {
     cwd = vim.fs.dirname(file),
@@ -230,17 +333,19 @@ local function render(buf)
       vim.fn.setqflist({}, 'r', { title = 'Manim ' .. st.scene, items = items })
       local here = items[1] and items[1].filename == file and (' (line ' .. items[1].lnum .. ')') or ''
       return notify(('%s failed%s: %s\n:copen for the place, :ManimLog for the whole output'):format(
-        st.scene, here, message or ('exit code ' .. res.code)), vim.log.levels.ERROR)
+        what, here, message or ('exit code ' .. res.code)), vim.log.levels.ERROR)
     end
-    local video = findVideo(dir, name)
-    if not video then return notify('rendered, but no video found in ' .. dir, vim.log.levels.WARN) end
-    notify(('%s ready (%.1fs)'):format(st.scene, secs))
-    show(video)
-    -- The previous videos: removed once the new one is playing.
+    local out = findOutput(dir, name, ext)
+    if not out then return notify('rendered, but nothing found in ' .. dir, vim.log.levels.WARN) end
+    notify(('%s ready (%.1fs)'):format(what, secs))
+    show(out)
+    -- The ones shown before: removed once the new one is showing (a moment
+    -- later, as Windows keeps the one mpv still has open locked). Only
+    -- those: a render that finishes meanwhile keeps its file.
+    local old = st.shown or {}
+    st.shown = { out }
     vim.defer_fn(function()
-      for _, p in ipairs(vim.fn.globpath(dir, '**/' .. st.scene .. '-*.mp4', false, true)) do
-        if vim.fs.basename(p) ~= name .. '.mp4' then pcall(os.remove, p) end
-      end
+      for _, p in ipairs(old) do pcall(os.remove, p) end
     end, 2000)
   end))
   if not ok then return notify('could not run manim: ' .. tostring(obj), vim.log.levels.ERROR) end
@@ -252,15 +357,62 @@ end
 --  Commands
 -- -----------------------------------------------------------------------------
 
-local function start(buf, scene)
-  active[buf] = { scene = scene }
+--- Start previewing `scene`: the whole of it, or (`range`: { first, last }
+--- lines) only a part or the frame at a line.
+local function start(buf, scene, mode, range)
+  local old = active[buf]
+  if old and old.job then kill(old.job) end
+  vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+  local st = { scene = scene, mode = mode or 'scene', count = old and old.count, shown = old and old.shown }
+  if range then
+    st.marks = {
+      vim.api.nvim_buf_set_extmark(buf, ns, range[1] - 1, 0, {}),
+      vim.api.nvim_buf_set_extmark(buf, ns, range[2] - 1, 0, {}),
+    }
+  end
+  active[buf] = st
   if vim.bo[buf].modified then vim.cmd('silent write') else render(buf) end
+end
+
+--- The visual selection as lines, leaving visual mode; nil outside it.
+local function selection()
+  if not vim.fn.mode():match('^[vV\22]') then return nil end
+  local a, b = vim.fn.line('v'), vim.fn.line('.')
+  vim.api.nvim_feedkeys(vim.keycode('<Esc>'), 'nx', false)
+  return { math.min(a, b), math.max(a, b) }
+end
+
+--- Preview only part of the scene: the selection, or the block the cursor
+--- is in (from the comment above it to the next). Saving renders that part
+--- again.
+function M.part()
+  local buf = vim.api.nvim_get_current_buf()
+  local range = selection()
+  local scene = sceneAtCursor(buf)
+  if not scene then return notify('put the cursor inside a scene', vim.log.levels.WARN) end
+  local c = constructOf(buf, scene)
+  if not c then return notify('no construct() in ' .. scene, vim.log.levels.WARN) end
+  if not range then
+    local first, last = blockAt(buf, c, vim.api.nvim_win_get_cursor(0)[1])
+    range = { first, last }
+  end
+  start(buf, scene, 'part', range)
+end
+
+--- The scene as it is at the cursor line, as a picture. Saving draws it
+--- again.
+function M.frame()
+  local buf = vim.api.nvim_get_current_buf()
+  local scene = sceneAtCursor(buf)
+  if not scene then return notify('put the cursor inside a scene', vim.log.levels.WARN) end
+  local row = vim.api.nvim_win_get_cursor(0)[1]
+  start(buf, scene, 'frame', { row, row })
 end
 
 --- Start the preview of the scene under the cursor, or stop it.
 function M.toggle()
   local buf = vim.api.nvim_get_current_buf()
-  if active[buf] then return M.stop(buf) end
+  if active[buf] and active[buf].mode == 'scene' then return M.stop(buf) end
   if vim.api.nvim_buf_get_name(buf) == '' then return notify('save the file first', vim.log.levels.WARN) end
   local scene = sceneAtCursor(buf)
   if scene then return start(buf, scene) end
@@ -281,6 +433,7 @@ function M.stop(buf)
   local st = active[buf]
   if st and st.job then kill(st.job) end
   active[buf] = nil
+  pcall(vim.api.nvim_buf_clear_namespace, buf, ns, 0, -1)
   if next(active) == nil then M.closeViewer() end
   notify('preview stopped')
 end
@@ -317,6 +470,7 @@ vim.api.nvim_create_user_command('ManimLog', function()
 end, { desc = 'The output of the last Manim render' })
 vim.api.nvim_create_user_command('ManimStop', function() M.stop() end, { desc = 'Stop the Manim preview' })
 
-M._scenes, M._sceneAtCursor = scenes, sceneAtCursor
+M._scenes, M._sceneAtCursor, M._constructOf, M._countAnims, M._blockAt =
+  scenes, sceneAtCursor, constructOf, countAnims, blockAt
 
 return M
