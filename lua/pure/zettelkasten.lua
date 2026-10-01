@@ -351,7 +351,9 @@ end
 --- @param stem string
 --- @return boolean
 local function isGeneratedName(stem)
-  return stem == 'Untitled' or stem:match('^%d+%-%a+$') ~= nil
+  -- "Untitled 2" too: newNote() numbers a second nameless note that way.
+  return stem == 'Untitled' or stem:match('^Untitled %d+$') ~= nil
+    or stem:match('^%d+%-%a+$') ~= nil
 end
 
 --- A title made safe as a file or folder name: Windows rejects \ / : * ? " < > |
@@ -858,6 +860,85 @@ function M.pickTemplate(callback)
   local files = templateNames(true)
   if not files then return callback(nil) end
   vim.ui.select(files, { prompt = 'Template' }, callback)
+end
+
+--- Folder new notes go to (<leader>vn / <leader>nv), relative to the vault.
+--- Added so a new note asks for its name only: every new note starts in the
+--- inbox and a template (<leader>vt) moves it to its place later.
+local function inboxFolder()
+  local folder = vim.g.pure_inbox
+  if folder == nil or folder == '' then folder = '0-Inbox' end
+  return (tostring(folder):gsub('^[/\\]+', ''):gsub('[/\\]+$', ''))
+end
+
+--- A new note in the vault's inbox: asks for its name only, never the path.
+--- An existing note of that name is opened instead of overwritten.
+function M.newNote()
+  local root = vaultPath()
+  if not root then
+    vim.notify('No Obsidian vault set: run :ZettelVault', vim.log.levels.WARN)
+    return M.setVault()
+  end
+  vim.ui.input({ prompt = 'New note: ' }, function(input)
+    if input == nil then return end -- cancelled
+    -- A typed ".md" is dropped first, so "idea.md" does not become "idea.md.md".
+    local name = safeName((input:gsub('%.md$', '')))
+    local dir = root .. '/' .. inboxFolder()
+    vim.fn.mkdir(dir, 'p')
+    -- No name: the same fallback the templates recognise as "not a title yet",
+    -- so <leader>vt asks for one later (see isGeneratedName).
+    if name == '' then name = M.noteId('Untitled', dir) end
+    vim.cmd('edit ' .. vim.fn.fnameescape(dir .. '/' .. name .. '.md'))
+  end)
+end
+
+--- Move the current note to the vault's trash (the Delete template's folder,
+--- emptied by cleanTrash), then show the previous buffer. Added as a key of
+--- its own (<leader>vd): the Delete template did the same but first asked for
+--- a template and inserted its text into a note about to be thrown away.
+function M.trashNote()
+  local root = vaultPath()
+  local path = vim.api.nvim_buf_get_name(0)
+  if not root or path == '' or vim.bo.buftype ~= '' then
+    return vim.notify('Not a note of the vault', vim.log.levels.WARN)
+  end
+  path = vim.fs.normalize(path)
+  local trash = root .. '/' .. destinations.Delete
+  if not isInside(path, root) then
+    return vim.notify('Not a note of the vault: ' .. path, vim.log.levels.WARN)
+  end
+  if isInside(path, trash) then
+    return vim.notify('Already in the trash', vim.log.levels.INFO)
+  end
+  local name = vim.fs.basename(path)
+  if vim.fn.confirm('Move "' .. name .. '" to the trash?', '&Yes\n&No', 2) ~= 1 then return end
+
+  local old = vim.api.nvim_get_current_buf()
+  local stat = vim.uv.fs_stat(path)
+  if stat and stat.type == 'file' then
+    -- Unsaved changes go to the trash with the note, not lost with the buffer.
+    if vim.bo[old].modified then vim.cmd('silent write') end
+    vim.fn.mkdir(trash, 'p')
+    -- Never over a note already in the trash: "Idea 2.md", as noteId names them.
+    local stem = name:gsub('%.md$', '')
+    local target = trash .. '/' .. M.noteId(stem, trash) .. '.md'
+    local ok, err = os.rename(path, target)
+    if not ok then
+      return vim.notify('Could not move the note: ' .. tostring(err), vim.log.levels.ERROR)
+    end
+  end
+
+  -- The window shows the previous buffer rather than closing with the note.
+  local alt = vim.fn.bufnr('#')
+  if alt > 0 and alt ~= old and vim.fn.buflisted(alt) == 1 then
+    vim.cmd('buffer ' .. alt)
+  else
+    vim.cmd('enew')
+  end
+  if vim.api.nvim_buf_is_valid(old) then
+    vim.api.nvim_buf_delete(old, { force = true })
+  end
+  vim.notify('Moved to the trash: ' .. name)
 end
 
 --- Empty the vault's trash, the folder the Delete template sends notes to, as

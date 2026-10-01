@@ -46,7 +46,7 @@ the vault root, the current note's folder, or the chosen folder. A path in
 the link (`[[Projects/New]]`) puts it there.
 
 **With a template**, a template is picked (the periodic ones are left out)
-and applied as `<leader>nt` applies it, moves included: the Project template
+and applied as `<leader>vt` applies it, moves included: the Project template
 sends the note to `1-Projects/<title>/`. The note is made only once a template
 is picked, so cancelling leaves nothing behind. **In another folder** asks
 for a folder of the vault, with completion, starting from the current
@@ -54,17 +54,33 @@ note's own, and makes it if it does not exist.
 
 ## Completing links: `[[`
 
-Typing `[[` lists the vault's notes (and canvases) as you type, matched
-loosely (`[[pxt` finds "Projeto X texto"). After `[[Note#` it lists that
-note's headings. Accepting one writes the link whole, without a second `]]`
-(`pure/pairs.lua` already closed the `[[`).
+Typing `[[` lists, as you type and matched loosely (`[[pxt` finds
+"Projeto X texto"):
+
+- the vault's **notes** (and canvases) first;
+- then its **folders** (`3-Zettelkasten/`, accepted without `]]` so you keep
+  typing into it);
+- then **attachments** (images, PDFs…), with their extension, as Obsidian
+  links them (`![[photo.png]]`).
+
+Each item says what it is in the menu (`note`, `folder`, `file`). With a
+path, `[[3-Zettelkasten/`, it lists what is directly in that folder (case
+does not matter), matched by what follows the last `/`. After `[[Note#` it
+lists that note's headings. Accepting one writes the link whole, without a
+second `]]` (`pure/pairs.lua` already closed the `[[`).
+
+`Tab` / `S-Tab` walk the list even with the `]]` right after the cursor;
+`Esc` closes the list, and then `Tab` steps past the `]]`
+([editing.md](editing.md)).
 
 A name shared by two notes is listed with its folder (`Areas/Ideia`),
-which is how the link has to be written to reach that one.
+which is how the link has to be written to reach that one. Otherwise
+`[[Note]]` is enough, wherever the note is: links resolve by name, as in
+Obsidian, so a note a template moves keeps working.
 
-## Renaming and moving: `<leader>nr`, oil
+## Renaming and moving: `<leader>vr`, oil
 
-`<leader>nr` (or `:NoteRename [name]`) renames the current note and fixes
+`<leader>vr` (or `:NoteRename [name]`) renames the current note and fixes
 every link to it in the vault. A bare name keeps the folder; a name with
 `/` is a path from the vault's root (`Areas/New name`; `./Name` for the
 root). The buffer follows the file.
@@ -89,10 +105,12 @@ Neovim are changed in their buffer and saved, unless they had unsaved
 changes: those are changed and left for you to save. Line endings (CRLF)
 are kept.
 
-## Backlinks: `<leader>fl`
+## Backlinks: `<leader>vb`
 
-`<leader>fl` (or `:NoteBacklinks`) lists the lines of other notes that link
-to the current one, in the fzf picker; picking one opens it there. Useful to
+`<leader>vb` (also `<leader>fl`, or `:NoteBacklinks`) lists the lines of
+other notes that link to the current one, in the fzf picker, with the
+linking note shown above as you move (the line of the link highlighted);
+picking one opens it there. Useful to
 see where a note is used before changing or deleting it, or what a
 project's daily mentions are.
 

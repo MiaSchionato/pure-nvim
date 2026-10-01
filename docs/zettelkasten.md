@@ -14,12 +14,25 @@ precedence:
 2. the `OBSIDIAN_VAULT` environment variable;
 3. the saved answer.
 
-`:ZettelVault` asks again at any time. The vault is used by `<leader>ev`
-(explore), `<leader>fv` (find), `<leader>nv` (new note), the templates, the
-Todoist sync and the links between notes ([notes.md](notes.md)), which all
-follow a change at once.
+`:ZettelVault` asks again at any time. The vault is used by the `<leader>v`
+keys (below), the templates, the Todoist sync and the links between notes
+([notes.md](notes.md)), which all follow a change at once.
 
-## Templates: `<leader>nt`
+## The vault's keys: `<leader>v`
+
+| Key | What |
+|---|---|
+| `<leader>vn` | new note: asks its **name only** and makes it in the inbox (`0-Inbox/`, `vim.g.pure_inbox`); also `<leader>nv` |
+| `<leader>vt` | apply a template (below) |
+| `<leader>vd` | delete the note: asks, saves it, moves it to the vault's trash (`0-Inbox/Trash`, never over a note already there: "Idea 2") and shows the buffer before it |
+| `<leader>vr` | rename the note and fix the links to it ([notes.md](notes.md)) |
+| `<leader>vb` | backlinks, with the linking note as preview |
+| `<leader>ve` | explore the vault (oil); also `<leader>ev` |
+| `<leader>vf` | find a note; also `<leader>fv` |
+| `<leader>vg` | grep the vault |
+| `<leader>vs` | sync the vault with git (`:VaultSync`); also `<leader>gv` |
+
+## Templates: `<leader>vt`
 
 Picks a file from `<vault>/Templates` (`vim.g.pure_templates` renames the
 folder) and expands it:

@@ -1083,7 +1083,10 @@ local function feed(keys)
   local cb = vim.o.clipboard
   local default = cb:find('unnamedplus') and '+' or cb:find('unnamed') and '*' or '"'
   local reg = vim.v.register ~= default and ('"' .. vim.v.register) or ''
-  api.nvim_feedkeys(reg .. vim.v.count1 .. keys, 'n', false)
+  -- 'i': in front of what is already typed ahead, not after it. Without it a
+  -- macro (or keys typed faster than the mapping runs) such as "obar<Esc>"
+  -- ran "bar<Esc>" first and the o afterwards.
+  api.nvim_feedkeys(reg .. vim.v.count1 .. keys, 'in', false)
 end
 
 local function redraw(buf, b, byDay, orphans)
@@ -1129,7 +1132,8 @@ local function openLine()
   local buf = api.nvim_get_current_buf()
   local row = api.nvim_win_get_cursor(0)[1] - 1
   local b = gridAt(buf, row)
-  if not b then return feed('o') end
+  -- Outside a grid: o, going on with a list item (pure/lists.lua).
+  if not b then return feed(require('pure.lists').open('o')) end
   -- On a week's bottom border the new line belongs to the week above it.
   local at = isBorder(api.nvim_get_current_line()) and row or row + 1
   blankLineAt(buf, at, columnAt())
@@ -1258,6 +1262,91 @@ api.nvim_create_user_command('CalendarRefresh', function()
   M.refresh()
   M.format()
 end, { desc = 'Draw and tidy the ```calendar grids of this note' })
+
+-- -----------------------------------------------------------------------------
+--  For the LLM actions: context: calendar
+-- -----------------------------------------------------------------------------
+--  The appointments of today and the next days, straight from Google, one
+--  plain line each ("10:00-11:00 Dentista · Clínica"), for the Claude / Ollama
+--  actions that ask for them (`context: calendar`, pure/llm.lua). Added for
+--  the vault's daily note action: reading the note's ```calendar grid gave
+--  the model ~7 KB of box-drawing characters it reads badly, for a handful
+--  of appointments.
+
+--- `days` days from today (default 2: today and tomorrow), every calendar
+--- shown in Google Calendar. Waits for Google (up to 15 s); an error comes
+--- back as the text, so the action still runs.
+function M.text(days)
+  days = tonumber(days) or 2
+  local g = gcal()
+  if not (g and g.connected and g.connected()) then return 'Google Calendar is not connected (:CalendarAuth).' end
+  local now = os.date('*t')
+  local stop = os.date('*t', os.time({ year = now.year, month = now.month, day = now.day + days, hour = 12 }))
+  local range = ('&timeMin=%s&timeMax=%s'):format(g.urlencode(rfc3339(now.year, now.month, now.day, 0, 0)),
+    g.urlencode(rfc3339(stop.year, stop.month, stop.day, 0, 0)))
+
+  local events, err, done = {}, nil, false
+  g.getAll('/users/me/calendarList', function(lerr, list)
+    if lerr then err, done = lerr, true; return end
+    local cals = vim.tbl_filter(function(c) return c.selected ~= false end, list or {})
+    local i = 0
+    local function nextCal()
+      i = i + 1
+      if i > #cals then done = true; return end
+      local cal = cals[i]
+      g.getAll('/calendars/' .. g.urlencode(cal.id) .. '/events?singleEvents=true&orderBy=startTime' .. range,
+        function(eerr, list_)
+          if not eerr then
+            for _, ev in ipairs(list_ or {}) do
+              if ev.status ~= 'cancelled' then
+                ev._cal = cal.summaryOverride or cal.summary
+                table.insert(events, ev)
+              end
+            end
+          end
+          nextCal()
+        end)
+    end
+    nextCal()
+  end)
+  vim.wait(15000, function() return done end, 50)
+  if err then return 'Google Calendar: ' .. err end
+  if not done then return 'Google Calendar did not answer in time.' end
+
+  -- One line per appointment, under its day; all-day ones first.
+  local byDay = {}
+  for _, ev in ipairs(events) do
+    local s, e = ev.start or {}, ev['end'] or {}
+    local title = (ev.summary and ev.summary ~= '') and ev.summary:gsub('%s+', ' ') or '(no title)'
+    local loc = (ev.location and ev.location ~= '') and (' · ' .. ev.location:gsub('%s+', ' ')) or ''
+    local day, key, when
+    if s.dateTime then
+      local a, b = fromRfc3339(s.dateTime), e.dateTime and fromRfc3339(e.dateTime)
+      if a then
+        day = ('%04d-%02d-%02d'):format(a.year, a.month, a.day)
+        when = ('%02d:%02d'):format(a.hour, a.min) .. (b and ('-%02d:%02d'):format(b.hour, b.min) or '')
+        key = when
+      end
+    elseif s.date then
+      day, when, key = s.date, 'all day', '00'
+    end
+    if day then
+      byDay[day] = byDay[day] or {}
+      table.insert(byDay[day], { key = key, line = ('- %s %s%s (%s)'):format(when, title, loc, ev._cal or '') })
+    end
+  end
+  local out = {}
+  for d = 0, days - 1 do
+    local t = os.date('*t', os.time({ year = now.year, month = now.month, day = now.day + d, hour = 12 }))
+    local day = ('%04d-%02d-%02d'):format(t.year, t.month, t.day)
+    table.insert(out, day .. (d == 0 and ' (today)' or d == 1 and ' (tomorrow)' or '') .. ':')
+    local list = byDay[day] or {}
+    table.sort(list, function(a, b) return a.key < b.key end)
+    if #list == 0 then table.insert(out, '- nothing') end
+    for _, x in ipairs(list) do table.insert(out, x.line) end
+  end
+  return table.concat(out, '\n')
+end
 
 -- For tests.
 M._render, M._parse, M._splitRow, M._monthWeeks = render, parse, splitRow, monthWeeks
