@@ -182,6 +182,35 @@ vim.g.pure_templates_locale = 'en'
 -- Default: '0-Inbox'.
 vim.g.pure_inbox = '0-Inbox'
 
+-- Folders of the periodic notes (Daily, Weekly, Monthly templates), inside
+-- the vault. Only the periods listed change; the others keep their default.
+-- Default:
+-- vim.g.pure_periodic_folders = {
+--   Daily   = '9-Archive/Periodic/Daily',
+--   Weekly  = '9-Archive/Periodic/Weekly',
+--   Monthly = '9-Archive/Periodic/Monthly',
+-- }
+
+-- The list the daily note's quote of the day comes from ({{quote}}).
+-- Default: '9-Archive/Periodic/Quotes.md'.
+-- vim.g.pure_quotes = '9-Archive/Periodic/Quotes.md'
+
+-- Folder each template moves its note to (<leader>vt), by template name.
+-- {{title}} becomes the note's title. Only the names listed change; false
+-- leaves that template's note where it is. Delete is also the trash
+-- (<leader>vd, vim.g.pure_trash_cleanup) and Permanent is where the daily
+-- note's resurfaced notes come from, so those two always keep a folder.
+-- Default:
+-- vim.g.pure_template_destinations = {
+--   Delete     = '0-Inbox/Trash',
+--   Literature = '3-Zettelkasten/Literature',
+--   MOC        = '4-Maps',
+--   Permanent  = '3-Zettelkasten/Permanent',
+--   Project    = '1-Projects/{{title}}',
+--   Tester     = '2-Areas/Audiovisual/YouTube/Tester channel',
+--   VideoIdeas = '2-Areas/Audiovisual/Ideas',
+-- }
+
 -- Empty the vault's trash (0-Inbox/Trash, where <leader>vd and the Delete
 -- template send notes) each time Neovim starts, as Obsidian's TrashCleaner
 -- did. true: everything; a number: only what was not modified for that many

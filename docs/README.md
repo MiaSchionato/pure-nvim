@@ -114,6 +114,9 @@ where to change them.
 | `vim.g.pure_terminal_shell` | nu, pwsh or powershell on Windows; `'shell'` elsewhere | [ui](ui.md) |
 | `vim.b.pure_indentscope_disable` | off | [editing](editing.md) |
 | `vim.g.pure_inbox` | `'0-Inbox'` | [zettelkasten](zettelkasten.md) |
+| `vim.g.pure_periodic_folders` | `9-Archive/Periodic/{Daily,Weekly,Monthly}` | [zettelkasten](zettelkasten.md) |
+| `vim.g.pure_quotes` | `'9-Archive/Periodic/Quotes.md'` | [zettelkasten](zettelkasten.md) |
+| `vim.g.pure_template_destinations` | see the Destinations table | [zettelkasten](zettelkasten.md) |
 | `vim.g.pure_new_file_ask_name` | on | [fuzzy](fuzzy.md) |
 | `vim.g.pure_spelllang` | `{ 'pt_br', 'en', 'it' }` | [markdown](markdown.md) |
 | `vim.g.pure_md_bullets` | `{ '•', '◦', '▪', '▫' }` | [markdown](markdown.md) |
