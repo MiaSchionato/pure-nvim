@@ -386,8 +386,8 @@ map('n', '<leader>ad', function() require('pure.llm').runNamed('Nota do dia') en
   func.getOpts(opts, "Daily note: next step and the measured day"))
 map('n', '<leader>aw', function() require('pure.llm').runNamed('Nota da semana') end,
   func.getOpts(opts, "Weekly note: the week in one place"))
-map('n', '<leader>ap', function() require('pure.llm').runNamed('Assistente de trabalho') end,
-  func.getOpts(opts, "Work partner: what to do now (chat)"))
+map('n', '<leader>aj', function() require('pure.llm').runNamed('Assistente de trabalho') end,
+  func.getOpts(opts, "Job assistant: what to do now (chat)"))
 
 -- =============================================================================
 --  Git
