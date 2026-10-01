@@ -352,6 +352,8 @@ map('n', '<leader>ms', function() require('pure.manim').pick() end, func.getOpts
 map({ 'n', 'x' }, '<leader>mp', function() require('pure.manim').part() end,
   func.getOpts(opts, "Preview only this part (selection, or the block under the cursor)"))
 map('n', '<leader>mf', function() require('pure.manim').frame() end, func.getOpts(opts, "Picture of the scene at this line"))
+map('n', '<leader>mi', function() require('pure.manim').interactive() end,
+  func.getOpts(opts, "Live window at this line: mouse camera, Python shell (toggle)"))
 
 -- =============================================================================
 --  Vault  (<leader>v, pure/zettelkasten.lua and pure/notes.lua)

@@ -10,6 +10,8 @@
 --    <leader>mp   only a part: the selection, or the block the cursor is in
 --                 (from the comment above it to the next one)
 --    <leader>mf   a picture of the scene at the cursor line
+--    <leader>mi   live: the scene at the cursor line in a window where the
+--                 mouse moves the camera (3D), with a Python shell below
 --
 --  Each keeps going on every save: the same part, the same line.
 --
@@ -354,6 +356,140 @@ local function render(buf)
 end
 
 -- -----------------------------------------------------------------------------
+--  Live window (OpenGL renderer)
+-- -----------------------------------------------------------------------------
+--  <leader>mi runs the scene up to the cursor line in Manim's OpenGL
+--  renderer: a live window, where the mouse moves the camera (drag:
+--  orbit, middle drag: pan, wheel: zoom, r: reset), and an IPython shell
+--  in a terminal below, with the scene as it is at that line (`self`,
+--  play(), add(), remove(), wait()). `exit` in the shell lets the scene
+--  play on to the end and closes the window.
+--
+--  It runs a copy of the file (in stdpath('cache')) with
+--  self.interactive_embed() inserted after the statement at the cursor;
+--  the file itself is not touched. The animations before it are applied
+--  without being played (-n), so the window opens at that point at once.
+--  Needs IPython (pip install ipython) and OpenGL 3.3.
+
+local live -- { chan, buf, win }
+
+--- Code of a line without strings and comments, to count brackets.
+local function bare(line)
+  return (line:gsub('\\.', ''):gsub('"[^"]*"', ''):gsub("'[^']*'", ''):gsub('#.*$', ''))
+end
+
+--- Where to insert the embed for the cursor at `row` in construct `c`:
+--- the line to insert after (1-based) and the indent. After the whole
+--- statement the cursor is on (not inside a call spanning lines), and
+--- inside the block when that statement opens one (`for ...:`).
+local function embedPoint(lines, c, row)
+  row = math.max(math.min(row, c.last), c.first)
+  -- Bracket depth at the start of every line of construct.
+  local depth, at_start = 0, {}
+  for i = c.first, c.last do
+    at_start[i] = depth
+    for ch in bare(lines[i]):gmatch('[%(%)%[%]{}]') do
+      depth = depth + (ch:match('[%(%[{]') and 1 or -1)
+    end
+    depth = math.max(depth, 0)
+  end
+  local function code(i) local l = lines[i] or '' return l:match('%S') and not l:match('^%s*#') end
+  -- The statement holding the cursor: its first line...
+  local start = row
+  while start > c.first and (not code(start) or at_start[start] > 0) do start = start - 1 end
+  if not code(start) then return c.first - 1, c.indent end -- before any code
+  -- ...and its last.
+  local last = start
+  for i = start, c.last do
+    local after = at_start[i + 1] or 0
+    last = i
+    if i >= row and after == 0 and not bare(lines[i]):match('\\%s*$') then break end
+  end
+  local indent = lines[start]:match('^%s*')
+  if bare(lines[last]):match(':%s*$') then
+    -- A block header: the embed goes first thing in its body.
+    for i = last + 1, c.last do
+      if code(i) then indent = lines[i]:match('^%s*') break end
+    end
+  end
+  return last, indent
+end
+
+function M.closeLive()
+  if not live then return end
+  pcall(vim.fn.jobstop, live.chan)
+  if vim.api.nvim_win_is_valid(live.win) then pcall(vim.api.nvim_win_close, live.win, true) end
+  live = nil
+end
+
+--- The scene at the cursor line, live: camera with the mouse, a shell.
+--- Again: close it.
+function M.interactive()
+  if live then return M.closeLive() end
+  local buf = vim.api.nvim_get_current_buf()
+  local file = vim.api.nvim_buf_get_name(buf)
+  local scene = sceneAtCursor(buf)
+  if not scene then return notify('put the cursor inside a scene', vim.log.levels.WARN) end
+  local c = constructOf(buf, scene)
+  if not c then return notify('no construct() in ' .. scene, vim.log.levels.WARN) end
+  local cmd = manimCmd()
+  if not cmd then return notify('manim is not installed (pip install manim)', vim.log.levels.ERROR) end
+  if vim.bo[buf].modified then vim.cmd('silent write') end
+
+  local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+  local after, indent = embedPoint(lines, c, vim.api.nvim_win_get_cursor(0)[1])
+  table.insert(lines, after + 1, indent .. 'self.interactive_embed()  # added by pure/manim.lua')
+  local before = countAnims(buf, c.first, after)
+
+  -- The copy keeps the file's name (Manim names things after it) and runs
+  -- in the file's folder, so its imports and asset paths still work.
+  local dir = vim.fn.stdpath('cache') .. '/manim/live'
+  vim.fn.mkdir(dir, 'p')
+  local copy = dir .. '/' .. vim.fs.basename(file)
+  vim.fn.writefile(lines, copy)
+  local here = vim.fs.dirname(file)
+  local sep = is_win and ';' or ':'
+  vim.list_extend(cmd, { '-ql', '--renderer=opengl', '-p', '--media_dir', dir .. '/media' })
+  if before > 0 then vim.list_extend(cmd, { '-n', tostring(before) }) end
+  vim.list_extend(cmd, vim.g.pure_manim_args or {})
+  vim.list_extend(cmd, { copy, scene })
+
+  vim.cmd('botright ' .. (vim.g.pure_manim_shell_height or 12) .. 'new')
+  local tbuf, twin = vim.api.nvim_get_current_buf(), vim.api.nvim_get_current_win()
+  local chan = vim.fn.jobstart(cmd, {
+    term = true,
+    cwd = here,
+    env = { PYTHONPATH = here .. (vim.env.PYTHONPATH and (sep .. vim.env.PYTHONPATH) or '') },
+    on_exit = function(_, code)
+      vim.schedule(function()
+        local was = live
+        if was and was.buf == tbuf then live = nil end
+        if code == 0 then
+          if vim.api.nvim_win_is_valid(twin) then pcall(vim.api.nvim_win_close, twin, true) end
+          return
+        end
+        -- Kept open to read; the usual cause, said plainly.
+        local text = table.concat(vim.api.nvim_buf_get_lines(tbuf, 0, -1, false), '\n')
+        if text:find("No module named 'IPython'", 1, true) then
+          notify('the live window needs IPython: pip install ipython', vim.log.levels.ERROR)
+        elseif was then
+          notify(('%s stopped (exit %d): the terminal below has the details'):format(scene, code),
+            vim.log.levels.WARN)
+        end
+      end)
+    end,
+  })
+  if chan <= 0 then
+    pcall(vim.api.nvim_win_close, twin, true)
+    return notify('could not start manim', vim.log.levels.ERROR)
+  end
+  live = { chan = chan, buf = tbuf, win = twin }
+  notify(('%s live at line %d%s: drag to orbit, wheel to zoom, r to reset; exit in the shell to finish'):format(
+    scene, after, before > 0 and (' (animations 0-' .. (before - 1) .. ' applied)') or ''))
+  vim.cmd('startinsert')
+end
+
+-- -----------------------------------------------------------------------------
 --  Commands
 -- -----------------------------------------------------------------------------
 
@@ -450,7 +586,10 @@ vim.api.nvim_create_autocmd('BufWipeout', {
     if active[args.buf] then M.stop(args.buf) end
   end,
 })
-vim.api.nvim_create_autocmd('VimLeavePre', { group = group, callback = M.closeViewer })
+vim.api.nvim_create_autocmd('VimLeavePre', { group = group, callback = function()
+  M.closeViewer()
+  M.closeLive()
+end })
 
 vim.api.nvim_create_user_command('ManimPreview', function(o)
   local buf = vim.api.nvim_get_current_buf()
@@ -470,7 +609,7 @@ vim.api.nvim_create_user_command('ManimLog', function()
 end, { desc = 'The output of the last Manim render' })
 vim.api.nvim_create_user_command('ManimStop', function() M.stop() end, { desc = 'Stop the Manim preview' })
 
-M._scenes, M._sceneAtCursor, M._constructOf, M._countAnims, M._blockAt =
-  scenes, sceneAtCursor, constructOf, countAnims, blockAt
+M._scenes, M._sceneAtCursor, M._constructOf, M._countAnims, M._blockAt, M._embedPoint =
+  scenes, sceneAtCursor, constructOf, countAnims, blockAt, embedPoint
 
 return M
