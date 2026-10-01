@@ -210,7 +210,7 @@ carries its link.
 ## 3. Archive
 
 ```lua
-vim.g.pure_todoist_archive = '9-Archive/Todoist/'
+vim.g.pure_todoist_archive = '7-Archive/Todoist/'
 ```
 
 A relative folder is inside the Obsidian vault (see [zettelkasten](zettelkasten.md)),
