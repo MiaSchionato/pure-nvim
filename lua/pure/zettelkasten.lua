@@ -41,20 +41,46 @@ local no_prompt_file = vim.fn.stdpath('data') .. '/obsidian_vault_no_prompt'
 ---
 --- `name` is an os.date format; %G-W%V is the ISO week, which Windows' strftime
 --- does support (checked: 2026-09-25 gives 2026-W39).
-local periodic = {
+---
+--- The folders, the quotes file and the destinations below used to be fixed
+--- here, so reorganising the vault meant editing this module. They are now
+--- defaults that vim.g.pure_periodic_folders, vim.g.pure_quotes and
+--- vim.g.pure_template_destinations (configs.lua) override. The options are
+--- read on every use, not once at load: configs.lua may run after this file,
+--- and a change made with :let takes effect without restarting.
+local default_periodic = {
   Daily   = { folder = '9-Archive/Periodic/Daily',   name = '%Y-%m-%d', step = 86400,  unit = 'day' },
   Weekly  = { folder = '9-Archive/Periodic/Weekly',  name = '%G-W%V',   step = 604800, unit = 'week' },
   Monthly = { folder = '9-Archive/Periodic/Monthly', name = '%Y-%m',    step = nil,    unit = 'month' },
 }
 
+--- A vault-relative folder from an option, without slashes at either end.
+local function relFolder(path)
+  return (tostring(path):gsub('\\', '/'):gsub('^/+', ''):gsub('/+$', ''))
+end
+
+--- `periodic.Daily` etc.: the default entry with the folder from
+--- vim.g.pure_periodic_folders when it names one.
+local periodic = setmetatable({}, {
+  __index = function(_, period)
+    local entry = default_periodic[period]
+    local folder = entry and (vim.g.pure_periodic_folders or {})[period]
+    if not folder or folder == '' then return entry end
+    return vim.tbl_extend('force', entry, { folder = relFolder(folder) })
+  end,
+})
+
 --- Where the quote of the day lives, relative to the vault. The resurfaced
 --- notes come from destinations.Permanent.
-local QUOTES = '9-Archive/Periodic/Quotes.md'
+local function quotesFile()
+  local path = vim.g.pure_quotes
+  return (path and path ~= '') and relFolder(path) or '9-Archive/Periodic/Quotes.md'
+end
 
 --- Folder each template sends its note to, relative to the vault root.
 --- "{{title}}" is expanded, which is what puts a project in its own folder.
 --- A template missing here simply leaves the note where it is.
-local destinations = {
+local default_destinations = {
   Delete     = '0-Inbox/Trash',
   Literature = '3-Zettelkasten/Literature',
   MOC        = '4-Maps',
@@ -63,6 +89,19 @@ local destinations = {
   Tester     = '2-Areas/Audiovisual/YouTube/Tester channel',
   VideoIdeas = '2-Areas/Audiovisual/Ideas',
 }
+
+--- `destinations[name]`: vim.g.pure_template_destinations first, then the
+--- default. `false` there leaves that template's note where it is, except for
+--- Delete and Permanent: the trash and the resurfaced notes always need a
+--- folder, so those fall back to the default.
+local destinations = setmetatable({}, {
+  __index = function(_, name)
+    local value = (vim.g.pure_template_destinations or {})[name]
+    if value == false and name ~= 'Delete' and name ~= 'Permanent' then return nil end
+    if type(value) == 'string' and value ~= '' then return relFolder(value) end
+    return default_destinations[name]
+  end,
+})
 
 --- Day and month names per locale. os.date's %A / %B always gave English
 --- (the C locale), whatever language Obsidian renders the same template in.
@@ -411,7 +450,7 @@ end
 local function quoteOfTheDay(when)
   local root = vaultPath()
   if not root then return '' end
-  local file = io.open(root .. '/' .. QUOTES, 'r')
+  local file = io.open(root .. '/' .. quotesFile(), 'r')
   if not file then return '' end
 
   local quotes = {}
