@@ -384,6 +384,8 @@ map({ 'n', 'x' }, '<leader>ax', llm('pickAction'), func.getOpts(opts, "Actions (
 map('n', '<leader>ab', llm('runBlockAtCursor'), func.getOpts(opts, "Run the ```llm block under the cursor"))
 map('n', '<leader>ad', function() require('pure.llm').runNamed('Nota do dia') end,
   func.getOpts(opts, "Daily note: next step and the measured day"))
+map('n', '<leader>aw', function() require('pure.llm').runNamed('Nota da semana') end,
+  func.getOpts(opts, "Weekly note: the week in one place"))
 
 -- =============================================================================
 --  Git
