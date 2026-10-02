@@ -1016,6 +1016,7 @@ local no_think = {}
 
 local ollama_server   -- the `ollama serve` started here (vim.system object)
 local ollama_declined -- "No" once: not asked again this session
+local touchOllama     -- the idle countdown, defined with it below
 
 local function ollamaUrl() return vim.g.pure_ollama_url or 'http://localhost:11434' end
 
@@ -1031,10 +1032,12 @@ local function waitOllama(tries, cb)
   end)
 end
 
---- Start Ollama if allowed (asking, by default); `cb(ok, why)`.
-local function startOllama(cb)
+--- Start Ollama if allowed (asking, by default); `cb(ok, why)`. `force`:
+--- without asking (vim.g.pure_ollama_start_with_nvim, which is the consent).
+local function startOllama(cb, force)
   local setting = vim.g.pure_ollama_autostart
   if setting == nil then setting = 'ask' end
+  if force then setting = true end
   if setting == false or ollama_declined then return cb(false) end
   if not ollamaUrl():match('^https?://localhost[:/]') and not ollamaUrl():match('^https?://127%.0%.0%.1[:/]') then
     return cb(false) -- an Ollama on another machine is not ours to start
@@ -1074,6 +1077,8 @@ local function startOllama(cb)
   waitOllama(40, function(up)
     if not up then return cb(false, 'Ollama was started but does not answer at ' .. ollamaUrl()) end
     vim.notify('Ollama is running (it stops when Neovim quits)')
+    -- Not used yet: the idle countdown starts now.
+    touchOllama()
     cb(true)
   end)
 end
@@ -1098,13 +1103,11 @@ local ollama_used = {}
 -- The same is M.shutdown (<leader>aq), without quitting: the GPU freed while
 -- Neovim stays open (Improvment.md). The next Ollama request asks to start
 -- it again (vim.g.pure_ollama_autostart). Returns what it did.
-local function shutdown()
-  local stopped, unloaded, server = 0, 0, false
-  for _, stop in pairs(running) do
-    pcall(stop)
-    stopped = stopped + 1
-  end
-
+--- Ollama's part alone (also the idle timer's, below): the models used here
+--- unloaded, the Ollama started here closed. Returns how many models were
+--- unloaded and whether a server was closed.
+local function ollamaOff()
+  local unloaded, server = 0, false
   if not ollama_server and next(ollama_used) then
     for model in pairs(ollama_used) do
       pcall(function()
@@ -1125,7 +1128,69 @@ local function shutdown()
     end
     ollama_server, server = nil, true
   end
-  return stopped, unloaded, server
+  return unloaded, server
+end
+
+local function shutdown()
+  local stopped = 0
+  for _, stop in pairs(running) do
+    pcall(stop)
+    stopped = stopped + 1
+  end
+  return stopped, ollamaOff()
+end
+
+-- -----------------------------------------------------------------------------
+--  Ollama: idle timer and start with Neovim
+-- -----------------------------------------------------------------------------
+--  vim.g.pure_ollama_idle_minutes (default 15; false or 0: never): that long
+--  without an Ollama request, ollamaOff() frees the GPU, as <leader>aq does
+--  but without stopping other requests. Counted from the end of the last
+--  request (or from Ollama's start here); never while one is running.
+--  vim.g.pure_ollama_start_with_nvim (default false): Ollama started in the
+--  background when Neovim opens with a UI, without asking (asked for in
+--  Improvment.md: ready before the first request, gone when idle).
+
+local idle_timer
+local ollama_busy = 0 -- Ollama requests running
+
+local function idleMinutes()
+  local m = vim.g.pure_ollama_idle_minutes
+  if m == nil then m = 15 end
+  return (type(m) == 'number' and m > 0) and m or nil
+end
+
+--- (Re)start the idle countdown; nothing while a request runs.
+function touchOllama()
+  if idle_timer then idle_timer:stop() end
+  local minutes = idleMinutes()
+  if not minutes or ollama_busy > 0 then return end
+  idle_timer = idle_timer or vim.uv.new_timer()
+  idle_timer:start(math.floor(minutes * 60000), 0, vim.schedule_wrap(function()
+    if ollama_busy > 0 then return end
+    local unloaded, server = ollamaOff()
+    if unloaded > 0 or server then
+      vim.notify(('Ollama: %g min idle, %s'):format(minutes,
+        server and 'closed (the next request starts it again)' or 'models unloaded from the GPU'))
+    end
+  end))
+end
+
+--- Ollama up in the background if it is not already (one quick check first:
+--- an Ollama already running, the tray app's, is left as it is).
+local function startWithNvim()
+  if vim.g.pure_ollama_start_with_nvim ~= true or #vim.api.nvim_list_uis() == 0 then return end
+  waitOllama(1, function(up)
+    if up then return end
+    startOllama(function(ok, why)
+      if not ok and why then vim.notify('Ollama: ' .. why, vim.log.levels.WARN) end
+    end, true)
+  end)
+end
+if vim.v.vim_did_enter == 1 then
+  vim.schedule(startWithNvim)
+else
+  vim.api.nvim_create_autocmd('VimEnter', { once = true, callback = function() vim.schedule(startWithNvim) end })
 end
 
 vim.api.nvim_create_autocmd('VimLeavePre', {
@@ -1743,8 +1808,20 @@ local function run(opts)
       if shown ~= '' then on_text(shown) end
     end
   end
+  -- An Ollama request holds off the idle countdown while it runs, and
+  -- starts it again when done (touchOllama).
+  local counted = active.backend == 'ollama'
+  if counted then
+    ollama_busy = ollama_busy + 1
+    touchOllama()
+  end
   -- `usage` (tokens, see tokens()) passes through untouched.
   opts.on_done = function(err, text, session, usage)
+    if counted then
+      counted = false
+      ollama_busy = math.max(ollama_busy - 1, 0)
+      touchOllama()
+    end
     if on_text then
       local rest = filter('', true)
       if rest ~= '' then on_text(rest) end

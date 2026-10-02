@@ -352,6 +352,14 @@ The `:Claude…` names of these commands (`:ClaudeModel`, `:ClaudeActions`,
   stopped (with the model processes) when Neovim quits. An Ollama already
   running is never stopped. `vim.g.pure_ollama_autostart`: `'ask'`, `true`
   (without asking), `false`.
+- **With Neovim, if you like.** `vim.g.pure_ollama_start_with_nvim = true`
+  starts it in the background when Neovim opens (with a UI), without
+  asking, unless one is running already.
+- **Off when idle.** `vim.g.pure_ollama_idle_minutes` (default 15) minutes
+  after the last local request ends, the models used here are unloaded from
+  the GPU and the Ollama started here is closed; never while a request
+  runs. `false` or `0`: never. `<leader>aq` does the same at once (and stops
+  every request).
 - **Tools.** Local models get the same tools as Claude in the same request:
   read a file, list files, grep and, only where the request allows it
   (actions with `Edit` / `Write` / `Move`), edit, write and move files. Only inside the
@@ -458,6 +466,8 @@ vim.g.pure_ollama_url = 'http://localhost:11434'
 vim.g.pure_ollama_num_ctx = 32768     -- largest context a request may get
 vim.g.pure_ollama_think = false       -- true: models think before answering (slower)
 vim.g.pure_ollama_autostart = 'ask'   -- true / false
+vim.g.pure_ollama_start_with_nvim = false -- true: start it when Neovim opens
+vim.g.pure_ollama_idle_minutes = 15   -- unload / close after that long unused (false: never)
 vim.g.pure_ollama_models = nil        -- models folder for the Ollama started here
 ```
 
