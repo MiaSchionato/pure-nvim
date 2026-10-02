@@ -82,7 +82,7 @@ In the answer:
 | `n` | a new chat (the old one stays reachable with `[`) |
 | `t` | show / hide the thinking of every answer |
 | `y` | copy the answer (also to the system clipboard) |
-| `Esc` | hide the chat (`<leader>aa` shows it again) |
+| `Esc` | hide the chat (its key shows it again: `<leader>aa`, or a persona's, see "Personas") |
 | `q` | close it for good (stops an answer still coming) |
 
 Here the model may read other files of the project (Read, Grep, Glob) to
@@ -242,10 +242,14 @@ propose one small step...
 | `greeting` | shown when a chat opens with it (`chatWith`), without asking the model anything |
 | `context`, `tools`, `dirs`, `model` | as for actions. With `Edit` or `Write` it may change files in `dirs` when you ask or it clearly helps, and says which |
 
-`require('pure.llm').chatWith('job')` opens the chat with a persona: its
-greeting, and the box waiting for your first question (nothing is asked
-before it). Called again while that chat is open, it hides it or shows it,
-like `<leader>aa`. Map it in `keymaps.lua` to give a persona its key.
+`require('pure.llm').chatWith('job')` opens the persona's **own chat**,
+apart from `<leader>aa`'s: each keeps its own conversation and context, so
+you can go back and forth between them. It opens with the persona's
+greeting (if it has one) and the box waiting for your first question
+(nothing is asked before it). Called again, it hides or shows that chat,
+like `<leader>aa`. The chats share the middle of the screen, so showing one
+hides the other (kept, with an answer still coming). Map it in
+`keymaps.lua` to give a persona its key.
 
 ## Requests in notes: ```` ```llm ```` blocks
 
