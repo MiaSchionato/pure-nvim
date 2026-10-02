@@ -317,6 +317,13 @@ vim.g.pure_llm_blocks = true
 -- Changed: 'AI' (the vault's Claude/ folder was renamed on 2026-10-01).
 vim.g.pure_llm_actions = 'AI'
 
+-- Folders (inside the vault, or absolute) no cloud model (Claude, agy) may
+-- see; local models (Ollama) may. A request holding a note from one, or whose
+-- folders reach one, is not sent to a cloud model. Claude still works in the
+-- vault's root when the vault's .claude/settings.json denies Read(<folder>/**).
+-- Default: none. Changed: the private folder.
+vim.g.pure_llm_private = { '6-Private' }
+
 -- Folder of the personas (/name), inside the actions folder. Default: 'Personas'.
 -- vim.g.pure_llm_personas = 'Personas'
 
