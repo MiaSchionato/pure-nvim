@@ -51,9 +51,12 @@ For questions that write nothing: "what does this do?", "why this error?",
   still coming keeps coming);
 - the chat hidden: it is shown again as it was.
 
-The answer comes as it is written, drawn as markdown. The question goes with
-the context of the buffer the chat was opened (or last shown) from; in visual
-mode, the selection.
+The answer comes as it is written, drawn as markdown, and the window keeps
+its end in view (a long line too). Move the cursor up in the answer to read
+and it stops following; back on the last line (`G`), or with your next
+question, it follows again. The question goes with the context of the
+buffer the chat was opened (or last shown) from; in visual mode, the
+selection.
 
 The title shows what the model is doing and the seconds since you asked
 (`thinking… 3s`). Each answer ends with its time and tokens, small and grey
@@ -78,6 +81,7 @@ In the answer:
 | Key | What |
 |---|---|
 | `a` / `i` | down to the box |
+| `r` | reply to a part of the answer: the selection (visual mode) or the cursor line goes, quoted, with your next question (the box says `Reply to «…»`); another `r` replaces it |
 | `[` / `]` | the previous / next answer of this session, in the same window (the title says which, `2/5`); a follow-up then continues that one |
 | `n` | a new chat (the old one stays reachable with `[`) |
 | `t` | show / hide the thinking of every answer |
