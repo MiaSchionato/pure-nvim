@@ -359,6 +359,16 @@ vim.g.pure_ollama_think = false
 -- when Neovim quits.
 vim.g.pure_ollama_autostart = 'ask'
 
+-- Start Ollama in the background when Neovim opens (with a UI), without
+-- asking, if it is not running already. Default: false. Changed: true.
+vim.g.pure_ollama_start_with_nvim = true
+
+-- Minutes without any Ollama request after which the models used here are
+-- unloaded from the GPU and the Ollama started here is closed (as <leader>aq
+-- does). The next request starts it again (see pure_ollama_autostart).
+-- false or 0: never. Default: 15.
+vim.g.pure_ollama_idle_minutes = 15
+
 -- Models folder for the Ollama started from here. Unset (default):
 -- OLLAMA_MODELS, or ~/.ollama/models when OLLAMA_MODELS holds no models.
 -- vim.g.pure_ollama_models = 'D:/Models'
