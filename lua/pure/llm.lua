@@ -1094,29 +1094,58 @@ local ollama_used = {}
 --      otherwise keeps them loaded for 5 more minutes;
 --   3. the Ollama started here goes, with its model processes.
 -- All synchronous (:wait), or Neovim is gone before they run.
-vim.api.nvim_create_autocmd('VimLeavePre', {
-  group = vim.api.nvim_create_augroup('PureOllamaServer', { clear = true }),
-  callback = function()
-    exiting = true
-    for _, stop in pairs(running) do pcall(stop) end
+--
+-- The same is M.shutdown (<leader>aq), without quitting: the GPU freed while
+-- Neovim stays open (Improvment.md). The next Ollama request asks to start
+-- it again (vim.g.pure_ollama_autostart). Returns what it did.
+local function shutdown()
+  local stopped, unloaded, server = 0, 0, false
+  for _, stop in pairs(running) do
+    pcall(stop)
+    stopped = stopped + 1
+  end
 
-    if not ollama_server and next(ollama_used) then
-      for model in pairs(ollama_used) do
-        pcall(function()
-          vim.system({ 'curl', '-s', '-m', '2', ollamaUrl() .. '/api/generate', '-d',
-            vim.json.encode({ model = model, keep_alive = 0 }) }):wait(2500)
-        end)
-      end
+  if not ollama_server and next(ollama_used) then
+    for model in pairs(ollama_used) do
+      pcall(function()
+        vim.system({ 'curl', '-s', '-m', '2', ollamaUrl() .. '/api/generate', '-d',
+          vim.json.encode({ model = model, keep_alive = 0 }) }):wait(2500)
+      end)
+      unloaded = unloaded + 1
     end
+  end
+  -- Emptied in place: the table is shared with runOllama.
+  for model in pairs(ollama_used) do ollama_used[model] = nil end
 
-    if not ollama_server or not ollama_server.pid then return end
+  if ollama_server and ollama_server.pid then
     if vim.fn.has('win32') == 1 then
       pcall(function() vim.system({ 'taskkill', '/T', '/F', '/PID', tostring(ollama_server.pid) }):wait(3000) end)
     else
       pcall(function() ollama_server:kill(15) end)
     end
+    ollama_server, server = nil, true
+  end
+  return stopped, unloaded, server
+end
+
+vim.api.nvim_create_autocmd('VimLeavePre', {
+  group = vim.api.nvim_create_augroup('PureOllamaServer', { clear = true }),
+  callback = function()
+    exiting = true
+    shutdown()
   end,
 })
+
+--- <leader>aq: stop every request, unload the Ollama models used here and
+--- close the Ollama started here, without quitting Neovim.
+function M.shutdown()
+  local stopped, unloaded, server = shutdown()
+  local parts = {}
+  if stopped > 0 then table.insert(parts, stopped .. ' request(s) stopped') end
+  if unloaded > 0 then table.insert(parts, unloaded .. ' model(s) unloaded from the GPU') end
+  if server then table.insert(parts, 'Ollama closed') end
+  vim.notify('LLM: ' .. (#parts > 0 and table.concat(parts, ', ') or 'nothing running, nothing loaded'))
+end
 
 --- Tool calls a model wrote as text instead of through Ollama's tool_calls:
 --- qwen2.5-coder answered a plain question with
