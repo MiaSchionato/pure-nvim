@@ -11,9 +11,13 @@
 | `cs` | old, new | changes the pair: `cs"'`, `cs[{` |
 
 Characters: `(` `)` `p` → `( )` · `[` `]` `b` → `[ ]` · `{` `}` `c` → `{ }` ·
-`<` `>` → `< >` · `"` `q` → `" "` · `'` · `` ` `` `t` → `` ` ` `` · any other
-character surrounds with itself on both sides (`s*` → `*word*`). `ds` / `cs`
-look on the current line.
+`<` `>` → `< >` · `'` `q` → `' '` · `"` `dq` → `" "` · `` ` `` `t` → `` ` ` `` ·
+any other character surrounds with itself on both sides (`s*` → `*word*`).
+
+`d` before a key doubles the pair: `sdb` → `[[word]]` (a wikilink), `sdp` →
+`((word))`, `sdc` → `{{word}}`; `dq` is the exception, the double quote. The
+same keys work in `ds` and `cs`: `dsdb` removes `[[ ]]`, `csbdb` turns
+`[word]` into `[[word]]`. `ds` / `cs` look on the current line.
 
 ## Auto pairs (`lua/pure/pairs.lua`)
 

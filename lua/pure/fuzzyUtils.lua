@@ -43,6 +43,25 @@ local function fdExcludes()
   return table.concat(parts, " ")
 end
 
+--- " --no-ignore-vcs" when `path` is inside the Obsidian vault, else "".
+---
+--- fd and rg skip what .gitignore lists, and the vault's .gitignore lists
+--- the private folder (kept out of git, not out of reach): its notes never
+--- showed in <leader>vf / <leader>vg. Outside the vault .gitignore is still
+--- honoured, which is what keeps node_modules and build output out of a
+--- project's pickers. The LLM tools (pure/llm.lua) keep honouring it in the
+--- vault too, so private notes stay out of what a model can read.
+--- @param path string|nil
+--- @return string
+local function vaultNoIgnore(path)
+  local ok, zet = pcall(require, 'pure.zettelkasten')
+  local vault = ok and zet.vaultPath and zet.vaultPath()
+  if not (vault and path) then return "" end
+  local function norm(p) return (vim.fs.normalize(p):gsub("/+$", "")):lower() .. "/" end
+  local v = norm(vault)
+  return norm(path):sub(1, #v) == v and " --no-ignore-vcs" or ""
+end
+
 --- @return string flags for ls, e.g. --ignore='.git'
 ---
 --- Filtering inside ls rather than grepping its output is deliberate:
@@ -270,7 +289,7 @@ M.pickList = pickList
 function M.fuzzySearch(path)
   if path == nil then path = vim.uv.os_homedir():gsub("\\", "/") .. "/" end
   path = asDir(path)
-  local fd = tool("fd", "fdfind") .. " --hidden " .. fdExcludes() .. " --type file . --strip-cwd-prefix --base-directory  "
+  local fd = tool("fd", "fdfind") .. " --hidden " .. fdExcludes() .. vaultNoIgnore(path) .. " --type file . --strip-cwd-prefix --base-directory  "
   local fzf = "fzf --keep-right --tiebreak=end"
 
   M.fuzzyLogic({
@@ -292,7 +311,7 @@ end
 --- the first key. Nothing is listed until something is typed.
 function M.fuzzyGrep(path)
   path = asDir(path)
-  local rg = "rg --column --line-number --no-heading --color=always --smart-case"
+  local rg = "rg --column --line-number --no-heading --color=always --smart-case" .. vaultNoIgnore(path)
   -- fzf wants input on stdin even with --disabled; give it an empty one.
   -- By shell, not by OS: the windows branch runs these through Git bash.
   local empty = vim.o.shell:lower():match("cmd%.exe$") and "type nul" or "true"
@@ -578,7 +597,7 @@ end
 
 function M.NewFile(path)
   path = asDir(path)
-  local fd = tool("fd", "fdfind") .. " --hidden " .. fdExcludes() .. " --type directory . --strip-cwd-prefix --base-directory  "
+  local fd = tool("fd", "fdfind") .. " --hidden " .. fdExcludes() .. vaultNoIgnore(path) .. " --type directory . --strip-cwd-prefix --base-directory  "
   local fzf = "fzf --keep-right --tiebreak=end"
   M.fuzzyLogic({
     title = "Select New File Path",
