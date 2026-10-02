@@ -215,9 +215,11 @@ An action is *what* to do; a persona is *who* answers: its instructions (tone,
 rules, what it knows how to do), the context it needs and its tools. Start
 any request with `/name` and that persona answers it:
 
-- **in the chat** (`<leader>aa`), as the first question or a follow-up:
-  `/job what do I do now?`. It stays for the follow-ups, until another
-  `/name`;
+- **in the chat** (`<leader>aa`, or its own, see `chatWith` below), as the
+  first question or a follow-up: `/job what do I do now?`. It stays for the
+  follow-ups, until another `/name`. Here the persona brings its own `tools`
+  and `dirs` too: with `Edit`, `Write` and `Move` it reads, writes and moves
+  files in its folders while you talk;
 - **at `<leader>ai`**: `/job summarize this` writes in the persona's voice;
 - **in an action's text** or a **```` ```llm ```` block** starting with
   `/name`: its instructions and context come first. The tools stay the
@@ -238,7 +240,7 @@ description: Work assistant
 aliases: coworker
 greeting: Hi! What are we doing?
 context: todoist, stats.lua
-tools: Read, Glob, Grep, Edit
+tools: Read, Glob, Grep, Edit, Write, Move
 dirs: vault
 ---
 You are my work assistant. Wait for my question; when I ask what to do,
@@ -250,7 +252,7 @@ propose one small step...
 | `description` | what it is (required, as for actions) |
 | `aliases` | more names for it: `coworker, cowork` |
 | `greeting` | shown when a chat opens with it (`chatWith`), without asking the model anything |
-| `context`, `tools`, `dirs`, `model` | as for actions. With `Edit` or `Write` it may change files in `dirs` when you ask or it clearly helps, and says which |
+| `context`, `tools`, `dirs`, `model` | as for actions. With `Edit`, `Write` or `Move` it may change, write or move files in `dirs` when you ask or it clearly helps, and says which |
 
 `require('pure.llm').chatWith('job')` opens the persona's **own chat**,
 apart from `<leader>aa`'s: each keeps its own conversation and context, so
