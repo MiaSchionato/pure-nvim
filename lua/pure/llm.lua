@@ -1943,29 +1943,31 @@ local function askInto(w, question, prompt, opts)
   w.stop = function() stopped = true; stop() end
 end
 
---- The <leader>aa chat: shown, hidden (kept with its conversation), or nil.
---- One at a time: a new one replaces it.
-local chat
+--- The chats, each shown, hidden (kept with its conversation) or absent,
+--- by slot: `ask` for <leader>aa and the windows of the other requests, a
+--- persona's command for M.chatWith. Each keeps its own conversation and
+--- context; they share the screen's middle, so showing one hides the
+--- others. A new chat in a slot replaces the one there.
+local chats = {}
 
-local NEW_CHAT = { '_New chat: type your question in the box below._', '',
-  '_In this window: [ ] older / newer answers · n new chat · y copy · t thinking · Esc hide (<leader>aa shows it again) · q close_' }
-
---- An empty chat's text: with a persona, its greeting (never a request:
---- the chat waits for the first question).
+--- An empty chat's text: nothing (the box is waiting), or a persona's
+--- greeting (never a request: the chat waits for the first question).
 local function freshLines(p)
-  if not p then return NEW_CHAT end
-  return { '_' .. (p.greeting or ('/' .. p.command .. ': type your question in the box below.')) .. '_', '', NEW_CHAT[3] }
+  if not (p and p.greeting) then return { '' } end
+  return { '_' .. p.greeting .. '_' }
 end
 
 --- The chat window: `question` asked with `prompt` (sent at once), `preset`
 --- (an answer from the history, shown), or, with `fresh` ({ ctx, persona,
---- buf }), an empty chat whose first question is typed in the box. The
---- persona comes in `fresh` or in `extra.persona`.
+--- buf, slot }), an empty chat whose first question is typed in the box.
+--- The persona comes in `fresh` or in `extra.persona`; the slot (see
+--- `chats`) in `fresh.slot`, `ask` by default.
 local function openAnswer(kind, question, prompt, cwd, preset, extra, fresh)
-  if chat and chat.valid() then chat.destroy() end
+  local slot = fresh and fresh.slot or 'ask'
+  if chats[slot] and chats[slot].valid() then chats[slot].destroy() end
   local p = (fresh and fresh.persona) or (extra and extra.persona)
   local w = answerWindow((question or p) and kind or 'new chat', extra and extra.model)
-  chat = w
+  chats[slot], w.slot = w, slot
   w.cwd, w.extra, w.persona = cwd, extra, p
   w.srcbuf = fresh and fresh.buf or vim.api.nvim_get_current_buf()
   if question then
@@ -2055,6 +2057,10 @@ local function openAnswer(kind, question, prompt, cwd, preset, extra, fresh)
   --- line docked below, as in a chat; the answer gives up its 3 rows).
   function w.show()
     if w.visible() then return end
+    -- The other chats use the same place on screen: hidden (kept).
+    for _, other in pairs(chats) do
+      if other ~= w and other.valid() and other.visible() then other.hide() end
+    end
     local height = math.ceil(vim.o.lines * 0.7)
     local width = math.ceil(vim.o.columns * 0.7)
     local row = math.ceil((vim.o.lines - height) / 2)
@@ -2078,7 +2084,7 @@ local function openAnswer(kind, question, prompt, cwd, preset, extra, fresh)
     vim.api.nvim_create_autocmd('WinClosed', { pattern = tostring(b), once = true,
       callback = function() vim.schedule(function() pcall(vim.api.nvim_win_close, a, true) end) end })
   end
-  --- Off screen, kept: <leader>aa shows it again.
+  --- Off screen, kept: its key (<leader>aa, or the persona's) shows it again.
   function w.hide()
     for _, win in ipairs({ w.input.win, w.win }) do
       if win and vim.api.nvim_win_is_valid(win) then pcall(vim.api.nvim_win_close, win, true) end
@@ -2090,7 +2096,7 @@ local function openAnswer(kind, question, prompt, cwd, preset, extra, fresh)
     for _, b in ipairs({ ibuf, w.buf }) do
       if vim.api.nvim_buf_is_valid(b) then pcall(vim.api.nvim_buf_delete, b, { force = true }) end
     end
-    if chat == w then chat = nil end
+    if chats[w.slot] == w then chats[w.slot] = nil end
   end
   -- A request still running when the chat is closed for good is stopped:
   -- nobody would see it. Hiding does not stop it.
@@ -2189,6 +2195,7 @@ function M.ask(question, range)
     if ex then ex.persona = p end
     return openAnswer(p and ('/' .. p.command) or 'ask', question, prompt, ex and ex.cwd or workdir(buf), nil, ex)
   end
+  local chat = chats.ask
   if chat and chat.valid() then
     if chat.visible() and not range then return chat.hide() end
     -- Shown again from here: a new chat in it (n) is about this buffer.
@@ -2196,26 +2203,30 @@ function M.ask(question, range)
     chat.show()
     return chat.focusInput()
   end
-  openAnswer('ask', nil, nil, workdir(buf), nil, nil, { ctx = context(buf, range), buf = buf })
+  openAnswer('ask', nil, nil, workdir(buf), nil, nil, { ctx = context(buf, range), buf = buf, slot = 'ask' })
 end
 
---- A chat with the persona `name` (/name): its greeting, and the box
---- waiting for the first question; nothing is asked before it. Again while
---- that persona's chat is open: hides it or shows it, like <leader>aa.
+--- The persona `name`'s own chat (/name), apart from <leader>aa's, with its
+--- own conversation and context: opened with its greeting and the box
+--- waiting for the first question (nothing is asked before it); called
+--- again, hidden or shown, like <leader>aa. Showing it hides the others.
 function M.chatWith(name)
   local p = persona.find(name)
   if not p then
     return vim.notify(('%s: no persona /%s in %s'):format(modelLabel(), name, persona.dir() or 'the actions folder'),
       vim.log.levels.WARN)
   end
-  if chat and chat.valid() and chat.persona and chat.persona.command == p.command then
+  local buf = vim.api.nvim_get_current_buf()
+  local chat = chats[p.command]
+  if chat and chat.valid() then
     if chat.visible() then return chat.hide() end
+    -- Shown again from here: a new chat in it (n) is about this buffer.
+    chat.ctx, chat.srcbuf = context(buf, selection()), buf
     chat.show()
     return chat.focusInput()
   end
-  local buf = vim.api.nvim_get_current_buf()
   openAnswer('/' .. p.command, nil, nil, workdir(buf), nil, nil,
-    { ctx = context(buf, selection()), persona = p, buf = buf })
+    { ctx = context(buf, selection()), persona = p, buf = buf, slot = p.command })
 end
 
 local REVIEW = 'Review this code. Point out bugs, risky cases and clear simplifications, each with its line '
