@@ -1710,7 +1710,10 @@ local function answerWindow(title, model_spec)
   -- with its whole conversation (see M.ask); q wipes it for good.
   vim.bo[buf].bufhidden = 'hide'
   vim.b[buf].pure_mdview = true
-  local w = { buf = buf, model = model_spec, title_text = title }
+  -- `follow`: the window keeps the end of the text in view as it comes.
+  -- On until the cursor is moved up in the answer, to read; back on at the
+  -- last line, and with every new question (w.follow = true).
+  local w = { buf = buf, model = model_spec, title_text = title, follow = true }
 
   --- The chat exists (its buffer); it may be hidden.
   function w.valid() return vim.api.nvim_buf_is_valid(buf) end
@@ -1723,20 +1726,35 @@ local function answerWindow(title, model_spec)
       pcall(vim.api.nvim_win_set_config, w.win, { title = ' ' .. modelLabel(w.model) .. ' · ' .. s .. ' ' })
     end
   end
-  --- Append `s` (may hold newlines) at the end, following it with the
-  --- cursor when the cursor is on the last line. Hidden, the text still
-  --- goes in: an answer keeps coming while the chat is hidden.
+  --- The end of the text in view: the cursor at the end of the last line,
+  --- not its start (a long line wraps over many rows, and its start would
+  --- leave the newest text below the window).
+  function w.toBottom()
+    if not w.visible() then return end
+    local last = vim.api.nvim_buf_line_count(buf)
+    local text = vim.api.nvim_buf_get_lines(buf, last - 1, last, false)[1] or ''
+    pcall(vim.api.nvim_win_set_cursor, w.win, { last, math.max(#text - 1, 0) })
+  end
+  --- Append `s` (may hold newlines) at the end, keeping it in view while
+  --- `follow` is on. Hidden, the text still goes in: an answer keeps coming
+  --- while the chat is hidden.
   function w.append(s)
     if not w.valid() then return end
     local count = vim.api.nvim_buf_line_count(buf)
-    local follow = w.visible() and vim.api.nvim_win_get_cursor(w.win)[1] >= count - 1
     local last_line = vim.api.nvim_buf_get_lines(buf, count - 1, count, false)[1] or ''
     local new = vim.split(last_line .. s, '\n', { plain = true })
     vim.api.nvim_buf_set_lines(buf, count - 1, count, false, new)
-    if follow then
-      pcall(vim.api.nvim_win_set_cursor, w.win, { vim.api.nvim_buf_line_count(buf), 0 })
-    end
+    if w.follow then w.toBottom() end
   end
+  -- Moving the cursor in the answer: up stops following, the last line
+  -- (G) follows again. The cursor moved by toBottom lands on the last line.
+  vim.api.nvim_create_autocmd('CursorMoved', {
+    buffer = buf,
+    callback = function()
+      if not w.visible() or vim.api.nvim_get_current_win() ~= w.win then return end
+      w.follow = vim.api.nvim_win_get_cursor(w.win)[1] >= vim.api.nvim_buf_line_count(buf)
+    end,
+  })
   return w
 end
 
@@ -1929,7 +1947,7 @@ local function askInto(w, question, prompt, opts)
       end
       local total_used = tokens(w.tokens)
       w.title(opts.kind .. (' %.1fs'):format(w.total) .. (total_used ~= '' and (' · ' .. total_used) or '')
-        .. ' · [ ]: older/newer, a: follow up, y: copy, q: close')
+        .. ' · [ ]: older/newer, a: follow up, r: reply to a part, y: copy, q: close')
       w.session = session
       w.answer = text
       addHistory(opts.kind, question, text, session, extra.model)
@@ -1949,6 +1967,7 @@ end
 --- context; they share the screen's middle, so showing one hides the
 --- others. A new chat in a slot replaces the one there.
 local chats = {}
+M._chats = chats
 
 --- An empty chat's text: nothing (the box is waiting), or a persona's
 --- greeting (never a request: the chat waits for the first question).
@@ -1998,28 +2017,70 @@ local function openAnswer(kind, question, prompt, cwd, preset, extra, fresh)
     for _, th in ipairs(thoughts) do th.open = open; th.draw() end
   end, o)
 
+  --- The box's title: what Enter does, and the part of the answer being
+  --- replied to (r), if any.
+  local function boxTitle()
+    if w.quote then
+      local shown = vim.fn.strcharpart(w.quote:gsub('%s+', ' '), 0, 40)
+      if vim.fn.strchars(w.quote) > 40 then shown = shown .. '…' end
+      return (' Reply to «%s» · Enter: send · Esc: to the answer '):format(shown)
+    end
+    return w.fresh and ' Ask · Enter: send · Esc: to the answer ' or ' Follow up · Enter: send · Esc: to the answer '
+  end
+  w.boxTitle = boxTitle
+
   local function followUp(q)
     if not q or vim.trim(q) == '' or not w.valid() then return end
     if not w.session then return vim.notify(m_label .. ': wait for the answer first') end
-    w.append('\n---\n\n## ' .. q .. '\n\n')
+    -- A part of the answer replied to (r): shown above the question, and
+    -- sent with it.
+    local quoted = w.quote and ('> ' .. w.quote:gsub('\n', '\n> ')) or nil
+    w.quote = nil
+    local function withQuote(s)
+      return quoted and ('In reply to this part of your answer:\n' .. quoted .. '\n\n' .. s) or s
+    end
+    w.follow = true
+    w.append('\n---\n\n' .. (quoted and (quoted .. '\n\n') or '') .. '## ' .. q .. '\n\n')
     -- /name switches the persona: its instructions go with this question,
     -- its tools and folders with this one and the next. The conversation
     -- keeps its folder (w.cwd): a session resumes only where it began.
-    local text, p, rest = q, persona.split(q)
+    local text, p, rest = withQuote(q), persona.split(q)
     if p then
       w.persona, w.extra = p, persona.extra(p, w.srcbuf)
-      text = persona.prompt(p) .. '\n\nRequest: ' .. (rest ~= '' and rest or q)
+      text = persona.prompt(p) .. '\n\nRequest: ' .. withQuote(rest ~= '' and rest or q)
     end
     -- To the model of the answer shown (it changes with [ / ]).
     local ex = vim.tbl_extend('force', w.extra or {}, { model = w.model })
     askInto(w, q, text, { cwd = w.cwd, session = w.session, kind = kind, extra = ex })
   end
 
+  --- r: reply to a part of the answer: the selection (visual mode) or the
+  --- cursor line, quoted in the next question. Another r replaces it.
+  local function replyTo()
+    local mode = vim.fn.mode()
+    local text
+    if mode == 'v' or mode == 'V' or mode == '\22' then
+      text = table.concat(vim.fn.getregion(vim.fn.getpos('v'), vim.fn.getpos('.'), { type = mode }), '\n')
+      vim.api.nvim_feedkeys(vim.keycode('<Esc>'), 'nx', false)
+    else
+      text = vim.api.nvim_get_current_line()
+    end
+    text = vim.trim(text)
+    if text == '' then return end
+    if w.fresh or not w.session then return vim.notify(m_label .. ': wait for the answer first') end
+    w.quote = text
+    if w.input.win and vim.api.nvim_win_is_valid(w.input.win) then
+      pcall(vim.api.nvim_win_set_config, w.input.win, { title = boxTitle() })
+    end
+    w.focusInput()
+  end
+  vim.keymap.set({ 'n', 'x' }, 'r', replyTo, o)
+
   --- The first question of a new chat, typed in the box: asked with the
   --- context of the buffer the chat was opened (or last shown) from, and
   --- the chat's persona (opened with one, or /name at the start).
   local function startChat(q)
-    w.fresh = false
+    w.fresh, w.follow = false, true
     vim.api.nvim_buf_clear_namespace(w.buf, ns, 0, -1)
     vim.api.nvim_buf_set_lines(w.buf, 0, -1, false, { '## ' .. q, '', '' })
     w.thoughts, w.session, w.answer, w.index, w.total, w.tokens, w.model = {}, nil, nil, nil, nil, nil, nil
@@ -2039,7 +2100,7 @@ local function openAnswer(kind, question, prompt, cwd, preset, extra, fresh)
     if running() then return vim.notify(m_label .. ': wait for the answer first') end
     vim.api.nvim_buf_clear_namespace(w.buf, ns, 0, -1)
     vim.api.nvim_buf_set_lines(w.buf, 0, -1, false, freshLines(w.persona))
-    w.fresh, w.thoughts, w.session, w.answer, w.index = true, {}, nil, nil, nil
+    w.fresh, w.thoughts, w.session, w.answer, w.index, w.quote = true, {}, nil, nil, nil, nil
     w.title(w.persona and ('/' .. w.persona.command) or 'new chat')
     w.focusInput()
   end
@@ -2074,9 +2135,10 @@ local function openAnswer(kind, question, prompt, cwd, preset, extra, fresh)
     vim.wo[w.win].conceallevel = 2
     w.input.win = vim.api.nvim_open_win(ibuf, false, {
       relative = 'editor', row = row + h + 2, col = col, width = width, height = 1,
-      style = 'minimal', border = 'rounded', title_pos = 'left',
-      title = w.fresh and ' Ask · Enter: send · Esc: to the answer ' or ' Follow up · Enter: send · Esc: to the answer ',
+      style = 'minimal', border = 'rounded', title_pos = 'left', title = boxTitle(),
     })
+    -- What came while it was hidden: the end in view, if following.
+    if w.follow then w.toBottom() end
     -- One goes, both go (hidden: the buffers stay).
     local a, b = w.win, w.input.win
     vim.api.nvim_create_autocmd('WinClosed', { pattern = tostring(a), once = true,
@@ -2113,10 +2175,10 @@ local function openAnswer(kind, question, prompt, cwd, preset, extra, fresh)
     if q == '' then return end
     if not w.fresh and not w.session then return vim.notify(m_label .. ': wait for the answer first') end
     vim.api.nvim_buf_set_lines(ibuf, 0, -1, false, { '' })
-    if w.input.win and vim.api.nvim_win_is_valid(w.input.win) then
-      pcall(vim.api.nvim_win_set_config, w.input.win, { title = ' Follow up · Enter: send · Esc: to the answer ' })
-    end
     if w.fresh then startChat(q) else followUp(q) end
+    if w.input.win and vim.api.nvim_win_is_valid(w.input.win) then
+      pcall(vim.api.nvim_win_set_config, w.input.win, { title = boxTitle() })
+    end
   end
   vim.keymap.set({ 'i', 'n' }, '<CR>', send, iopts)
   vim.keymap.set('i', '<Esc>', function()
@@ -2156,7 +2218,7 @@ local function openAnswer(kind, question, prompt, cwd, preset, extra, fresh)
     vim.list_extend(lines, vim.split(h.answer or '', '\n', { plain = true }))
     vim.api.nvim_buf_set_lines(w.buf, 0, -1, false, lines)
     if w.visible() then pcall(vim.api.nvim_win_set_cursor, w.win, { 1, 0 }) end
-    w.index, w.session, w.answer, w.model, w.total = i, h.session, h.answer, h.spec, nil
+    w.index, w.session, w.answer, w.model, w.total, w.quote = i, h.session, h.answer, h.spec, nil, nil
     w.title(('%s %d/%d · %s · [ ]: older/newer, %sn: new chat, q: close'):format(h.kind, i, #history,
       os.date('%H:%M', h.time), h.session and 'a: follow up, ' or ''))
   end
