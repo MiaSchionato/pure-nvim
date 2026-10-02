@@ -58,6 +58,12 @@ question, it follows again. The question goes with the context of the
 buffer the chat was opened (or last shown) from; in visual mode, the
 selection.
 
+A conversation stays in the folder (project) it began in, also when the
+chat is shown again from a file of another project, and when an older
+answer is reached with `[`: Claude Code resumes a session only from there.
+The next new chat (`n`) starts in the folder of the buffer it was last
+shown from.
+
 The title shows what the model is doing and the seconds since you asked
 (`thinking… 3s`). Each answer ends with its time and tokens, small and grey
 on the right (not copied with `y`): `5.4s · 5.2k↑ 40↓`, tokens sent (the note

@@ -1686,7 +1686,7 @@ local function chatPrompt(p, ctx, q, buf)
 end
 M._chatPrompt = chatPrompt
 
-local function addHistory(kind, question, answer, session, model_spec)
+local function addHistory(kind, question, answer, session, model_spec, cwd)
   table.insert(history, {
     kind = kind,
     question = question,
@@ -1696,6 +1696,9 @@ local function addHistory(kind, question, answer, session, model_spec)
     -- The model itself, not only its label: a follow-up on an answer reached
     -- with [ / ] in the window goes to the model that gave it.
     spec = model_spec,
+    -- The folder it ran in: Claude Code keeps a session under its project
+    -- folder, so a follow-up reached with [ / ] must resume from there.
+    cwd = cwd,
     time = os.time(),
   })
   if #history > 50 then table.remove(history, 1) end
@@ -1950,7 +1953,7 @@ local function askInto(w, question, prompt, opts)
         .. ' · [ ]: older/newer, a: follow up, r: reply to a part, y: copy, q: close')
       w.session = session
       w.answer = text
-      addHistory(opts.kind, question, text, session, extra.model)
+      addHistory(opts.kind, question, text, session, extra.model, opts.cwd)
       w.index = #history -- where [ / ] in the window start from
       -- Chat-like: the follow-up box takes the cursor once the answer is
       -- in, if you are still in the answer (never pulled from elsewhere).
@@ -2088,6 +2091,9 @@ local function openAnswer(kind, question, prompt, cwd, preset, extra, fresh)
     if p then w.persona = p else rest = q end
     local prompt, ex = chatPrompt(w.persona, w.ctx, rest, w.srcbuf)
     w.extra = ex
+    -- A new conversation may start in another folder: the one of the buffer
+    -- the chat was last shown from (M.ask). Never changed mid-conversation.
+    w.cwd = w.next_cwd or w.cwd
     if ex and ex.cwd then w.cwd = ex.cwd end
     local name = w.persona and ('/' .. w.persona.command) or nil
     last = { kind = 'ask', instruction = name and (name .. ' ' .. rest) or q }
@@ -2219,6 +2225,8 @@ local function openAnswer(kind, question, prompt, cwd, preset, extra, fresh)
     vim.api.nvim_buf_set_lines(w.buf, 0, -1, false, lines)
     if w.visible() then pcall(vim.api.nvim_win_set_cursor, w.win, { 1, 0 }) end
     w.index, w.session, w.answer, w.model, w.total, w.quote = i, h.session, h.answer, h.spec, nil, nil
+    -- Its session resumes only from the folder it began in (see addHistory).
+    w.cwd = h.cwd or w.cwd
     w.title(('%s %d/%d · %s · [ ]: older/newer, %sn: new chat, q: close'):format(h.kind, i, #history,
       os.date('%H:%M', h.time), h.session and 'a: follow up, ' or ''))
   end
@@ -2261,7 +2269,11 @@ function M.ask(question, range)
   if chat and chat.valid() then
     if chat.visible() and not range then return chat.hide() end
     -- Shown again from here: a new chat in it (n) is about this buffer.
-    chat.ctx, chat.cwd, chat.srcbuf = context(buf, range), workdir(buf), buf
+    -- Not chat.cwd: a follow-up resumes the conversation on screen, and
+    -- Claude Code finds a session only in the folder it began in. Shown
+    -- from another project, `--resume` there failed. The new folder waits
+    -- for the next new chat (startChat).
+    chat.ctx, chat.next_cwd, chat.srcbuf = context(buf, range), workdir(buf), buf
     chat.show()
     return chat.focusInput()
   end
