@@ -128,6 +128,7 @@ where to change them.
 | `vim.g.pure_llm_thinking` | `'show'` | [llm](llm.md) |
 | `vim.g.pure_llm_user_context` | `stdpath('data')/llm_user.md` | [llm](llm.md) |
 | `vim.g.pure_llm_memory` | on | [llm](llm.md) |
+| `vim.g.pure_llm_private` | none (folders no cloud model may see) | [llm](llm.md) |
 | `vim.g.pure_ollama_url` | `'http://localhost:11434'` | [llm](llm.md) |
 | `vim.g.pure_ollama_num_ctx` | `32768` (the largest; each request gets the smallest that holds it) | [llm](llm.md) |
 | `vim.g.pure_ollama_think` | off | [llm](llm.md) |
