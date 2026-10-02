@@ -133,6 +133,8 @@ where to change them.
 | `vim.g.pure_ollama_num_ctx` | `32768` (the largest; each request gets the smallest that holds it) | [llm](llm.md) |
 | `vim.g.pure_ollama_think` | off | [llm](llm.md) |
 | `vim.g.pure_ollama_autostart` | `'ask'` | [llm](llm.md) |
+| `vim.g.pure_ollama_start_with_nvim` | off | [llm](llm.md) |
+| `vim.g.pure_ollama_idle_minutes` | `15` | [llm](llm.md) |
 | `vim.g.pure_ollama_models` | `OLLAMA_MODELS`, else `~/.ollama/models` | [llm](llm.md) |
 | `vim.g.pure_indentscope_disable` | off | [editing](editing.md) |
 
