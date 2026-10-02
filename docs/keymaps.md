@@ -39,7 +39,7 @@ See [llm.md](llm.md).
 | `<leader>ad` | n | Daily note: next step and the measured day (the vault action `Nota do dia`) |
 | `<leader>ah` | n | Past answers |
 | `<leader>ai` | n, x | Write here (visual: rewrite) |
-| `<leader>aj` | n | Job assistant: what to do now, in the chat (the vault action `Assistente de trabalho`) |
+| `<leader>aj` | n | Job assistant: the chat with the `/job` persona, waiting for your question (see [llm.md](llm.md#personas-name)) |
 | `<leader>am` | n | Select model (Ollama / Claude / agy) |
 | `<leader>ar` | n, x | Repeat the last request |
 | `<leader>as` | n | Stop |

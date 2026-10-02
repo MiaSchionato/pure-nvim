@@ -27,6 +27,11 @@
 --    <leader>ax   the actions: markdown files of the vault's claude/ folder (see
 --                 "Actions" below).
 --
+--  Personas: /name at the start of any request (the chat, <leader>ai, an
+--  action, a block) makes a persona of the actions' Personas/ folder answer:
+--  its instructions, context and tools. M.chatWith(name) opens the chat with
+--  one, waiting for the first question (see "Personas" below).
+--
 --  Blocks: a note can hold a request that runs on its own, and whose answer
 --  is written into the note under it, between two markers (```claude and
 --  <!-- claude --> are still read, for the notes written before):
@@ -1665,6 +1670,22 @@ local ASK_WRITE_RULES = 'You are called from inside Neovim with the user\'s curr
 -- What the window's title says while the model uses a tool.
 local TOOL_STATES = { Read = 'reading…', Edit = 'editing…', MultiEdit = 'editing…', Write = 'writing a file…' }
 
+-- Personas (/name, see the "Personas" section below, which needs the
+-- actions folder): the chat, <leader>ai, actions and blocks reach them here.
+local persona = {}
+
+--- The first prompt of a chat question `q`, with the persona `p` or none:
+--- the rules (the writing ones for a persona that may write), the
+--- persona's instructions and context, the buffer's context, the request.
+--- Also returns the persona's request options (persona.extra), or nil.
+local function chatPrompt(p, ctx, q, buf)
+  local ex = p and persona.extra(p, buf) or nil
+  local rules = ex and ex.write and ASK_WRITE_RULES or ASK_RULES
+  if q == '' then q = '(No question yet: greet in one short line and ask what to do.)' end
+  return rules .. '\n\n' .. (p and (persona.prompt(p) .. '\n\n') or '') .. (ctx or '') .. '\n\nRequest: ' .. q, ex
+end
+M._chatPrompt = chatPrompt
+
 local function addHistory(kind, question, answer, session, model_spec)
   table.insert(history, {
     kind = kind,
@@ -1929,21 +1950,31 @@ local chat
 local NEW_CHAT = { '_New chat: type your question in the box below._', '',
   '_In this window: [ ] older / newer answers · n new chat · y copy · t thinking · Esc hide (<leader>aa shows it again) · q close_' }
 
+--- An empty chat's text: with a persona, its greeting (never a request:
+--- the chat waits for the first question).
+local function freshLines(p)
+  if not p then return NEW_CHAT end
+  return { '_' .. (p.greeting or ('/' .. p.command .. ': type your question in the box below.')) .. '_', '', NEW_CHAT[3] }
+end
+
 --- The chat window: `question` asked with `prompt` (sent at once), `preset`
---- (an answer from the history, shown), or, with `fresh` ({ ctx }), an empty
---- chat whose first question is typed in the box.
+--- (an answer from the history, shown), or, with `fresh` ({ ctx, persona,
+--- buf }), an empty chat whose first question is typed in the box. The
+--- persona comes in `fresh` or in `extra.persona`.
 local function openAnswer(kind, question, prompt, cwd, preset, extra, fresh)
   if chat and chat.valid() then chat.destroy() end
-  local w = answerWindow(question and kind or 'new chat', extra and extra.model)
+  local p = (fresh and fresh.persona) or (extra and extra.persona)
+  local w = answerWindow((question or p) and kind or 'new chat', extra and extra.model)
   chat = w
-  w.cwd = cwd
+  w.cwd, w.extra, w.persona = cwd, extra, p
+  w.srcbuf = fresh and fresh.buf or vim.api.nvim_get_current_buf()
   if question then
     vim.api.nvim_buf_set_lines(w.buf, 0, -1, false, { '## ' .. (question:gsub('\n', ' ')), '', '' })
     if preset then
       vim.api.nvim_buf_set_lines(w.buf, 2, -1, false, vim.split(preset, '\n', { plain = true }))
     end
   else
-    vim.api.nvim_buf_set_lines(w.buf, 0, -1, false, NEW_CHAT)
+    vim.api.nvim_buf_set_lines(w.buf, 0, -1, false, freshLines(p))
     w.fresh, w.ctx = true, fresh and fresh.ctx or ''
   end
 
@@ -1969,31 +2000,45 @@ local function openAnswer(kind, question, prompt, cwd, preset, extra, fresh)
     if not q or vim.trim(q) == '' or not w.valid() then return end
     if not w.session then return vim.notify(m_label .. ': wait for the answer first') end
     w.append('\n---\n\n## ' .. q .. '\n\n')
+    -- /name switches the persona: its instructions go with this question,
+    -- its tools and folders with this one and the next. The conversation
+    -- keeps its folder (w.cwd): a session resumes only where it began.
+    local text, p, rest = q, persona.split(q)
+    if p then
+      w.persona, w.extra = p, persona.extra(p, w.srcbuf)
+      text = persona.prompt(p) .. '\n\nRequest: ' .. (rest ~= '' and rest or q)
+    end
     -- To the model of the answer shown (it changes with [ / ]).
-    local ex = vim.tbl_extend('force', extra or {}, { model = w.model })
-    askInto(w, q, q, { cwd = w.cwd, session = w.session, kind = kind, extra = ex })
+    local ex = vim.tbl_extend('force', w.extra or {}, { model = w.model })
+    askInto(w, q, text, { cwd = w.cwd, session = w.session, kind = kind, extra = ex })
   end
 
   --- The first question of a new chat, typed in the box: asked with the
-  --- context of the buffer the chat was opened (or last shown) from.
+  --- context of the buffer the chat was opened (or last shown) from, and
+  --- the chat's persona (opened with one, or /name at the start).
   local function startChat(q)
     w.fresh = false
     vim.api.nvim_buf_clear_namespace(w.buf, ns, 0, -1)
     vim.api.nvim_buf_set_lines(w.buf, 0, -1, false, { '## ' .. q, '', '' })
     w.thoughts, w.session, w.answer, w.index, w.total, w.tokens, w.model = {}, nil, nil, nil, nil, nil, nil
-    last = { kind = 'ask', instruction = q }
-    local prompt = ASK_RULES .. '\n\n' .. (w.ctx or '') .. '\n\nRequest: ' .. q
-    askInto(w, q, prompt, { cwd = w.cwd, kind = 'ask' })
+    local p, rest = persona.split(q)
+    if p then w.persona = p else rest = q end
+    local prompt, ex = chatPrompt(w.persona, w.ctx, rest, w.srcbuf)
+    w.extra = ex
+    if ex and ex.cwd then w.cwd = ex.cwd end
+    local name = w.persona and ('/' .. w.persona.command) or nil
+    last = { kind = 'ask', instruction = name and (name .. ' ' .. rest) or q }
+    askInto(w, q, prompt, { cwd = w.cwd, kind = name or 'ask', extra = ex })
   end
 
-  --- n: a new chat in this same window; the conversation stays in the
-  --- history ([ / ] reach it).
+  --- n: a new chat in this same window, with the same persona; the
+  --- conversation stays in the history ([ / ] reach it).
   local function newChat()
     if running() then return vim.notify(m_label .. ': wait for the answer first') end
     vim.api.nvim_buf_clear_namespace(w.buf, ns, 0, -1)
-    vim.api.nvim_buf_set_lines(w.buf, 0, -1, false, NEW_CHAT)
+    vim.api.nvim_buf_set_lines(w.buf, 0, -1, false, freshLines(w.persona))
     w.fresh, w.thoughts, w.session, w.answer, w.index = true, {}, nil, nil, nil
-    w.title('new chat')
+    w.title(w.persona and ('/' .. w.persona.command) or 'new chat')
     w.focusInput()
   end
   vim.keymap.set('n', 'n', newChat, o)
@@ -2139,17 +2184,38 @@ function M.ask(question, range)
   if question then
     if vim.trim(question) == '' then return end
     last = { kind = 'ask', instruction = question }
-    local prompt = ASK_RULES .. '\n\n' .. context(buf, range) .. '\n\nRequest: ' .. question
-    return openAnswer('ask', question, prompt, workdir(buf))
+    local p, rest = persona.split(question)
+    local prompt, ex = chatPrompt(p, context(buf, range), p and rest or question, buf)
+    if ex then ex.persona = p end
+    return openAnswer(p and ('/' .. p.command) or 'ask', question, prompt, ex and ex.cwd or workdir(buf), nil, ex)
   end
   if chat and chat.valid() then
     if chat.visible() and not range then return chat.hide() end
     -- Shown again from here: a new chat in it (n) is about this buffer.
-    chat.ctx, chat.cwd = context(buf, range), workdir(buf)
+    chat.ctx, chat.cwd, chat.srcbuf = context(buf, range), workdir(buf), buf
     chat.show()
     return chat.focusInput()
   end
-  openAnswer('ask', nil, nil, workdir(buf), nil, nil, { ctx = context(buf, range) })
+  openAnswer('ask', nil, nil, workdir(buf), nil, nil, { ctx = context(buf, range), buf = buf })
+end
+
+--- A chat with the persona `name` (/name): its greeting, and the box
+--- waiting for the first question; nothing is asked before it. Again while
+--- that persona's chat is open: hides it or shows it, like <leader>aa.
+function M.chatWith(name)
+  local p = persona.find(name)
+  if not p then
+    return vim.notify(('%s: no persona /%s in %s'):format(modelLabel(), name, persona.dir() or 'the actions folder'),
+      vim.log.levels.WARN)
+  end
+  if chat and chat.valid() and chat.persona and chat.persona.command == p.command then
+    if chat.visible() then return chat.hide() end
+    chat.show()
+    return chat.focusInput()
+  end
+  local buf = vim.api.nvim_get_current_buf()
+  openAnswer('/' .. p.command, nil, nil, workdir(buf), nil, nil,
+    { ctx = context(buf, selection()), persona = p, buf = buf })
 end
 
 local REVIEW = 'Review this code. Point out bugs, risky cases and clear simplifications, each with its line '
@@ -2195,18 +2261,26 @@ function M.write(instruction, range, extra)
   local function go(q)
     if not q or vim.trim(q) == '' then return end
     if not extra.label then last = { kind = 'write', instruction = q } end
+    -- /name: the persona's instructions, context, tools and folders.
+    local p, rest = persona.split(q)
+    local who = ''
+    if p then
+      if rest == '' then return end
+      q, who = rest, persona.prompt(p) .. '\n\n'
+      extra = vim.tbl_extend('force', extra, persona.extra(p, buf))
+    end
     local row = vim.api.nvim_win_get_cursor(0)[1] - 1 -- 0-based
     local first, last_row -- 0-based rows replaced: [first, last_row)
     local prompt
     if range then
       first, last_row = range[1] - 1, range[2]
-      prompt = WRITE_RULES .. '\n\n' .. context(buf, range)
+      prompt = WRITE_RULES .. '\n\n' .. who .. context(buf, range)
         .. '\n\nYour answer REPLACES the selected lines.\n\nRequest: ' .. q
     else
       -- A blank cursor line is filled; otherwise the text goes below it.
       local here = vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1] or ''
       if here:match('^%s*$') then first, last_row = row, row + 1 else first, last_row = row + 1, row + 1 end
-      prompt = WRITE_RULES .. '\n\n' .. header(buf)
+      prompt = WRITE_RULES .. '\n\n' .. who .. header(buf)
         .. ('\n\nThe file, with %s where your answer goes:\n<file>\n%s\n</file>'):format(MARK,
           fileText(buf, { first, MARK }))
       local diag = diagnosticsText(buf)
@@ -2450,6 +2524,9 @@ local function readAction(path)
     model = meta.model ~= '' and meta.model or nil,
     key = meta.key ~= '' and meta.key or nil,
     context = list(meta.context),
+    -- Personas only (see "Personas"): more /names, and the chat's greeting.
+    aliases = list(meta.aliases),
+    greeting = meta.greeting ~= '' and meta.greeting or nil,
     body = vim.trim(table.concat(body, '\n')),
   }
 end
@@ -2477,13 +2554,17 @@ local function extraContext(names)
   return table.concat(parts, '\n\n')
 end
 
---- Every action of the folder, sorted by title (file name).
+--- Every action of the folder, sorted by title (file name). The personas'
+--- folder is not actions: its files are called with /name.
 function M.actions()
   local dir = actionsDir()
   if not dir then return {} end
+  local personas = persona.dir()
+  local skip = personas and (personas:sub(#dir + 2) .. '/'):lower()
   local out = {}
   for name, kind in vim.fs.dir(dir, { depth = 4 }) do
-    if kind == 'file' and name:match('%.md$') then
+    local inPersonas = skip and name:gsub('\\', '/'):lower():sub(1, #skip) == skip
+    if kind == 'file' and name:match('%.md$') and not inPersonas then
       local a = readAction(dir .. '/' .. name)
       if a then table.insert(out, a) end
     end
@@ -2524,6 +2605,96 @@ local function mustConfirm(a, dirs)
   return false
 end
 
+-- -----------------------------------------------------------------------------
+--  Personas: /name
+-- -----------------------------------------------------------------------------
+--  Who answers, apart from what is asked: a persona's instructions, the
+--  context it needs and its tools, called by starting a request with /name:
+--  in the chat (it stays for the follow-ups until another /name), at
+--  <leader>ai, in an action's text or a ```llm block. One markdown file each
+--  in the `Personas` folder of the actions folder (vim.g.pure_llm_personas),
+--  in the actions' format; the file name is the command (job.md: /job) and
+--  `aliases` adds more. M.chatWith(name) opens the chat with one, its
+--  `greeting` shown and the box waiting for the first question.
+--
+--  In an action or a block, a persona brings its instructions and context;
+--  the tools stay the action's or the block's (a block runs on its own, so
+--  it never gets a persona's write permission).
+
+--- The personas' folder, or nil.
+function persona.dir()
+  local dir = actionsDir()
+  if not dir then return nil end
+  local name = (vim.g.pure_llm_personas or 'Personas'):lower()
+  for entry, kind in vim.fs.dir(dir) do
+    if kind == 'directory' and entry:lower() == name then return dir .. '/' .. entry end
+  end
+end
+
+--- Every persona, by command and by alias (lowercase, without the /).
+function persona.all()
+  local dir, out = persona.dir(), {}
+  if not dir then return out end
+  for name, kind in vim.fs.dir(dir) do
+    if kind == 'file' and name:match('%.md$') then
+      local p = readAction(dir .. '/' .. name)
+      if p then
+        p.command = p.name:lower()
+        out[p.command] = p
+        for _, alias in ipairs(p.aliases or {}) do
+          alias = alias:lower():gsub('^/', '')
+          out[alias] = out[alias] or p
+        end
+      end
+    end
+  end
+  return out
+end
+
+function persona.find(name)
+  return persona.all()[((name or ''):lower():gsub('^/', ''))]
+end
+
+--- `text` that starts with /name of a persona: that persona and the rest
+--- of the text. Any other text (a path such as /usr/bin): nil and the text.
+function persona.split(text)
+  local name, rest = (text or ''):match('^%s*/([%w_%-]+)(.*)$')
+  local p = name and persona.find(name)
+  if not p then return nil, text end
+  return p, vim.trim(rest)
+end
+
+--- A persona's part of a prompt: its instructions, then its context.
+--- `canWrite`: whether this request may change files (default: the
+--- persona's own tools; an action's or a block's decide for themselves).
+function persona.prompt(p, canWrite)
+  if canWrite == nil then canWrite = p.writes end
+  local parts = { ('Answer as the persona below (/%s): follow its instructions in this answer and in the '
+    .. 'rest of the conversation.'):format(p.command) }
+  if canWrite then
+    table.insert(parts, 'You may change files in the folders you were given, when the user asks for it or it '
+      .. 'clearly helps; say in your answer which files you changed.')
+  end
+  table.insert(parts, ('<persona name="%s">\n%s\n</persona>'):format(p.command, p.body))
+  if p.context then table.insert(parts, extraContext(p.context)) end
+  return table.concat(parts, '\n\n')
+end
+
+--- The request options a persona brings: tools, model, folders (`dirs`,
+--- the first one also as `cwd`) and, with Edit or Write, write permission.
+function persona.extra(p, buf)
+  local ex = { tools = p.tools, model = p.model, write = p.writes or nil }
+  if p.writes or p.dirs then
+    -- The chat's source buffer may be gone by a follow-up.
+    if not (buf and vim.api.nvim_buf_is_valid(buf)) then buf = vim.api.nvim_get_current_buf() end
+    local dirs = actionDirs(p, buf)
+    ex.cwd, ex.dirs = dirs[1], dirs
+  end
+  return ex
+end
+
+M._persona = persona
+
 --- Run action `a`. `ctx`: { buf, win, range } of where it was started.
 function M.runAction(a, ctx)
   ctx = ctx or { buf = vim.api.nvim_get_current_buf(), win = vim.api.nvim_get_current_win(), range = selection() }
@@ -2534,6 +2705,10 @@ function M.runAction(a, ctx)
 
   local function go(args)
     local body = a.body:gsub('%$ARGUMENTS', function() return args or '' end)
+    -- An action's text may start with /name: that persona's instructions and
+    -- context come first; the tools stay the action's.
+    local p, rest = persona.split(body)
+    if p then body = persona.prompt(p, a.writes) .. '\n\n' .. rest end
     if a.context then body = body .. '\n\n' .. extraContext(a.context) end
     local dirs = actionDirs(a, buf)
     if mustConfirm(a, dirs) then
@@ -2942,9 +3117,12 @@ local function runBlock(buf, block)
   local cwd = vault and vim.uv.fs_stat(vault) and vault or workdir(buf)
   local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
   local shown = (vim.fs.relpath and vim.fs.relpath(cwd, path)) or path
-  local prompt = BLOCK_RULES .. '\n\n'
+  -- /name at the start: that persona's instructions and context (never its
+  -- write permission: a block runs on its own).
+  local p, request = persona.split(block.prompt)
+  local prompt = BLOCK_RULES .. '\n\n' .. (p and (persona.prompt(p, false) .. '\n\n') or '')
     .. ('Note: %s\nToday: %s\n%s\n\n<note>\n%s\n</note>\n\nRequest: %s'):format(shown,
-      os.date('%Y-%m-%d, %A'), vaultHints(), table.concat(lines, '\n'), block.prompt)
+      os.date('%Y-%m-%d, %A'), vaultHints(), table.concat(lines, '\n'), p and request or block.prompt)
 
   local m_label = modelLabel(block.options.model)
   -- With the seconds going (statusMark), as <leader>aa's window shows them.
