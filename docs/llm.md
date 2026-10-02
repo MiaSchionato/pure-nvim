@@ -183,7 +183,7 @@ return M
 |---|---|---|
 | `description` | the name in the list (required) | |
 | `output` | `insert`: into the buffer below the cursor · `replace`: over the selection, or the whole note without one · `window`: the answer window, a chat (follow-ups with `a`); with `Edit` or `Write` in `tools` it may also change files in `dirs` when you ask or it clearly helps, and says which · `notify`: the model works on its own and sends a short summary of what it did as a notification | `notify` when it may change files, else `window` |
-| `tools` | what the model may use: `Read`, `Grep`, `Glob` read; `Edit`, `Write`, `Bash` change files (accepted without asking) | none for insert/replace; reading for window |
+| `tools` | what the model may use: `Read`, `Grep`, `Glob` read; `Edit` (replace a part), `Write` (create or rewrite a file), `Move` (move or rename a file, see below), `Bash` change files (accepted without asking) | none for insert/replace; reading for window |
 | `dirs` | where it may change files: `vault`, `file` (the note's folder), or paths (`~/Downloads`); the first is where it runs | `vault` |
 | `confirm` | `auto`: ask before running only when one of the `dirs` is not in a git repository · `always` · `never` | `auto` |
 | `model` | the model for this action (`haiku`, `sonnet`, `opus`) | the usual one |
@@ -351,7 +351,7 @@ The `:Claude…` names of these commands (`:ClaudeModel`, `:ClaudeActions`,
   (without asking), `false`.
 - **Tools.** Local models get the same tools as Claude in the same request:
   read a file, list files, grep and, only where the request allows it
-  (actions with `Edit` / `Write`), edit and write files. Only inside the
+  (actions with `Edit` / `Write` / `Move`), edit, write and move files. Only inside the
   request's folders, never a file with unsaved changes in Neovim. A model
   that writes its tool call as text (qwen2.5-coder) is understood too; one
   without tool support answers without them. A note read this way has the
@@ -385,6 +385,46 @@ Requests that only read run in agy's default mode, where edits are refused
 (print mode has nobody to approve them); requests that change files use
 `accept-edits`. The prompt goes on stdin as a stream-json event.
 
+## Moving files: `Move`
+
+Claude Code moves files only with `Bash`, which can run anything. `Move` in
+an action's `tools` moves and renames files without it: a tool for local
+models, and for Claude and agy a line `<move from="a.md" to="b/a.md"/>` in
+their answer, which Neovim carries out when the answer is done (the line
+is not shown; "Moved a.md to b/a.md" is). Either way: only inside the
+request's folders, missing folders are made, an existing file is never
+replaced, a file with unsaved changes stays, an open buffer follows its
+file, and links to a moved note are fixed in the vault (as `<leader>vr`
+does). An action to sort the inbox:
+
+```markdown
+---
+description: Organizar o inbox
+output: notify
+tools: Read, Glob, Move
+dirs: vault
+---
+Mova cada nota do 0-Inbox para a pasta certa do vault.
+```
+
+## Private folders: `vim.g.pure_llm_private`
+
+Folders no cloud model (Claude, agy) may see; local models (Ollama) may,
+since nothing leaves the machine. Inside the vault or absolute:
+
+```lua
+vim.g.pure_llm_private = { '6-Private' }
+```
+
+A request to a cloud model is not sent ("…not sent. A local model may do
+it.") when it holds the text of a note from one of them (the chat,
+`<leader>ai`, an action or a block from such a note), or when its folders
+reach one, since its tools could read it there. Claude may still work in the
+vault's root when the vault's `.claude/settings.json` denies
+`Read(<folder>/**)`, which Claude Code enforces itself; agy has nothing like
+it, so it gets no request whose folders reach one. A cloud model's `Move`
+never takes a file into or out of one.
+
 ## What the models know about you: `<leader>au`
 
 A markdown file about you that every request reads, whatever the model:
@@ -410,6 +450,7 @@ vim.g.pure_llm_personas = 'Personas'  -- folder of the personas (/name), in the 
 vim.g.pure_llm_thinking = 'show'      -- 'hide': never show a model's thinking
 vim.g.pure_llm_user_context = nil     -- the user context file (false: none)
 vim.g.pure_llm_memory = true          -- false: models never write to it
+vim.g.pure_llm_private = nil          -- folders no cloud model may see ({ '6-Private' })
 vim.g.pure_ollama_url = 'http://localhost:11434'
 vim.g.pure_ollama_num_ctx = 32768     -- largest context a request may get
 vim.g.pure_ollama_think = false       -- true: models think before answering (slower)
