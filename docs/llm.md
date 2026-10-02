@@ -199,6 +199,54 @@ no actions) writes five into the folder, never over an existing file:
 | Resumir | the note or the selection in topics (`window`) |
 | Nota permanente | the selection becomes its own note in `3-Resources`, replaced by a sentence and its `[[link]]` (`replace`, with `Write`) |
 
+## Personas: `/name`
+
+An action is *what* to do; a persona is *who* answers: its instructions (tone,
+rules, what it knows how to do), the context it needs and its tools. Start
+any request with `/name` and that persona answers it:
+
+- **in the chat** (`<leader>aa`), as the first question or a follow-up:
+  `/job what do I do now?`. It stays for the follow-ups, until another
+  `/name`;
+- **at `<leader>ai`**: `/job summarize this` writes in the persona's voice;
+- **in an action's text** or a **```` ```llm ```` block** starting with
+  `/name`: its instructions and context come first. The tools stay the
+  action's or the block's (a block runs on its own, so it never gets a
+  persona's write permission).
+
+A text starting with something that is not a persona (`/usr/bin`) is left as
+it is.
+
+Each persona is one markdown file in the `Personas` folder of the actions
+folder (`vim.g.pure_llm_personas` for another name), in the actions' format.
+The file name is the command (`job.md`: `/job`); the folder is not listed as
+actions.
+
+```markdown
+---
+description: Work assistant
+aliases: coworker
+greeting: Hi! What are we doing?
+context: todoist, stats.lua
+tools: Read, Glob, Grep, Edit
+dirs: vault
+---
+You are my work assistant. Wait for my question; when I ask what to do,
+propose one small step...
+```
+
+| Key | What |
+|---|---|
+| `description` | what it is (required, as for actions) |
+| `aliases` | more names for it: `coworker, cowork` |
+| `greeting` | shown when a chat opens with it (`chatWith`), without asking the model anything |
+| `context`, `tools`, `dirs`, `model` | as for actions. With `Edit` or `Write` it may change files in `dirs` when you ask or it clearly helps, and says which |
+
+`require('pure.llm').chatWith('job')` opens the chat with a persona: its
+greeting, and the box waiting for your first question (nothing is asked
+before it). Called again while that chat is open, it hides it or shows it,
+like `<leader>aa`. Map it in `keymaps.lua` to give a persona its key.
+
 ## Requests in notes: ```` ```llm ```` blocks
 
 A request that runs on its own, written in a note (```` ```claude ```` blocks, from
@@ -344,6 +392,7 @@ vim.g.pure_llm_model = nil            -- model when none was picked ('ollama:gem
 vim.g.pure_claude_cmd = 'claude'      -- Claude Code command, if not in the PATH
 vim.g.pure_llm_blocks = true          -- false: blocks run only with <leader>ab
 vim.g.pure_llm_actions = 'claude'     -- folder of the actions, in the vault
+vim.g.pure_llm_personas = 'Personas'  -- folder of the personas (/name), in the actions folder
 vim.g.pure_llm_thinking = 'show'      -- 'hide': never show a model's thinking
 vim.g.pure_llm_user_context = nil     -- the user context file (false: none)
 vim.g.pure_llm_memory = true          -- false: models never write to it

@@ -317,6 +317,9 @@ vim.g.pure_llm_blocks = true
 -- Changed: 'AI' (the vault's Claude/ folder was renamed on 2026-10-01).
 vim.g.pure_llm_actions = 'AI'
 
+-- Folder of the personas (/name), inside the actions folder. Default: 'Personas'.
+-- vim.g.pure_llm_personas = 'Personas'
+
 -- A model's thinking: 'show' (dimmed while it thinks, folded after: t in the
 -- chat, <leader>at for <leader>ai) or 'hide'. Default: 'show'.
 vim.g.pure_llm_thinking = 'show'
