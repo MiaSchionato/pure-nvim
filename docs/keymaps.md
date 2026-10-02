@@ -43,6 +43,7 @@ See [llm.md](llm.md).
 | `<leader>am` | n | Select model (Ollama / Claude / agy) |
 | `<leader>ar` | n, x | Repeat the last request |
 | `<leader>as` | n | Stop |
+| `<leader>aq` | n | Quit the AI: stop, unload models, close Ollama |
 | `<leader>at` | n | Thinking of <leader>ai (show / hide) |
 | `<leader>au` | n | User context file (what the LLMs know about you) |
 | `<leader>aw` | n | Weekly note: the week in one place (the vault action `Nota da semana`) |

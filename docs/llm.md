@@ -109,6 +109,7 @@ answer, never change them.
 | `<leader>at` | the thinking of `<leader>ai`: show / hide it while it writes, or open the last one |
 | `<leader>au` | open the user context file (see "What the models know about you") |
 | `<leader>as` | stop everything running |
+| `<leader>aq` | what quitting Neovim does, without quitting: stop everything, unload the Ollama models used here from the GPU, close the Ollama started here (the next local request asks to start it again) |
 | `<leader>ax` | the actions of the vault's `claude` folder (below) |
 | `<leader>ab` | run the ```` ```claude ```` or ```` ```llm ```` block under the cursor (again) |
 
