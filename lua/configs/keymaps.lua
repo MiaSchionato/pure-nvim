@@ -386,6 +386,8 @@ map({ 'n', 'x' }, '<leader>ac', llm('review'), func.getOpts(opts, "Review the co
 map({ 'n', 'x' }, '<leader>ar', llm('repeatLast'), func.getOpts(opts, "Repeat the last request"))
 map('n', '<leader>ah', llm('history'), func.getOpts(opts, "Past answers"))
 map('n', '<leader>as', llm('stop'), func.getOpts(opts, "Stop"))
+-- Frees the GPU without quitting (Improvment.md): what quitting does.
+map('n', '<leader>aq', llm('shutdown'), func.getOpts(opts, "Quit the AI: stop, unload models, close Ollama"))
 map('n', '<leader>am', llm('selectModel'), func.getOpts(opts, "Select model (Ollama / Claude / agy)"))
 map('n', '<leader>at', llm('toggleThinking'), func.getOpts(opts, "Thinking of <leader>ai (show / hide)"))
 -- The file about you that every request reads (outside any git repository).
