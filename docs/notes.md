@@ -8,6 +8,11 @@ vault works in both.
 It works in any markdown buffer (the `:Todoist` list too); the links resolve
 in the vault set with `:ZettelVault`.
 
+Every file of the vault counts, also those its `.gitignore` lists (a
+private folder kept out of git can be linked, completed and searched for
+backlinks); hidden folders (`.obsidian`, `.trash`) do not. The LLM tools
+still honour `.gitignore`, so a model never reads those files.
+
 ## Following links: `<CR>`
 
 `<CR>` in markdown, by what is under the cursor:

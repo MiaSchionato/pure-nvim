@@ -31,6 +31,10 @@ again on every change of the query (a regular expression; case-sensitive
 only if you type a capital letter). The preview shows the match in its file;
 `Enter` opens it at that line and column.
 
+In the vault (`<leader>vf`, `<leader>vg`, `<leader>fv`) the pickers ignore
+the vault's `.gitignore`, so a private folder kept out of git is still
+found. Everywhere else `.gitignore` is honoured (no `node_modules`).
+
 **`vim.ui.select`** – any plugin asking to pick from a list (code actions,
 the template picker…) gets this same fzf window.
 **`vim.ui.input`** – questions get a small floating window (`Enter` answers,

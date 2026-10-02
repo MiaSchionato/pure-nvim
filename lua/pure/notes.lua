@@ -97,9 +97,14 @@ local function indexOf(files)
   return idx
 end
 
+--- Every file of the vault. --no-ignore-vcs (also in the rename and
+--- backlinks searches below): the vault's .gitignore lists the private
+--- folder, which is kept out of git, not out of the vault. Without it its
+--- notes were missing from [[ completion, link resolution and backlinks.
+--- Hidden folders (.obsidian, .trash) are still skipped.
 local function listFiles(root)
   if vim.fn.executable('rg') == 1 then
-    local res = vim.system({ 'rg', '--files', '--path-separator', '/' }, { cwd = root, text = true }):wait()
+    local res = vim.system({ 'rg', '--files', '--no-ignore-vcs', '--path-separator', '/' }, { cwd = root, text = true }):wait()
     if res.code == 0 or (res.stdout or '') ~= '' then
       return vim.split(vim.trim(res.stdout or ''), '\n', { trimempty = true })
     end
@@ -746,8 +751,9 @@ function M.fixLinks(moves, quiet)
   local before = indexOf(old_files)
 
   -- The notes that may hold such a link: those that name one of the moved
-  -- files (ripgrep), and the moved notes themselves.
-  local args = { 'rg', '--files-with-matches', '--ignore-case', '--fixed-strings', '--path-separator', '/',
+  -- files (ripgrep), and the moved notes themselves. Ignoring .gitignore,
+  -- as in listFiles: a private note linking to a moved one is fixed too.
+  local args = { 'rg', '--files-with-matches', '--no-ignore-vcs', '--ignore-case', '--fixed-strings', '--path-separator', '/',
     '-g', '*.md', '-g', '*.canvas' }
   for _, m in ipairs(moves) do
     local stem = stemOf(m.old)
@@ -925,7 +931,7 @@ function M.backlinks()
   if not rel then return vim.notify('Not a note of the vault', vim.log.levels.WARN) end
   local stem = stemOf(rel)
   if vim.fn.executable('rg') == 0 then return vim.notify('Backlinks need ripgrep (rg)', vim.log.levels.WARN) end
-  local res = vim.system({ 'rg', '--line-number', '--no-heading', '--ignore-case', '--fixed-strings',
+  local res = vim.system({ 'rg', '--line-number', '--no-heading', '--no-ignore-vcs', '--ignore-case', '--fixed-strings',
     '--path-separator', '/', '-g', '*.md', '-e', stem, '-e', urlencodeSpaces(stem) }, { cwd = root, text = true }):wait()
   local hits = {}
   for _, l in ipairs(vim.split(res.stdout or '', '\n', { trimempty = true })) do
