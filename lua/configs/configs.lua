@@ -360,8 +360,8 @@ vim.g.pure_ollama_think = false
 vim.g.pure_ollama_autostart = 'ask'
 
 -- Start Ollama in the background when Neovim opens (with a UI), without
--- asking, if it is not running already. Default: false. Changed: true.
-vim.g.pure_ollama_start_with_nvim = true
+-- asking, if it is not running already. Default: false.
+vim.g.pure_ollama_start_with_nvim = false
 
 -- Minutes without any Ollama request after which the models used here are
 -- unloaded from the GPU and the Ollama started here is closed (as <leader>aq
