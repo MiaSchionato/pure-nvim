@@ -49,6 +49,33 @@ local function relTo(root, path)
   return path:sub(#r + 1)
 end
 
+--- Files of the vault used lately, as { [lowercased rel path] = rank },
+--- 0 the most recent: the open buffers (last used first), then Neovim's
+--- recent files (v:oldfiles). Not the current buffer: a note rarely links to
+--- itself. Asked for in Improvment.md, so [[ offers what she was just
+--- working on first; see RECENT_BONUS for how much that weighs once
+--- something is typed.
+local RECENT_BONUS = 40 -- added to the fuzzy score of the most recent match
+local function recentRanks(root)
+  local ranks, n = {}, 0
+  local current = vim.api.nvim_get_current_buf()
+  local function add(path)
+    local rel = path ~= '' and relTo(root, path)
+    if rel and ranks[lower(rel)] == nil and n < 30 then
+      ranks[lower(rel)] = n
+      n = n + 1
+    end
+  end
+  local bufs = vim.tbl_filter(function(b) return b.bufnr ~= current end, vim.fn.getbufinfo({ buflisted = 1 }))
+  table.sort(bufs, function(a, b) return a.lastused > b.lastused end)
+  for _, b in ipairs(bufs) do add(b.name) end
+  local here = vim.api.nvim_buf_get_name(current)
+  for _, f in ipairs(vim.v.oldfiles or {}) do
+    if vim.fs.normalize(f) ~= vim.fs.normalize(here) then add(f) end
+  end
+  return ranks
+end
+
 --- a/b/../c -> a/c, ./x -> x.
 local function collapse(path)
   local out = {}
@@ -572,11 +599,12 @@ function M.omnifunc(findstart, base)
   -- By name: notes first, then folders, then other files.
   local groups = { note = {}, folder = {}, file = {} }
   local by = {}
+  local recent = recentRanks(root)
   for _, f in ipairs(idx.files) do
     local kind = isNote(f) and 'note' or 'file'
     local name = linkName(idx, f)
     if not by[name] then
-      by[name] = { word = name .. close, kind = kind, dir = dirOf(f) }
+      by[name] = { word = name .. close, kind = kind, dir = dirOf(f), rank = recent[lower(f)] }
       table.insert(groups[kind], name)
     end
   end
@@ -590,15 +618,33 @@ function M.omnifunc(findstart, base)
   for _, kind in ipairs({ 'note', 'folder', 'file' }) do
     local names = groups[kind]
     if base ~= '' then
-      names = vim.fn.matchfuzzy(names, base)
+      -- What you type decides: only matches are listed. Among them, the
+      -- recent ones go up by a bonus smaller than a clearly better match.
+      local found = vim.fn.matchfuzzypos(names, base)
+      local score = {}
+      for i, name in ipairs(found[1]) do
+        local rank = by[name].rank
+        score[name] = found[3][i] + (rank and math.max(RECENT_BONUS - rank * 2, 0) or 0)
+      end
+      names = found[1]
+      table.sort(names, function(a, b)
+        if score[a] ~= score[b] then return score[a] > score[b] end
+        return a < b
+      end)
     else
-      table.sort(names)
+      -- Nothing typed yet: the open buffers and recent files first.
+      table.sort(names, function(a, b)
+        local ra, rb = by[a].rank or math.huge, by[b].rank or math.huge
+        if ra ~= rb then return ra < rb end
+        return a < b
+      end)
     end
     for _, name in ipairs(names) do
       if #items >= 200 then break end
       local it = by[name]
+      local where = it.dir ~= '' and it.dir or '/'
       table.insert(items, { word = it.word, abbr = name, kind = it.kind,
-        menu = it.dir ~= '' and it.dir or '/', equal = 1 })
+        menu = it.rank and ('󰋚 ' .. where) or where, equal = 1 })
     end
   end
   return items
