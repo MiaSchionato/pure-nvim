@@ -286,21 +286,65 @@ end
 
 M.pickList = pickList
 
+--- The fd list of `kind` ("file" or "directory") under `path` for fzf,
+--- without what is under a folder starting with "." (.git, .cache,
+--- AppData-like clutter), except .config, until the query itself starts
+--- with ".": then everything, hidden included. Asked for in Improvment.md.
+---
+--- fzf reads one list; switching it needs a reload, done by a `change`
+--- binding that runs a small script (on fzf's sh, Git bash on the windows
+--- branch). It reloads only when the query's first character crosses "."
+--- (the prompt, "> " or ".> ", remembers which list is shown), not on every
+--- key. The commands live in temp files, which keeps the quoting of paths
+--- with spaces out of fzf's own argument.
+--- @return string cmd, function cleanup
+local function dotAwareList(path, kind)
+  local fd = tool("fd", "fdfind")
+  local common = fdExcludes() .. vaultNoIgnore(path) .. " --type " .. kind
+  local base = vim.fn.shellescape(path)
+  local function script(lines)
+    local file = vim.fs.normalize(vim.fn.tempname()) .. ".sh"
+    vim.fn.writefile(lines, file)
+    return file
+  end
+  local normal = script({
+    ("%s %s . --strip-cwd-prefix --base-directory %s"):format(fd, common, base),
+    ("[ -d %s ] && %s --hidden %s . .config --base-directory %s"):format(
+      vim.fn.shellescape(path .. ".config"), fd, common, base),
+    -- A folder list also offers .config itself.
+    kind == "directory" and ("[ -d %s ] && echo .config"):format(vim.fn.shellescape(path .. ".config")) or "",
+    "true",
+  })
+  local hidden = script({ ("%s --hidden %s . --strip-cwd-prefix --base-directory %s"):format(fd, common, base) })
+  local toggle = script({
+    'case "$FZF_QUERY" in',
+    ('  .*) [ "$FZF_PROMPT" = ".> " ] || printf %%s \'change-prompt(.> )+reload(sh "%s")\' ;;'):format(hidden),
+    ('  *) [ "$FZF_PROMPT" = ".> " ] && printf %%s \'change-prompt(> )+reload(sh "%s")\' ;;'):format(normal),
+    'esac',
+    'true',
+  })
+  local cmd = ('sh "%s" | fzf --prompt %s --bind %s'):format(normal, vim.fn.shellescape("> "),
+    vim.fn.shellescape(('change:transform(sh "%s")'):format(toggle)))
+  return cmd, function()
+    for _, f in ipairs({ normal, hidden, toggle }) do os.remove(f) end
+  end
+end
+
 function M.fuzzySearch(path)
   if path == nil then path = vim.uv.os_homedir():gsub("\\", "/") .. "/" end
   path = asDir(path)
-  local fd = tool("fd", "fdfind") .. " --hidden " .. fdExcludes() .. vaultNoIgnore(path) .. " --type file . --strip-cwd-prefix --base-directory  "
-  local fzf = "fzf --keep-right --tiebreak=end"
+  local list, cleanup = dotAwareList(path, "file")
 
   M.fuzzyLogic({
     title = "Fuzzy Search",
     ratio = 0.6,
-    cmd = string.format("%s %s | %s", fd, vim.fn.shellescape(path), fzf),
+    cmd = list .. " --keep-right --tiebreak=end",
     callback = function(selection)
+      cleanup()
       vim.cmd("edit! " .. vim.fn.fnameescape(path .. selection))
       vim.cmd("filetype detect")
-    end
-
+    end,
+    on_cancel = cleanup,
   })
 end
 
@@ -597,13 +641,14 @@ end
 
 function M.NewFile(path)
   path = asDir(path)
-  local fd = tool("fd", "fdfind") .. " --hidden " .. fdExcludes() .. vaultNoIgnore(path) .. " --type directory . --strip-cwd-prefix --base-directory  "
-  local fzf = "fzf --keep-right --tiebreak=end"
+  local list, cleanup = dotAwareList(path, "directory")
   M.fuzzyLogic({
     title = "Select New File Path",
     ratio = 0.6,
-    cmd = string.format("%s %s | %s", fd, vim.fn.shellescape(path), fzf),
+    cmd = list .. " --keep-right --tiebreak=end",
+    on_cancel = cleanup,
     callback = function(selection)
+      cleanup()
       vim.ui.input({prompt = "New file name: "}, function(input)
         if input and input ~= "" then
           vim.cmd("edit! " .. vim.fn.fnameescape(path .. selection .. "/" .. input))
