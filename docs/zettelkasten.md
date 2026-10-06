@@ -83,6 +83,7 @@ by template name (`false` leaves that template's note where it is). Delete
 | MOC | `4-Maps` |
 | Permanent | `3-Zettelkasten/Permanent` |
 | Project | `1-Projects/{{title}}` |
+| Seed | `3-Zettelkasten/Seeds` |
 | VideoIdeas | `2-Areas/Audiovisual/Ideas` |
 
 The note must have a name to be moved (it need not be saved yet); it is
