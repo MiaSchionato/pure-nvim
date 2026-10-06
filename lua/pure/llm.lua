@@ -1180,6 +1180,9 @@ end
 --- an Ollama already running, the tray app's, is left as it is).
 local function startWithNvim()
   if vim.g.pure_ollama_start_with_nvim ~= true or #vim.api.nvim_list_uis() == 0 then return end
+  -- Not installed here (the same config on a machine or a WSL without
+  -- Ollama): nothing to start, and no warning at every start.
+  if vim.fn.exepath('ollama') == '' then return end
   waitOllama(1, function(up)
     if up then return end
     startOllama(function(ok, why)
