@@ -208,7 +208,6 @@ vim.g.pure_quotes = '7-Archive/Periodic/Quotes.md'
 --   MOC        = '4-Maps',
 --   Permanent  = '3-Zettelkasten/Permanent',
 --   Project    = '1-Projects/{{title}}',
---   Tester     = '2-Areas/Audiovisual/YouTube/Tester channel',
 --   VideoIdeas = '2-Areas/Audiovisual/Ideas',
 -- }
 
