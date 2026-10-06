@@ -35,6 +35,13 @@ In the vault (`<leader>vf`, `<leader>vg`, `<leader>fv`) the pickers ignore
 the vault's `.gitignore`, so a private folder kept out of git is still
 found. Everywhere else `.gitignore` is honoured (no `node_modules`).
 
+**Hidden files** (the file search and the folder picker of `<leader>nf`):
+what is under a folder starting with `.` (`.cache`, `.local`…) and dotfiles
+are left out, except `.config`, which is always listed. Start the query with
+`.` and the list switches to everything, hidden included (the prompt
+becomes `.>`); erase the `.` and it switches back. `.git` and
+`vim.g.pure_fuzzy_ignore` stay out either way.
+
 **`vim.ui.select`** – any plugin asking to pick from a list (code actions,
 the template picker…) gets this same fzf window.
 **`vim.ui.input`** – questions get a small floating window (`Enter` answers,
