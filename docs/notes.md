@@ -68,6 +68,12 @@ Typing `[[` lists, as you type and matched loosely (`[[pxt` finds
 - then **attachments** (images, PDFs…), with their extension, as Obsidian
   links them (`![[photo.png]]`).
 
+What you used lately comes first: the open buffers (last used first) and
+Neovim's recent files (`:oldfiles`), marked `󰋚` in the menu. Before you
+type, they head the list; once you type, only matches are listed, and a
+recent one goes up among matches about as good, never above a clearly
+better match. The current note is never offered.
+
 Each item says what it is in the menu (`note`, `folder`, `file`). With a
 path, `[[3-Zettelkasten/`, it lists what is directly in that folder (case
 does not matter), matched by what follows the last `/`. After `[[Note#` it
