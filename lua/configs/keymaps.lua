@@ -305,9 +305,9 @@ map('n', '<leader>ev', explore(dirs.v), func.getOpts(opts, "Explore Obsidian vau
 -- =============================================================================
 --  Find  (<leader>f)
 -- =============================================================================
-map('n', '<leader><leader>', function() fzf.fuzzySearch(file["4p"]()) end,
+map('n', '<leader>ff', function() fzf.fuzzySearch(file["4p"]()) end,
   func.getOpts(opts, "Find files, four levels up"))
-map('n', '<leader>ff', function() fzf.fuzzySearch(file.pp()) end,
+map('n', '<leader><leader>', function() fzf.fuzzySearch(file.pp()) end,
   func.getOpts(opts, "Find files, two levels up"))
 map('n', '<leader>f~', inDir(fzf.fuzzySearch, dirs['~']), func.getOpts(opts, "Find in home"))
 map('n', '<leader>f.', inDir(fzf.fuzzySearch, dirs['.']), func.getOpts(opts, "Find in ~/.config"))
