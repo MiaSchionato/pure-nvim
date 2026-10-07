@@ -42,6 +42,12 @@ are left out, except `.config`, which is always listed. Start the query with
 becomes `.>`); erase the `.` and it switches back. `.git` and
 `vim.g.pure_fuzzy_ignore` stay out either way.
 
+**Symlinked folders** (`~/windows`, `~/D` in WSL): a link sitting directly in
+the folder searched, or in its `.config`, is followed three levels deep, and
+the link itself is offered as a folder. Deeper is left out on purpose: such a
+link can lead to a whole Windows home or a whole drive; open the picker
+inside it (`<leader>nf`, `<leader>fe`) to go further.
+
 **`vim.ui.select`** – any plugin asking to pick from a list (code actions,
 the template picker…) gets this same fzf window.
 **`vim.ui.input`** – questions get a small floating window (`Enter` answers,

@@ -307,12 +307,22 @@ local function dotAwareList(path, kind)
     vim.fn.writefile(lines, file)
     return file
   end
+  -- Symlinked folders (Improvment.md: ~/windows, ~/D, ~/.config/windows in
+  -- WSL) were never listed: fd does not follow links. Following them
+  -- everywhere would walk a whole Windows home or a whole drive, so only a
+  -- link sitting directly in `path` is followed, LINK_DEPTH levels deep, and
+  -- the link itself is offered as a folder. .config follows its links too.
+  local LINK_DEPTH = 3
+  local links = ("(cd %s && for l in * .config/*; do [ -L \"$l\" ] && [ -d \"$l\" ] || continue; %s"
+    .. "%s --follow --max-depth %d %s . \"$l\"; done)"):format(base,
+    kind == "directory" and 'echo "$l"; ' or "", fd, LINK_DEPTH, common)
   local normal = script({
     ("%s %s . --strip-cwd-prefix --base-directory %s"):format(fd, common, base),
     ("[ -d %s ] && %s --hidden %s . .config --base-directory %s"):format(
       vim.fn.shellescape(path .. ".config"), fd, common, base),
     -- A folder list also offers .config itself.
     kind == "directory" and ("[ -d %s ] && echo .config"):format(vim.fn.shellescape(path .. ".config")) or "",
+    links,
     "true",
   })
   local hidden = script({ ("%s --hidden %s . --strip-cwd-prefix --base-directory %s"):format(fd, common, base) })
