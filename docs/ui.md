@@ -91,6 +91,10 @@ default is `NeoSolarized`; when a theme is not installed, `myghtfly` (the
 local one in `colors/`) is used instead. `<leader>ox` makes the background
 transparent. In Neovide the transparency is off (`configs/neovide.lua`).
 
+On startup, once the colorscheme has been applied, the `Normal` background is
+set to `#011627` (nightfly's background) in `configs/autocmds.lua`, whichever
+theme is in use.
+
 ## Toggles (`<leader>o…`)
 
 | Key | Toggles |

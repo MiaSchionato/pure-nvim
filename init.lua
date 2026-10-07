@@ -150,3 +150,4 @@ if #failures > 0 then
       .. table.concat(failures, '\n'), vim.log.levels.ERROR)
   end)
 end
+

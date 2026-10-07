@@ -31,6 +31,9 @@ vim.api.nvim_create_autocmd("VimEnter", {
     end
     -- Disable annoying commenting while coding 
     vim.api.nvim_set_hl(0,"DiagnosticUnnecessary", {})
+
+    -- Apply background color from nightfly
+    vim.api.nvim_set_hl(0,"Normal", {bg='#011627'})
   end
 })
 
