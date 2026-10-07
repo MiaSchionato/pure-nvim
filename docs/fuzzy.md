@@ -12,8 +12,8 @@ split and make fzf quit.)
 
 | Key | Picker | Searches |
 |---|---|---|
-| `<leader>ff` | files | two folders above the current file |
-| `<leader><leader>` | files | four folders above |
+| `<leader>ff` | files | four folders above the current file |
+| `<leader><leader>` | files | two folders above |
 | `<leader>fn` / `f.` / `f~` / `fa` | files | nvim config / `~/.config` / home / the Obsidian vault |
 | `<leader>fg` | **live grep** | two folders above; see below |
 | `<leader>gg` | git grep | the repository of the current file |
