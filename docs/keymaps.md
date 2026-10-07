@@ -13,7 +13,7 @@ Generated from the running config; the source is `lua/configs/keymaps.lua`.
 | `<leader>,` | n | Wider window |
 | `<leader>-` | n | Shorter window |
 | `<leader>.` | n | Narrower window |
-| `<leader><leader>` | n | Find files, four levels up |
+| `<leader><leader>` | n | Find files, two levels up |
 | `<leader>D` | n, x | Delete without yanking |
 | `<leader>E` | n | Explore home |
 | `<leader>h` | n | Toggle word highlight (short form) |
@@ -94,7 +94,7 @@ See [llm.md](llm.md).
 | `<leader>fb` | n | Buffers |
 | `<leader>fc` | n | Colorschemes |
 | `<leader>fe` | n | fzf explorer, current directory |
-| `<leader>ff` | n | Find files, two levels up |
+| `<leader>ff` | n | Find files, four levels up |
 | `<leader>fg` | n | Grep |
 | `<leader>fh` | n | Help tags |
 | `<leader>fj` | n | Jump list |
