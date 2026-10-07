@@ -208,6 +208,7 @@ See [manim.md](manim.md).
 | `<leader>vn` | n | New note (inbox, asks the name only) |
 | `<leader>vr` | n | Rename note, fix links to it |
 | `<leader>vs` | n | Sync the vault (git) |
+| `<leader>vN` | n | New note from a template (born in its folder) |
 | `<leader>vt` | n | Apply a template |
 
 ## `<leader>w` – Tabs, window view
