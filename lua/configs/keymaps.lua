@@ -365,6 +365,7 @@ local function notes(fn)
   return function() require('pure.notes')[fn]() end
 end
 map('n', '<leader>vn', zet.newNote, func.getOpts(opts, "New note (inbox, asks the name only)"))
+map('n', '<leader>vN', zet.newNoteFromTemplate, func.getOpts(opts, "New note from a template (born in its folder)"))
 map('n', '<leader>vt', zet.insertTemplate, func.getOpts(opts, "Apply a template"))
 map('n', '<leader>vd', zet.trashNote, func.getOpts(opts, "Delete note (to the vault's trash)"))
 map('n', '<leader>vr', notes('rename'), func.getOpts(opts, "Rename note, fix links to it"))

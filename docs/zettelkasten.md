@@ -23,6 +23,7 @@ keys (below), the templates, the Todoist sync and the links between notes
 | Key | What |
 |---|---|
 | `<leader>vn` | new note: asks its **name only** and makes it in the inbox (`0-Inbox/`, `vim.g.pure_inbox`); also `<leader>nv` |
+| `<leader>vN` | new note **of a kind**: picks the template first, then the title, and the note is born in that template's folder (Fleeting stays in the inbox) |
 | `<leader>vt` | apply a template (below) |
 | `<leader>vd` | delete the note: asks, saves it, moves it to the vault's trash (`0-Inbox/Trash`, never over a note already there: "Idea 2") and shows the buffer before it |
 | `<leader>vr` | rename the note and fix the links to it ([notes.md](notes.md)) |
@@ -82,15 +83,18 @@ by template name (`false` leaves that template's note where it is). Delete
 | Literature | `3-Zettelkasten/Literature` |
 | MOC | `4-Maps` |
 | Permanent | `3-Zettelkasten/Permanent` |
-| Project | `1-Projects/{{title}}` |
+| Project | `1-Projects/{{choose:Personal|Clients}}/{{title}}` (asks which) |
 | Seed | `3-Zettelkasten/Seeds` |
 | VideoIdeas | `2-Areas/Audiovisual/Ideas` |
 
+**Only a note whose place is not decided is moved**: one in the inbox (or
+below it) or loose in the vault's root. A note anywhere else was put there
+on purpose, so the template only fills it and it **stays where it is**,
+named after the title, with `.md`. The Delete template always moves (it is
+the trash). `{{choose:A|B}}` in a folder asks which one when the note moves.
+
 The note must have a name to be moved (it need not be saved yet); it is
-never moved over an existing note. A note that is **already inside the
-template's folder** – anywhere under `1-Projects` for Project – was put there
-on purpose before the template, so it **stays where it is**; it is only named
-after the title, with `.md`.
+never moved over an existing note.
 
 ## Periodic notes
 

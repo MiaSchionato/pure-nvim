@@ -79,13 +79,15 @@ end
 
 --- Folder each template sends its note to, relative to the vault root.
 --- "{{title}}" is expanded, which is what puts a project in its own folder.
---- A template missing here simply leaves the note where it is.
+--- "{{choose:A|B}}" asks which of them (Project: her projects live in
+--- 1-Projects/Personal and 1-Projects/Clients, and a new one landed beside
+--- those two folders). A template missing here leaves the note where it is.
 local default_destinations = {
   Delete     = '0-Inbox/Trash',
   Literature = '3-Zettelkasten/Literature',
   MOC        = '4-Maps',
   Permanent  = '3-Zettelkasten/Permanent',
-  Project    = '1-Projects/{{title}}',
+  Project    = '1-Projects/{{choose:Personal|Clients}}/{{title}}',
   Seed       = '3-Zettelkasten/Seeds',
   VideoIdeas = '2-Areas/Audiovisual/Ideas',
 }
@@ -839,6 +841,38 @@ local function templateNames(notes_only)
   return files
 end
 
+--- Folder new notes go to (<leader>vn / <leader>nv), relative to the vault.
+--- Added so a new note asks for its name only: every new note starts in the
+--- inbox and a template (<leader>vt) moves it to its place later.
+local function inboxFolder()
+  local folder = vim.g.pure_inbox
+  if folder == nil or folder == '' then folder = '0-Inbox' end
+  return (tostring(folder):gsub('^[/\\]+', ''):gsub('[/\\]+$', ''))
+end
+
+--- Whether `path` is a note whose place is not decided yet: in the inbox
+--- (or below it) or directly in the vault's root.
+--- @param root string
+--- @param path string
+--- @return boolean
+local function undecided(root, path)
+  root, path = vim.fs.normalize(root), vim.fs.normalize(path)
+  return isInside(path, root .. '/' .. inboxFolder()) or pathKey(vim.fs.dirname(path)) == pathKey(root)
+end
+
+--- `folder` with its "{{choose:A|B}}" asked for; `callback(folder)`, or
+--- `callback(nil)` when the pick is cancelled.
+--- @param folder string
+--- @param callback fun(folder: string|nil)
+local function chooseIn(folder, callback)
+  local options = folder:match('{{choose:([^}]*)}}')
+  if not options then return callback(folder) end
+  vim.ui.select(vim.split(options, '|', { plain = true }), { prompt = 'Where' }, function(pick)
+    if not pick then return callback(nil) end
+    callback((folder:gsub('{{choose:[^}]*}}', function() return pick end, 1)))
+  end)
+end
+
 --- Expand the template `selected` ("Project.md") into the current note and
 --- move the note if the template has a destination. A periodic template opens
 --- its own note instead. <leader>nt and a note made from a [[link]] with a
@@ -876,9 +910,19 @@ function M.applyTemplate(selected)
     end
 
     local folder = destinations[name]
-    if folder then
-      moveCurrentFile(folder, title)
+    if not folder then return end
+    -- Only a note still in the inbox (or loose in the vault's root) is
+    -- moved: anywhere else she already chose its place, so the template
+    -- just fills it and it stays, named after the title. Agreed with her in
+    -- Improvment.md (2026-10-06). Delete is the exception: it is the trash.
+    local root, path = vaultPath(), vim.api.nvim_buf_get_name(0)
+    if root and path ~= '' and name ~= 'Delete' and not undecided(root, path) then
+      local here = vim.fs.dirname(vim.fs.normalize(path)):sub(#vim.fs.normalize(root) + 2)
+      return moveCurrentFile(here, title)
     end
+    chooseIn(folder, function(chosen)
+      if chosen then moveCurrentFile(chosen, title) end
+    end)
   end)
 end
 
@@ -901,15 +945,6 @@ function M.pickTemplate(callback)
   vim.ui.select(files, { prompt = 'Template' }, callback)
 end
 
---- Folder new notes go to (<leader>vn / <leader>nv), relative to the vault.
---- Added so a new note asks for its name only: every new note starts in the
---- inbox and a template (<leader>vt) moves it to its place later.
-local function inboxFolder()
-  local folder = vim.g.pure_inbox
-  if folder == nil or folder == '' then folder = '0-Inbox' end
-  return (tostring(folder):gsub('^[/\\]+', ''):gsub('[/\\]+$', ''))
-end
-
 --- A new note in the vault's inbox: asks for its name only, never the path.
 --- An existing note of that name is opened instead of overwritten.
 function M.newNote()
@@ -928,6 +963,39 @@ function M.newNote()
     -- so <leader>vt asks for one later (see isGeneratedName).
     if name == '' then name = M.noteId('Untitled', dir) end
     vim.cmd('edit ' .. vim.fn.fnameescape(dir .. '/' .. name .. '.md'))
+  end)
+end
+
+--- A new note of a known kind (<leader>vN): the template first, then the
+--- title, and the note is born where the template puts it (a template with
+--- no destination, Fleeting, leaves it in the inbox). The second way in,
+--- next to <leader>vn's capture that asks nothing but a name: for when she
+--- already knows what she is writing (Improvment.md, 2026-10-06).
+---
+--- Made in the inbox and then applyTemplate, so it is the same path as
+--- <leader>vt on a captured note: same title, same move, same {{choose}}.
+function M.newNoteFromTemplate()
+  local root = vaultPath()
+  if not root then
+    vim.notify('No Obsidian vault set: run :ZettelVault', vim.log.levels.WARN)
+    return M.setVault()
+  end
+  local files = templateNames(true)
+  if not files then return end
+  -- Delete is the trash gesture, not a kind of note.
+  files = vim.tbl_filter(function(f) return f ~= 'Delete.md' end, files)
+  vim.ui.select(files, { prompt = 'New note from template' }, function(selected)
+    if not selected then return end
+    vim.ui.input({ prompt = 'Title: ' }, function(input)
+      if input == nil then return end -- cancelled
+      local dir = root .. '/' .. inboxFolder()
+      vim.fn.mkdir(dir, 'p')
+      -- An empty title gets the generated name, and applyTemplate asks again.
+      local title = safeName((input:gsub('%.md$', '')))
+      local name = M.noteId(title ~= '' and title or 'Untitled', dir)
+      vim.cmd('edit ' .. vim.fn.fnameescape(dir .. '/' .. name .. '.md'))
+      M.applyTemplate(selected)
+    end)
   end)
 end
 
