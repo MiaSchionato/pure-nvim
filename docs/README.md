@@ -91,6 +91,7 @@ where to change them.
 |---|---|---|
 | `vim.g.pure_vault` | asked on first start | [zettelkasten](zettelkasten.md) |
 | `vim.g.pure_templates` | `'Templates'` | [zettelkasten](zettelkasten.md) |
+| `vim.g.pure_folder_templates` | `{}` | [notes](notes.md) |
 | `vim.g.pure_templates_locale` | `'en'` | [zettelkasten](zettelkasten.md) |
 | `vim.g.pure_trash_cleanup` | off (`true` in configs.lua) | [zettelkasten](zettelkasten.md) |
 | `vim.g.pure_daily_on_start` | off (`true` in configs.lua) | [zettelkasten](zettelkasten.md) |

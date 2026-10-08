@@ -175,6 +175,12 @@ o.maxmempattern = 20000     -- memory (KB) a search pattern may use
 -- Folder of the templates, inside the vault. Default: 'Templates'.
 vim.g.pure_templates = 'Templates'
 
+-- Folders whose new notes are born with a template: a link to a note that
+-- does not exist yet, created there (Yes), gets it at once. Folder inside
+-- the vault = template name; a template not in the templates folder yet is
+-- skipped. Default: {}. Changed: the diary, linked from the daily note.
+vim.g.pure_folder_templates = { ['6-Private/Diary'] = 'Diary' }
+
 -- Language of day and month names in template dates: 'en' (default) or 'pt'.
 vim.g.pure_templates_locale = 'en'
 
