@@ -14,6 +14,7 @@ window to the bottom, so no `~` shows under the drawing.
 | `d` | today's daily note, created from the template if it is not there yet ([zettelkasten](zettelkasten.md)) |
 | `l` | the last note of the vault that was open, at the line where it was left (else the last file Neovim was closed on, `'0`) |
 | `n` | new empty buffer |
+| `v` | new note in the vault's inbox, asking only its name (same as `<leader>vn`) |
 | `q` | quit; in a tab while others are open, close just that tab |
 | `u` | update: the configuration's repository, then the plugins (below) |
 
