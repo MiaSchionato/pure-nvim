@@ -207,6 +207,8 @@ function M.drawDashboard()
   vim.keymap.set('n', 'd', function() require('pure.zettelkasten').openDaily() end, opts)
   vim.keymap.set('n', 'l', M.lastNote, opts)
   vim.keymap.set('n', 'n', ':enew<CR>', opts)
+  -- A note in the vault's inbox, asking only its name (like <leader>vn).
+  vim.keymap.set('n', 'v', function() require('pure.zettelkasten').newNote() end, opts)
   -- In a tab of its own, q closes that tab; from the last one it quits.
   vim.keymap.set('n', 'q', function()
     vim.cmd(#vim.api.nvim_list_tabpages() > 1 and 'tabclose' or 'qa')
