@@ -181,7 +181,9 @@ opens it too. Other tasks keep the usual form, their text as the link.
 task with subtasks starts folded to its own line (the fold shows just the
 task, without the link, date or project). `zz` (or `<leader>zz`) opens one,
 `<leader>za` opens all. It happens once per window, so a fold you opened
-stays open when a sync rewrites the list.
+stays open when a sync rewrites the list. It waits up to 3 s for the
+treesitter folds (parsed in the background); if they are still not there,
+the next time the note is shown tries again.
 
 ```lua
 vim.g.pure_todoist_fold = 'subtasks'  -- default
