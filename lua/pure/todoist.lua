@@ -1903,7 +1903,11 @@ vim.api.nvim_create_autocmd('BufWinEnter', {
     local seen = vim.w[win].pure_todoist_folded or {}
     if seen[tostring(buf)] then return end
     -- The treesitter folds are computed after the window shows the buffer:
-    -- wait for them (a few tries) before closing.
+    -- wait for them before closing. Up to 3 s: Neovim parses in the
+    -- background, and a big note on a busy machine took longer than the
+    -- 0.5 s it used to wait. Never ready: what can be closed is, but the
+    -- note is not marked as done, so the next time it is shown tries again
+    -- (it used to be marked, and the list then stayed open, Improvment.md).
     local tries = 0
     local function attempt()
       if not (vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_buf(win) == buf) then return end
@@ -1920,8 +1924,9 @@ vim.api.nvim_create_autocmd('BufWinEnter', {
       end
       if not has then return end
       tries = tries + 1
-      if not ready and tries < 10 then return vim.defer_fn(attempt, 50) end
+      if not ready and tries < 60 then return vim.defer_fn(attempt, 50) end
       closeListFolds(win, buf)
+      if not ready then return end
       seen[tostring(buf)] = true
       vim.w[win].pure_todoist_folded = seen
     end
