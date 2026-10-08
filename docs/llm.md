@@ -95,6 +95,12 @@ In the answer:
 | `Esc` | hide the chat (its key shows it again: `<leader>aa`, or a persona's, see "Personas") |
 | `q` | close it for good (stops an answer still coming) |
 
+A request that ends in an error, or is stopped (`<leader>as`), frees the
+chat like an answer does: `n` starts a new chat, and the box asks again
+(the first question failed: a new conversation) or follows up again (a
+follow-up failed: the same conversation). Only a request still running
+makes it say "wait for the answer first".
+
 Here the model may read other files of the project (Read, Grep, Glob) to
 answer, never change them.
 

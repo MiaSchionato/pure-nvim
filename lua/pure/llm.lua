@@ -2188,6 +2188,10 @@ local function askInto(w, question, prompt, opts)
   setState('thinking…')
   local extra = opts.extra or {}
   local m_label = modelLabel(extra.model)
+  -- Busy from here until on_done, whatever the outcome: an error or a stop
+  -- (<leader>as) ends the request too. "Waiting" used to mean "no answer
+  -- yet", so after an error the chat waited for good (Improvment.md).
+  w.busy = true
   local stop = run({
     prompt = prompt,
     tools = extra.tools or READ_TOOLS,
@@ -2211,12 +2215,22 @@ local function askInto(w, question, prompt, opts)
     end,
     on_done = function(err, text, session, usage)
       stopTimer()
+      w.busy = false
       if err then
+        -- <leader>as (M.stop) stops the process itself, not through w.stop:
+        -- the backends then end with 'stopped'.
+        stopped = stopped or err == 'stopped'
         if not stopped then
           w.append('\n\n> **Error:** ' .. err:gsub('\n', '\n> ') .. '\n')
           if not w.valid() then vim.notify(m_label .. ': ' .. err, vim.log.levels.ERROR) end
         end
-        w.title((stopped and 'stopped' or 'error') .. ' ' .. elapsed(true))
+        -- With a conversation (a follow-up failed), the box follows up on it
+        -- again; without one, it asks anew (see send).
+        w.title((stopped and 'stopped' or 'error') .. ' ' .. elapsed(true)
+          .. (w.session and ' · a: follow up again' or ' · a: ask again') .. ', n: new chat, q: close')
+        if w.boxTitle and w.input and w.input.win and vim.api.nvim_win_is_valid(w.input.win) then
+          pcall(vim.api.nvim_win_set_config, w.input.win, { title = w.boxTitle() })
+        end
         return
       end
       if th then th.answer(elapsed()) end
@@ -2298,7 +2312,7 @@ local function openAnswer(kind, question, prompt, cwd, preset, extra, fresh)
 
   local o = { buffer = w.buf, nowait = true, silent = true }
   local m_label = modelLabel(extra and extra.model)
-  local function running() return w.stop ~= nil and w.answer == nil and not w.fresh end
+  local function running() return w.busy == true end
 
   vim.keymap.set('n', 'y', function()
     if not w.answer then return end
@@ -2322,13 +2336,16 @@ local function openAnswer(kind, question, prompt, cwd, preset, extra, fresh)
       if vim.fn.strchars(w.quote) > 40 then shown = shown .. '…' end
       return (' Reply to «%s» · Enter: send · Esc: to the answer '):format(shown)
     end
-    return w.fresh and ' Ask · Enter: send · Esc: to the answer ' or ' Follow up · Enter: send · Esc: to the answer '
+    -- No conversation yet (a first question failed or was stopped): Enter
+    -- asks anew, as in a fresh chat.
+    local ask = w.fresh or (not w.session and not running())
+    return ask and ' Ask · Enter: send · Esc: to the answer ' or ' Follow up · Enter: send · Esc: to the answer '
   end
   w.boxTitle = boxTitle
 
   local function followUp(q)
     if not q or vim.trim(q) == '' or not w.valid() then return end
-    if not w.session then return vim.notify(m_label .. ': wait for the answer first') end
+    if not w.session then return vim.notify(m_label .. ': no conversation to follow up') end
     -- A part of the answer replied to (r): shown above the question, and
     -- sent with it.
     local quoted = w.quote and ('> ' .. w.quote:gsub('\n', '\n> ')) or nil
@@ -2364,7 +2381,8 @@ local function openAnswer(kind, question, prompt, cwd, preset, extra, fresh)
     end
     text = vim.trim(text)
     if text == '' then return end
-    if w.fresh or not w.session then return vim.notify(m_label .. ': wait for the answer first') end
+    if running() then return vim.notify(m_label .. ': wait for the answer first') end
+    if w.fresh or not w.session then return vim.notify(m_label .. ': no answer to reply to') end
     w.quote = text
     if w.input.win and vim.api.nvim_win_is_valid(w.input.win) then
       pcall(vim.api.nvim_win_set_config, w.input.win, { title = boxTitle() })
@@ -2473,9 +2491,11 @@ local function openAnswer(kind, question, prompt, cwd, preset, extra, fresh)
   local function send()
     local q = vim.trim(vim.api.nvim_buf_get_lines(ibuf, 0, 1, false)[1] or '')
     if q == '' then return end
-    if not w.fresh and not w.session then return vim.notify(m_label .. ': wait for the answer first') end
+    if running() then return vim.notify(m_label .. ': wait for the answer first') end
     vim.api.nvim_buf_set_lines(ibuf, 0, -1, false, { '' })
-    if w.fresh then startChat(q) else followUp(q) end
+    -- No conversation to follow up (the first question failed or was
+    -- stopped): a new one, as if the chat were fresh.
+    if w.fresh or not w.session then startChat(q) else followUp(q) end
     if w.input.win and vim.api.nvim_win_is_valid(w.input.win) then
       pcall(vim.api.nvim_win_set_config, w.input.win, { title = boxTitle() })
     end
