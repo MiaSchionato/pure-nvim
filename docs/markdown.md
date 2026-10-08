@@ -50,6 +50,11 @@ For every markdown buffer: `textwidth` 110, spell checking in the languages
 whose word lists are installed (pt_br, en, it; `vim.g.pure_spelllang`),
 suggestions ranked across them, conceal on.
 
+The automatic line break while typing never splits a `[[wikilink]]` (a link
+over two lines is no link, in Obsidian either): the line breaks before the
+link instead, and a link too long for that stays whole on a longer line.
+`gq` is Vim's own formatting.
+
 Treesitter parses markdown synchronously (`vim.g._ts_force_sync_parsing`,
 only while a markdown buffer is current): parsing in the background, as
 Neovim does once a parse takes over 3 ms, let `**bold**` and `` `code` ``
