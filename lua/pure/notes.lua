@@ -374,10 +374,32 @@ local function askFolder(from)
   return input
 end
 
+--- The template a new note in vault folder `rel` is born with
+--- (vim.g.pure_folder_templates: folder = template name; the deepest folder
+--- listed that holds `rel` wins), as its file name, or nil. A template that
+--- is not in the templates folder (yet) counts as none.
+local function folderTemplate(rel)
+  local best, best_len
+  for folder, name in pairs(vim.g.pure_folder_templates or {}) do
+    local f = (folder:gsub('\\', '/'):gsub('^/+', ''):gsub('/+$', ''))
+    local inside = rel == f or rel:sub(1, #f + 1) == f .. '/'
+    if vim.fn.has('win32') == 1 then
+      inside = rel:lower() == f:lower() or rel:lower():sub(1, #f + 1) == f:lower() .. '/'
+    end
+    if inside and (not best_len or #f > best_len) then best, best_len = name, #f end
+  end
+  if not best then return nil end
+  local file = best:gsub('%.md$', '') .. '.md'
+  local dir = zet().templatesPath()
+  return dir and vim.fn.filereadable(dir .. '/' .. file) == 1 and file or nil
+end
+
 --- Create the note a link names, after asking; then open it.
 ---
 ---   Yes                in the folder for new notes (Obsidian's setting), or
----                      the one the link names ([[Projects/New]])
+---                      the one the link names ([[Projects/New]]); a folder
+---                      with a template of its own (folderTemplate: the
+---                      diary's) fills the note with it
 ---   With a template    the same, then the template is applied as <leader>nt
 ---                      applies it, moves included: the Project template
 ---                      sends the note to 1-Projects/<title>/
@@ -391,7 +413,9 @@ local function create(root, link, from)
   local folder, title = target:match('^(.*)/([^/]*)$')
   if not folder then folder, title = newNoteFolder(root, from), target end
   title = title:gsub('%.md$', '')
-  local choice = vim.fn.confirm(('Create the note "%s"?'):format(title),
+  local own = folderTemplate(folder)
+  local choice = vim.fn.confirm(('Create the note "%s"%s?'):format(title,
+    own and (' (template ' .. own:gsub('%.md$', '') .. ')') or ''),
     '&Yes\nWith a &template\nIn another &folder\n&Cancel', 1)
 
   local function make(rel)
@@ -402,9 +426,15 @@ local function create(root, link, from)
     invalidate()
     vim.cmd('edit ' .. vim.fn.fnameescape(path))
   end
+  --- make(), then the folder's own template, if it has one.
+  local function makeFilled(rel)
+    make(rel)
+    local tpl = folderTemplate(rel)
+    if tpl then zet().applyTemplate(tpl) end
+  end
 
   if choice == 1 then
-    make(folder)
+    makeFilled(folder)
   elseif choice == 2 then
     zet().pickTemplate(function(selected)
       if not selected then return end
@@ -414,7 +444,7 @@ local function create(root, link, from)
     end)
   elseif choice == 3 then
     local chosen = askFolder(from)
-    if chosen then make(chosen) end
+    if chosen then makeFilled(chosen) end
   end
 end
 

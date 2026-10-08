@@ -57,6 +57,13 @@ is picked, so cancelling leaves nothing behind. **In another folder** asks
 for a folder of the vault, with completion, starting from the current
 note's own, and makes it if it does not exist.
 
+A folder can have a template of its own (`vim.g.pure_folder_templates`,
+folder inside the vault = template name): a note made there by **Yes** or
+**In another folder** is filled with it at once, and the question says so
+(`Create the note "2026-10-08, qui" (template Diary)?`). Here the diary,
+`6-Private/Diary`, linked from the daily note. A template missing from the
+templates folder is skipped.
+
 ## Completing links: `[[`
 
 Typing `[[` lists, as you type and matched loosely (`[[pxt` finds
