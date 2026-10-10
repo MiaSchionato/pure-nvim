@@ -2230,6 +2230,16 @@ end
 function M.act(a, refs)
   refs = refs or {}
   local function blank(v) return not v or vim.trim(v) == '' end
+  -- An ID the model was not given (made up: "ID_XXX") is refused, when the
+  -- caller says which it was given (refs._known)
+  local function unknown(id)
+    return refs._known and not refs._known[id] and not vim.tbl_contains(vim.tbl_values(refs), id)
+  end
+  for _, key in ipairs({ 'update', 'complete' }) do
+    if not blank(a[key]) and unknown(a[key]) then
+      return ('Todoist: %s %s skipped, not an open task'):format(key, a[key])
+    end
+  end
   local body = {}
   if not blank(a.due) then body.due_string = a.due end
   local p = tonumber((a.priority or ''):match('[1-4]'))
@@ -2237,10 +2247,16 @@ function M.act(a, refs)
   if not blank(a.description) then body.description = a.description end
 
   local parent = not blank(a.parent) and (refs[a.parent] or a.parent) or nil
+  if parent and unknown(parent) then
+    return ('Todoist: parent %s is not an open task nor a ref, skipped "%s"'):format(a.parent, a.add or a.update or '')
+  end
   local path, what
   if not blank(a.add) then
     -- A content too means the text (a model may write add="task" content="…")
     path, what, body.content = '/tasks', 'added', blank(a.content) and a.add or a.content
+    if refs._skip and refs._skip[vim.trim(body.content):lower()] then
+      return ('Todoist: skipped "%s", done or a legend in the note'):format(body.content)
+    end
     -- A subtask is in its parent's project
     if parent then
       body.parent_id, what = parent, 'added subtask'
@@ -2271,6 +2287,37 @@ function M.act(a, refs)
   if err then return 'Todoist: ' .. err end
   if not blank(a.ref) and data and data.id then refs[a.ref] = data.id end
   return ('Todoist: %s "%s"'):format(what, (data and data.content) or a.add or a.content or a.complete or a.update)
+end
+
+--- The task lines of a note, for the Todoist tool (llm.lua): without the
+--- regions Neovim writes (<!-- name --> … <!-- /name -->: the Todoist lists,
+--- the calendar, answers), code blocks, and a status legend (a task named
+--- "legend"/"legenda" with the states under it), which a small model took
+--- for tasks to add. Also the texts never to add (lowercased): the legend's
+--- and the done ([x]) tasks', which a model added anyway, the whole note
+--- being in its context too (act refuses them, refs._skip).
+--- @return string, table<string, true>
+function M.noteTasks(lines)
+  local out, skip, region, fence, legend = {}, {}, nil, false, nil
+  for _, line in ipairs(lines) do
+    local indent = #line:match('^%s*')
+    local box, text = line:match('^%s*[-*+] %[(.)%]%s*(.-)%s*$')
+    if line:match('^%s*```') then
+      fence = not fence
+    elseif region then
+      if line:match('^%s*<!%-%- /' .. vim.pesc(region) .. ' %-%->') then region = nil end
+    elseif line:match('^%s*<!%-%- ([%w_-]+) %-%->%s*$') then
+      region = line:match('^%s*<!%-%- ([%w_-]+) %-%->')
+    elseif not fence and box then
+      if legend and indent <= legend then legend = nil end
+      if not legend and text:lower():match('legend') then legend = indent end
+      if legend or box:lower() == 'x' then skip[text:lower()] = true end
+      if not legend then table.insert(out, line) end
+    elseif line:match('%S') and legend and indent <= legend then
+      legend = nil
+    end
+  end
+  return #out > 0 and table.concat(out, '\n') or '(none)', skip
 end
 
 -- For tests.
