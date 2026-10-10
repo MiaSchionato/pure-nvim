@@ -56,7 +56,9 @@
 --  requests the model can read the vault (Read, Grep, Glob), never write to it.
 --
 --  Settings: the "LLMs" section of configs/configs.lua (vim.g.pure_llm_*,
---  vim.g.pure_ollama_*, vim.g.pure_claude_cmd for the claude command).
+--  vim.g.pure_ollama_*, vim.g.pure_claude_cmd for the claude command;
+--  vim.g.pure_ollama_cmd for ollama, else `ollama`, else Windows' ollama.exe
+--  from WSL).
 -- =============================================================================
 
 local M = {}
@@ -1020,6 +1022,17 @@ local touchOllama     -- the idle countdown, defined with it below
 
 local function ollamaUrl() return vim.g.pure_ollama_url or 'http://localhost:11434' end
 
+--- The ollama command: vim.g.pure_ollama_cmd, or `ollama`, or else Windows'
+--- `ollama.exe`, which WSL runs through its interop (mirrored networking
+--- shares localhost, so it answers at the same URL). '' when none.
+local function ollamaExe()
+  for _, name in ipairs({ vim.g.pure_ollama_cmd or 'ollama', 'ollama.exe' }) do
+    local exe = vim.fn.exepath(name)
+    if exe ~= '' then return exe end
+  end
+  return ''
+end
+
 --- `cb(true)` once Ollama answers at its URL, polling up to `tries` times
 --- half a second apart; `cb(false)` if it never does.
 local function waitOllama(tries, cb)
@@ -1042,8 +1055,8 @@ local function startOllama(cb, force)
   if not ollamaUrl():match('^https?://localhost[:/]') and not ollamaUrl():match('^https?://127%.0%.0%.1[:/]') then
     return cb(false) -- an Ollama on another machine is not ours to start
   end
-  local exe = vim.fn.exepath('ollama')
-  if exe == '' then return cb(false, 'the `ollama` command is not in the PATH') end
+  local exe = ollamaExe()
+  if exe == '' then return cb(false, 'neither `ollama` nor `ollama.exe` is in the PATH (vim.g.pure_ollama_cmd)') end
   if ollama_server then return waitOllama(40, cb) end -- starting already
   if setting == 'ask' and vim.fn.confirm('Ollama is not running. Start it now (it stops when Neovim quits)?',
       '&Yes\n&No', 1) ~= 1 then
@@ -1123,6 +1136,11 @@ local function ollamaOff()
   if ollama_server and ollama_server.pid then
     if vim.fn.has('win32') == 1 then
       pcall(function() vim.system({ 'taskkill', '/T', '/F', '/PID', tostring(ollama_server.pid) }):wait(3000) end)
+    elseif ollamaExe():match('%.exe$') then
+      -- Windows' ollama.exe from WSL: the pid is WSL's side of the interop;
+      -- ending it leaves the Windows process. Started here only when no
+      -- Ollama was running, so every ollama.exe is this one's.
+      pcall(function() vim.system({ 'taskkill.exe', '/T', '/F', '/IM', 'ollama.exe' }):wait(3000) end)
     else
       pcall(function() ollama_server:kill(15) end)
     end
@@ -1182,7 +1200,7 @@ local function startWithNvim()
   if vim.g.pure_ollama_start_with_nvim ~= true or #vim.api.nvim_list_uis() == 0 then return end
   -- Not installed here (the same config on a machine or a WSL without
   -- Ollama): nothing to start, and no warning at every start.
-  if vim.fn.exepath('ollama') == '' then return end
+  if ollamaExe() == '' then return end
   waitOllama(1, function(up)
     if up then return end
     startOllama(function(ok, why)
