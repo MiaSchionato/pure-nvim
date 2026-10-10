@@ -214,8 +214,8 @@ are cached for 5 minutes; `:TodoistRefresh` reloads them.
 ## For the LLM actions: `tools: Todoist`
 
 An action with `Todoist` in its tools changes Todoist through `M.act`: the
-model answers with `<todoist add=…/>`, `<todoist update=ID …/>` and
-`<todoist complete=ID/>` lines, given every open task with its id
+model answers with `<todoist add=…/>` (a subtask with `parent=`),
+`<todoist update=ID …/>` and `<todoist complete=ID/>` lines, given every open task with its id
 (`M.text('all', true)`). See [llm](llm.md#actions-leaderax).
 
 ## For the LLM actions: `context: todoist`
