@@ -18,6 +18,11 @@ precedence:
 keys (below), the templates, the Todoist sync and the links between notes
 ([notes.md](notes.md)), which all follow a change at once.
 
+A vault that is not an absolute path to an existing folder counts as not set:
+nothing is created inside it. That covers a vault not cloned yet, and a path
+from another system (`C:/...` is relative on Linux, so the `mkdir -p` calls
+used to build it under the current directory).
+
 ## The vault's keys: `<leader>v`
 
 | Key | What |

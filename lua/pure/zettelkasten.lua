@@ -281,9 +281,10 @@ local function formatMoment(fmt, time)
   return table.concat(out)
 end
 
---- Configured vault path, or nil when it has never been answered.
+--- Configured vault path, or nil when it has never been answered. The folder
+--- may not exist (yet).
 --- @return string|nil
-local function vaultPath()
+local function configuredVault()
   local configured = vim.g.pure_vault
   if configured and configured ~= '' then
     return vim.fs.normalize(vim.fn.expand(configured))
@@ -302,6 +303,20 @@ local function vaultPath()
   return saved ~= '' and vim.fs.normalize(vim.fn.expand(saved)) or nil
 end
 
+--- The vault path, or nil when it is unanswered or not a folder that exists.
+--- Everything that writes into the vault goes through this: a vault that is
+--- missing (not cloned yet) or a path from another system (C:/... on Linux is
+--- relative) would otherwise get its folders created from the current
+--- directory by the mkdir -p calls.
+--- @return string|nil
+local function vaultPath()
+  local root = configuredVault()
+  if root and vim.fn.isabsolutepath(root) == 1 and vim.fn.isdirectory(root) == 1 then
+    return root
+  end
+  return nil
+end
+
 local function templatesPath()
   local root = vaultPath()
   return root and (root .. '/' .. (vim.g.pure_templates or 'Templates')) or nil
@@ -315,7 +330,7 @@ end
 function M.setVault()
   local ok, input = pcall(vim.fn.input, {
     prompt = 'Obsidian vault folder (empty to cancel): ',
-    default = vaultPath() or vim.fn.expand('~/'),
+    default = configuredVault() or vim.fn.expand('~/'),
     completion = 'dir',
   })
   input = ok and vim.trim(input or '') or ''
@@ -357,7 +372,7 @@ end
 --- Declining writes a marker so the question is not repeated; :ZettelVault
 --- still works afterwards.
 function M.maybeAskVault()
-  if vaultPath() or vim.uv.fs_stat(no_prompt_file) or #vim.api.nvim_list_uis() == 0 then
+  if configuredVault() or vim.uv.fs_stat(no_prompt_file) or #vim.api.nvim_list_uis() == 0 then
     return
   end
   vim.schedule(function()
