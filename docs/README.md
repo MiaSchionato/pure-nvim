@@ -106,6 +106,7 @@ where to change them.
 | `vim.g.pure_calendar_sync` | `{ interval = 15 }` | [calendar](calendar.md) |
 | `vim.g.pure_llm_model` | `'claude:default'` (a pick with `<leader>am` wins) | [llm](llm.md) |
 | `vim.g.pure_claude_cmd` | `'claude'` | [llm](llm.md) |
+| `vim.g.pure_ollama_cmd` | `'ollama'`, else `ollama.exe` | [llm](llm.md) |
 | `vim.g.pure_llm_actions` | `'claude'` (folder of the vault) | [llm](llm.md) |
 | `vim.g.pure_llm_blocks` | on | [llm](llm.md) |
 | `vim.g.pure_manim_cmd` | `'manim'` | [manim](manim.md) |

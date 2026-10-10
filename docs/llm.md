@@ -482,6 +482,8 @@ All in `lua/configs/configs.lua`, section "LLMs":
 ```lua
 vim.g.pure_llm_model = nil            -- model when none was picked ('ollama:gemma4:e4b', 'sonnet', 'agy:')
 vim.g.pure_claude_cmd = 'claude'      -- Claude Code command, if not in the PATH
+vim.g.pure_ollama_cmd = 'ollama'      -- ollama command; without one, `ollama`, else Windows'
+                                      -- ollama.exe (from WSL: the Windows Ollama is used)
 vim.g.pure_llm_blocks = true          -- false: blocks run only with <leader>ab
 vim.g.pure_llm_actions = 'claude'     -- folder of the actions, in the vault
 vim.g.pure_llm_personas = 'Personas'  -- folder of the personas (/name), in the actions folder
