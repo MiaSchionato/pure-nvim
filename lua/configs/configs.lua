@@ -225,10 +225,13 @@ vim.g.pure_quotes = '7-Archive/Periodic/Quotes.md'
 -- Default: false. Changed: true.
 vim.g.pure_trash_cleanup = true
 
--- Make today's daily note (from the Daily template) each time Neovim starts,
--- without opening it, so it is there before it is first opened. false: only
--- when it is opened (d on the dashboard). Default: false. Changed: true.
-vim.g.pure_daily_on_start = true
+-- Make the current periodic notes (from their templates) each time Neovim
+-- starts, without opening them, so they are there before they are first
+-- opened: today's daily, this week's, this month's (the current one, so a
+-- week whose Monday Neovim was not opened still gets its note). Periods
+-- left out are made only when opened. (vim.g.pure_daily_on_start = true, the
+-- older option, makes the daily alone.) Default: none. Changed: all three.
+vim.g.pure_periodic_on_start = { 'Daily', 'Weekly', 'Monthly' }
 
 -- -----------------------------------------------------------------------------
 --  New files and pickers  (pure/fuzzyUtils.lua, <leader>n, <leader>f)

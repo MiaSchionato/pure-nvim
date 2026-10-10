@@ -64,6 +64,11 @@ folder inside the vault = template name): a note made there by **Yes** or
 `6-Private/Diary`, linked from the daily note. A template missing from the
 templates folder is skipped.
 
+A link to a periodic note that does not exist yet, in its folder and named as
+its period names it (`[[…/Weekly/2026-W42]]`, the daily's "Next week →"), only
+asks **Yes** or **Cancel**: its name is its date, so it is made from its own
+template (Daily, Weekly, Monthly) for that date, as opening it would.
+
 ## Completing links: `[[`
 
 Typing `[[` lists, as you type and matched loosely (`[[pxt` finds
