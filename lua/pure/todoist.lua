@@ -2239,7 +2239,8 @@ function M.act(a, refs)
   local parent = not blank(a.parent) and (refs[a.parent] or a.parent) or nil
   local path, what
   if not blank(a.add) then
-    path, what, body.content = '/tasks', 'added', a.add
+    -- A content too means the text (a model may write add="task" content="…")
+    path, what, body.content = '/tasks', 'added', blank(a.content) and a.add or a.content
     -- A subtask is in its parent's project
     if parent then
       body.parent_id, what = parent, 'added subtask'
