@@ -1781,12 +1781,17 @@ local MOVE_RULES = '\n\nTo move or rename a file, use no tool: put one line per 
 --- Told to every model when an action has Todoist in its tools: no model has
 --- a Todoist tool, so the changes come as <todoist/> lines that Neovim sends
 --- after the answer (todoist.act), with the open tasks given here to compare.
-local TODOIST_RULES = '\n\nTo change Todoist, use no tool: put one line per change in your answer:\n'
-  .. '<todoist add="task" due="tomorrow 10am" priority="p2" project="Name" description="…" ref="t1"/>\n'
-  .. '<todoist add="subtask" parent="t1"/>\n'
+local TODOIST_RULES = '\n\nTo change Todoist, use no tool: put one line per change in your answer. '
+  .. 'The value of add IS the new task\'s text (there is no content field when adding). For example, '
+  .. 'a task with two steps under it:\n'
+  .. '<todoist add="Finish the chimp video" project="Work" ref="t1"/>\n'
+  .. '<todoist add="Color grade" parent="t1" ref="t2"/>\n'
+  .. '<todoist add="Match the cameras" parent="t2" due="tomorrow 10am" priority="p2"/>\n'
+  .. 'Changing or completing an open task (its ID from the list below):\n'
   .. '<todoist update="ID" content="new text" due="…" priority="…" parent="…"/>\n'
   .. '<todoist complete="ID"/>\n'
-  .. 'Only add and content are required; leave out what does not change. due is any Todoist date phrase '
+  .. 'Every line is sent as written, so write each change once, with its real text: no draft, example '
+  .. 'or corrected lines. Leave out what does not change. description is optional. due is any Todoist date phrase '
   .. 'in English, priority p1 (urgent) to p4, project an existing project\'s name. parent makes a subtask '
   .. '(any depth): the ID of an open task, or the ref of a task added in an earlier line of this answer '
   .. '(a subtask takes its parent\'s project; on update it moves the task there). No double quotes inside '
