@@ -190,7 +190,7 @@ return M
 |---|---|---|
 | `description` | the name in the list (required) | |
 | `output` | `insert`: into the buffer below the cursor · `replace`: over the selection, or the whole note without one · `window`: the answer window, a chat (follow-ups with `a`); with `Edit` or `Write` in `tools` it may also change files in `dirs` when you ask or it clearly helps, and says which · `notify`: the model works on its own and sends a short summary of what it did as a notification | `notify` when it may change files, else `window` |
-| `tools` | what the model may use: `Read`, `Grep`, `Glob` read; `Edit` (replace a part), `Write` (create or rewrite a file), `Move` (move or rename a file, see below), `Bash` change files (accepted without asking) | none for insert/replace; reading for window |
+| `tools` | what the model may use: `Read`, `Grep`, `Glob` read; `Edit` (replace a part), `Write` (create or rewrite a file), `Move` (move or rename a file, see below), `Bash` change files (accepted without asking); `Todoist` adds, updates and completes Todoist tasks (see below) | none for insert/replace; reading for window |
 | `dirs` | where it may change files: `vault`, `file` (the note's folder), or paths (`~/Downloads`); the first is where it runs | `vault` |
 | `confirm` | `auto`: ask before running only when one of the `dirs` is not in a git repository · `always` · `never` | `auto` |
 | `model` | the model for this action (`haiku`, `sonnet`, `opus`) | the usual one |
@@ -204,6 +204,21 @@ are in `<leader>ah`.
 
 It is the format of Claude Code's own commands (`.claude/commands/*.md`),
 whose other keys are ignored here.
+
+**`tools: Todoist`.** No model has a Todoist tool, so an action with this one
+gets every open task with its id (`todoist.text('all', true)`) and answers
+with one line per change, which Neovim sends to Todoist when it ends and
+replaces with what was done (`Todoist: added "…"`):
+
+```
+<todoist add="Call the dentist" due="tomorrow 10am" priority="p2" project="Home"/>
+<todoist update="ID" content="…" due="…" priority="…"/>
+<todoist complete="ID"/>
+```
+
+It works the same on Claude, agy and Ollama, and the `todoist` blocks of open
+notes are redrawn after. The vault's "Sincronizar com Todoist" action uses it
+to bring the current note's `- [ ]` tasks into Todoist.
 
 **Examples.** `:LLMActionsExamples` (or `<leader>ax` while the folder has
 no actions) writes five into the folder, never over an existing file:
