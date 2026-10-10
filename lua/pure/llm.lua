@@ -1778,6 +1778,19 @@ local MOVE_RULES = '\n\nTo move or rename a file, use no tool: put one line per 
   .. 'moves them when you are done (never over an existing file) and fixes the links to moved notes. '
   .. 'You will not see the result, so say in your answer what you asked to move.'
 
+--- Told to every model when an action has Todoist in its tools: no model has
+--- a Todoist tool, so the changes come as <todoist/> lines that Neovim sends
+--- after the answer (todoist.act), with the open tasks given here to compare.
+local TODOIST_RULES = '\n\nTo change Todoist, use no tool: put one line per change in your answer:\n'
+  .. '<todoist add="task" due="tomorrow 10am" priority="p2" project="Name" description="…"/>\n'
+  .. '<todoist update="ID" content="new text" due="…" priority="…"/>\n'
+  .. '<todoist complete="ID"/>\n'
+  .. 'Only add and content are required; leave out what does not change. due is any Todoist date phrase '
+  .. 'in English, priority p1 (urgent) to p4, project an existing project\'s name. No double quotes inside '
+  .. 'a value. IDs come from the open tasks below. Never add a task that is already there: update it. '
+  .. 'Neovim sends the lines when you are done; you will not see the result, so say in your answer what '
+  .. 'you asked to change.\n<todoist_tasks>\n%s\n</todoist_tasks>'
+
 local function run(opts)
   local active = parseModel(opts.model)
   opts = vim.tbl_extend('force', {}, opts)
@@ -1799,6 +1812,12 @@ local function run(opts)
   if by_tag then
     opts.tools = vim.tbl_filter(function(t) return t:match('^%a+') ~= 'Move' end, opts.tools)
     opts.prompt = opts.prompt .. MOVE_RULES
+  end
+  -- Todoist, on every model: the same, with <todoist/> lines (TODOIST_RULES).
+  local todoist = vim.iter(opts.tools or {}):any(function(t) return t:match('^%a+') == 'Todoist' end)
+  if todoist then
+    opts.tools = vim.tbl_filter(function(t) return t:match('^%a+') ~= 'Todoist' end, opts.tools)
+    opts.prompt = opts.prompt .. TODOIST_RULES:format(require('pure.todoist').text('all', true))
   end
   -- The user context goes with every new conversation (a follow-up's
   -- session already has it), and <remember> is taken out of the answer.
@@ -1838,6 +1857,19 @@ local function run(opts)
         return ''
       end)
       if #moved > 0 then clean = vim.trim(clean) .. '\n\n' .. table.concat(moved, '\n') end
+    end
+    if todoist and not err and clean then
+      local done = {}
+      clean = clean:gsub('[ \t]*<todoist%s+(.-)%s*/?>[ \t]*\n?', function(attrs)
+        local a = {}
+        for k, v in attrs:gmatch('(%w+)="([^"]*)"') do a[k] = v end
+        table.insert(done, require('pure.todoist').act(a))
+        return ''
+      end)
+      if #done > 0 then
+        clean = vim.trim(clean) .. '\n\n' .. table.concat(done, '\n')
+        pcall(require('pure.todoist').refreshBlocks)
+      end
     end
     return on_done(err, clean, session, usage)
   end
@@ -2837,7 +2869,8 @@ end
 --    ---
 --    description: Revisar ortografia e gramática
 --    output: replace         insert | replace | window | notify
---    tools: Read, Grep       what Claude may use (Edit, Write, Bash: files)
+--    tools: Read, Grep       what Claude may use (Edit, Write, Bash: files;
+--                            Todoist: its tasks, see TODOIST_RULES)
 --    dirs: vault, ~/Downloads   where it may change files
 --    confirm: auto           auto (only outside git) | always | never
 --    model: haiku            this action only

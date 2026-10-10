@@ -2051,12 +2051,13 @@ end, {
 --
 --    - [ ] Revisar roteiro · 2026-09-30 · P1 · Vídeos
 
---- The tasks of `filter` (default "today | overdue | no date", as the daily note's blocks). Waits for Todoist (up
---- to 15 s); an error comes back as the text, so the action still runs.
-function M.text(filter)
+--- The tasks of `filter` (default "today | overdue | no date", as the daily note's blocks; "all": every active
+--- task). Waits for Todoist (up to 15 s); an error comes back as the text, so the action still runs. `with_ids`
+--- ends each line in " · id:<id>", for the Todoist tool (M.act).
+function M.text(filter, with_ids)
   filter = (filter and filter ~= '') and filter or 'today | overdue | no date'
   local tasks, projects, err, done
-  fetch(filter, function(e, t, p) err, tasks, projects, done = e, t, p, true end)
+  fetch(filter ~= 'all' and filter or nil, function(e, t, p) err, tasks, projects, done = e, t, p, true end)
   vim.wait(15000, function() return done end, 50)
   if err then return 'Todoist: ' .. err end
   if not done then return 'Todoist did not answer in time.' end
@@ -2081,6 +2082,7 @@ function M.text(filter)
     if f.d ~= '' then table.insert(meta, f.d) end
     if f.p > 1 then table.insert(meta, priorityLabel(f.p)) end
     if f.j ~= '' then table.insert(meta, f.j) end
+    if with_ids then table.insert(meta, 'id:' .. t.id) end
     table.insert(out, ('%s- [ ] %s%s'):format(string.rep('  ', depth), f.c,
       #meta > 0 and (' · ' .. table.concat(meta, ' · ')) or ''))
     for _, c in ipairs(children[t.id] or {}) do add(c, depth + 1) end
@@ -2088,6 +2090,64 @@ function M.text(filter)
   for _, t in ipairs(roots) do add(t, 0) end
   if #roots == 0 then table.insert(out, '- nothing') end
   return table.concat(out, '\n')
+end
+
+-- -----------------------------------------------------------------------------
+--  For the LLM actions: the Todoist tool
+-- -----------------------------------------------------------------------------
+--  An action with `tools: Todoist` (pure/llm.lua) gets every active task with
+--  its id (M.text('all', true)) and answers with one line per change, which
+--  Neovim then sends here:
+--
+--    <todoist add="Call the dentist" due="tomorrow 10am" priority="p2" project="Home"/>
+--    <todoist update="<id>" content="…" due="…" priority="…"/>
+--    <todoist complete="<id>"/>
+
+--- Wait for request() (up to 15 s), as M.text does.
+local function wait(method, path, body)
+  local err, data, done
+  request(method, path, function(e, d) err, data, done = e, d, true end, body)
+  vim.wait(15000, function() return done end, 50)
+  if not done then return 'Todoist did not answer in time' end
+  return err, data
+end
+
+--- Do one change `a` (the attributes of a <todoist/> line); a line saying
+--- what was done, or why not.
+--- @param a table<string, string>
+--- @return string
+function M.act(a)
+  local function blank(v) return not v or vim.trim(v) == '' end
+  local body = {}
+  if not blank(a.due) then body.due_string = a.due end
+  local p = tonumber((a.priority or ''):match('[1-4]'))
+  if p then body.priority = 5 - p end -- P1 is Todoist's 4
+  if not blank(a.description) then body.description = a.description end
+
+  local path, what
+  if not blank(a.add) then
+    path, what, body.content = '/tasks', 'added', a.add
+    if not blank(a.project) then
+      local err, projects = wait('GET', '/projects?limit=200')
+      for _, pr in ipairs(not err and projects and projects.results or {}) do
+        if pr.name:lower() == a.project:lower() then body.project_id = pr.id end
+      end
+    end
+  elseif not blank(a.update) then
+    path, what = '/tasks/' .. a.update, 'updated'
+    if not blank(a.content) then body.content = a.content end
+  elseif not blank(a.complete) then
+    -- Closing answers with no body: the task's name comes from before
+    local _, task = wait('GET', '/tasks/' .. a.complete)
+    local err = wait('POST', '/tasks/' .. a.complete .. '/close')
+    if err then return 'Todoist: ' .. err end
+    return ('Todoist: completed "%s"'):format(task and task.content or a.complete)
+  else
+    return 'Todoist: a line with no add, update or complete, skipped'
+  end
+  local err, data = wait('POST', path, body)
+  if err then return 'Todoist: ' .. err end
+  return ('Todoist: %s "%s"'):format(what, (data and data.content) or a.add or a.content or a.complete or a.update)
 end
 
 return M
