@@ -212,9 +212,15 @@ replaces with what was done (`Todoist: added "…"`):
 
 ```
 <todoist add="Call the dentist" due="tomorrow 10am" priority="p2" project="Home"/>
-<todoist update="ID" content="…" due="…" priority="…"/>
+<todoist add="Finish the video" ref="v"/>
+<todoist add="Edit the intro" parent="v"/>
+<todoist update="ID" content="…" due="…" priority="…" parent="…"/>
 <todoist complete="ID"/>
 ```
+
+`parent` makes a subtask, at any depth: the id of an open task, or the `ref`
+of a task added earlier in the same answer; on `update` it moves the task
+under that one.
 
 It works the same on Claude, agy and Ollama, and the `todoist` blocks of open
 notes are redrawn after. The vault's "Sincronizar com Todoist" action uses it
