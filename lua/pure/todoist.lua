@@ -35,6 +35,7 @@
 --    <leader>x  cycle [ ] [~] [!] [>] [-] [x]; only [x] (done) reaches Todoist,
 --               the other states are kept locally and drawn back on reload
 --    r          reload (asks first if there are unsaved edits)
+--    zc / zo    fold a project or a task with its subtasks (M.foldexpr)
 --    q / <Esc>  close (same)
 --
 --  Token (Todoist > Settings > Integrations > Developer), never kept in this
@@ -904,6 +905,20 @@ local function apply(ops, done, log)
   next_call()
 end
 
+--- Folds of the task buffer ('foldexpr'): each ## project folds, and so does
+--- each task with subtasks under it. Indentation (two spaces a level, under
+--- a shiftwidth that may be 4) and markdown's treesitter folds (one level for
+--- every nested task) did not give a fold per task.
+function M.foldexpr(lnum)
+  local line = vim.fn.getline(lnum)
+  if line:match('^##%s') then return '>1' end
+  if line:match('^%s*$') or line:match('^#%s') then return '0' end
+  local depth = math.floor(#line:match('^%s*') / 2)
+  local next_line = vim.fn.getline(lnum + 1)
+  local parent = next_line:match('%S') and #next_line:match('^%s*') > #line:match('^%s*')
+  return parent and ('>' .. (depth + 2)) or tostring(depth + 1)
+end
+
 --- :w on the task buffer.
 function M.save()
   local buf = state.buf
@@ -1023,6 +1038,15 @@ function M.open(filter, float)
     -- render-md.lua sets a textwidth for markdown, which would wrap long task
     -- lines into two while typing -- and the second half would be a new task.
     vim.bo[buf].textwidth = 0
+    -- Its own folds (M.foldexpr), set on the window showing it: the FileType
+    -- above ran before there was one.
+    vim.api.nvim_create_autocmd('BufWinEnter', {
+      buffer = buf,
+      callback = function()
+        vim.wo.foldexpr = "v:lua.require'pure.todoist'.foldexpr(v:lnum)"
+        vim.wo.foldmethod = 'expr'
+      end,
+    })
 
     vim.api.nvim_create_autocmd('BufWriteCmd', { buffer = buf, callback = M.save })
     vim.api.nvim_create_autocmd({ 'TextChanged', 'TextChangedI' }, {
