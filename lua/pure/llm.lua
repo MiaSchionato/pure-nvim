@@ -1782,11 +1782,14 @@ local MOVE_RULES = '\n\nTo move or rename a file, use no tool: put one line per 
 --- a Todoist tool, so the changes come as <todoist/> lines that Neovim sends
 --- after the answer (todoist.act), with the open tasks given here to compare.
 local TODOIST_RULES = '\n\nTo change Todoist, use no tool: put one line per change in your answer:\n'
-  .. '<todoist add="task" due="tomorrow 10am" priority="p2" project="Name" description="…"/>\n'
-  .. '<todoist update="ID" content="new text" due="…" priority="…"/>\n'
+  .. '<todoist add="task" due="tomorrow 10am" priority="p2" project="Name" description="…" ref="t1"/>\n'
+  .. '<todoist add="subtask" parent="t1"/>\n'
+  .. '<todoist update="ID" content="new text" due="…" priority="…" parent="…"/>\n'
   .. '<todoist complete="ID"/>\n'
   .. 'Only add and content are required; leave out what does not change. due is any Todoist date phrase '
-  .. 'in English, priority p1 (urgent) to p4, project an existing project\'s name. No double quotes inside '
+  .. 'in English, priority p1 (urgent) to p4, project an existing project\'s name. parent makes a subtask '
+  .. '(any depth): the ID of an open task, or the ref of a task added in an earlier line of this answer '
+  .. '(a subtask takes its parent\'s project; on update it moves the task there). No double quotes inside '
   .. 'a value. IDs come from the open tasks below. Never add a task that is already there: update it. '
   .. 'Neovim sends the lines when you are done; you will not see the result, so say in your answer what '
   .. 'you asked to change.\n<todoist_tasks>\n%s\n</todoist_tasks>'
@@ -1859,11 +1862,11 @@ local function run(opts)
       if #moved > 0 then clean = vim.trim(clean) .. '\n\n' .. table.concat(moved, '\n') end
     end
     if todoist and not err and clean then
-      local done = {}
+      local done, refs = {}, {}
       clean = clean:gsub('[ \t]*<todoist%s+(.-)%s*/?>[ \t]*\n?', function(attrs)
         local a = {}
         for k, v in attrs:gmatch('(%w+)="([^"]*)"') do a[k] = v end
-        table.insert(done, require('pure.todoist').act(a))
+        table.insert(done, require('pure.todoist').act(a, refs))
         return ''
       end)
       if #done > 0 then

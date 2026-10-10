@@ -2204,7 +2204,10 @@ end
 --  Neovim then sends here:
 --
 --    <todoist add="Call the dentist" due="tomorrow 10am" priority="p2" project="Home"/>
---    <todoist update="<id>" content="…" due="…" priority="…"/>
+--    <todoist add="Finish the video" ref="v"/>
+--    <todoist add="Edit the intro" parent="v"/>      (a subtask: parent is a ref
+--                                                     of this answer or an id)
+--    <todoist update="<id>" content="…" due="…" priority="…" parent="…"/>
 --    <todoist complete="<id>"/>
 
 --- Wait for request() (up to 15 s), as M.text does.
@@ -2217,10 +2220,13 @@ local function wait(method, path, body)
 end
 
 --- Do one change `a` (the attributes of a <todoist/> line); a line saying
---- what was done, or why not.
+--- what was done, or why not. `refs` is shared by the lines of one answer:
+--- an add with ref="x" is a parent="x" of the lines after it.
 --- @param a table<string, string>
+--- @param refs table<string, string>|nil
 --- @return string
-function M.act(a)
+function M.act(a, refs)
+  refs = refs or {}
   local function blank(v) return not v or vim.trim(v) == '' end
   local body = {}
   if not blank(a.due) then body.due_string = a.due end
@@ -2228,10 +2234,14 @@ function M.act(a)
   if p then body.priority = 5 - p end -- P1 is Todoist's 4
   if not blank(a.description) then body.description = a.description end
 
+  local parent = not blank(a.parent) and (refs[a.parent] or a.parent) or nil
   local path, what
   if not blank(a.add) then
     path, what, body.content = '/tasks', 'added', a.add
-    if not blank(a.project) then
+    -- A subtask is in its parent's project
+    if parent then
+      body.parent_id, what = parent, 'added subtask'
+    elseif not blank(a.project) then
       local err, projects = wait('GET', '/projects?limit=200')
       for _, pr in ipairs(not err and projects and projects.results or {}) do
         if pr.name:lower() == a.project:lower() then body.project_id = pr.id end
@@ -2240,6 +2250,11 @@ function M.act(a)
   elseif not blank(a.update) then
     path, what = '/tasks/' .. a.update, 'updated'
     if not blank(a.content) then body.content = a.content end
+    if parent then
+      local err = wait('POST', '/tasks/' .. a.update .. '/move', { parent_id = parent })
+      if err then return 'Todoist: ' .. err end
+      if not next(body) then return ('Todoist: moved under %s'):format(a.parent) end
+    end
   elseif not blank(a.complete) then
     -- Closing answers with no body: the task's name comes from before
     local _, task = wait('GET', '/tasks/' .. a.complete)
@@ -2251,6 +2266,7 @@ function M.act(a)
   end
   local err, data = wait('POST', path, body)
   if err then return 'Todoist: ' .. err end
+  if not blank(a.ref) and data and data.id then refs[a.ref] = data.id end
   return ('Todoist: %s "%s"'):format(what, (data and data.content) or a.add or a.content or a.complete or a.update)
 end
 
