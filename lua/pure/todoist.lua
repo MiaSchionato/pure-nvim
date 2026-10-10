@@ -1039,12 +1039,14 @@ function M.open(filter, float)
     -- lines into two while typing -- and the second half would be a new task.
     vim.bo[buf].textwidth = 0
     -- Its own folds (M.foldexpr), set on the window showing it: the FileType
-    -- above ran before there was one.
+    -- above ran before there was one. It opens folded: the projects open,
+    -- every task's subtasks closed (foldlevel 1).
     vim.api.nvim_create_autocmd('BufWinEnter', {
       buffer = buf,
       callback = function()
         vim.wo.foldexpr = "v:lua.require'pure.todoist'.foldexpr(v:lnum)"
         vim.wo.foldmethod = 'expr'
+        vim.wo.foldlevel = 1
       end,
     })
 
