@@ -60,7 +60,7 @@ Keys in that buffer:
 | `<leader>x` | cycle Obsidian states `[ ] [~] [!] [>] [-] [x]`; only `[x]` reaches Todoist, the others are remembered locally (`todoist_states.json`) |
 | `r` | reload from Todoist (asks if there are unsaved edits) |
 | `q` / `<Esc>` | close (same) |
-| `zc` / `zo` / `za` (or `zz`) | fold a `##` project, or a task with its subtasks |
+| `zc` / `zo` / `za` (or `zz`) | fold a `##` project, or a task with its subtasks (it opens with every task's subtasks folded) |
 
 **Confirmation before sending** – `vim.g.pure_todoist_confirm`:
 `'all'` (every save, default), `'delete'` (only when tasks would be deleted),
