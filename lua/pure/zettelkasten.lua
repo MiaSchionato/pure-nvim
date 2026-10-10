@@ -766,16 +766,23 @@ local function openPeriodic(template, period, when)
   vim.notify((existing and 'Filled ' or 'Created ') .. period.folder .. '/' .. name)
 end
 
---- Make today's daily note on disk, without opening it: created from the
+--- Make the current period's note on disk ("Daily": today's, "Weekly": this
+--- week's, "Monthly": this month's), without opening it: created from its
 --- template when it is not in the vault, filled when it is there but blank,
---- the same rules as opening it. Run once per start with a UI when
---- vim.g.pure_daily_on_start is set, so the note is there from the start
---- (for Obsidian, for Claude actions that write in it) and not only once it
---- is opened.
-function M.createDaily()
+--- the same rules as opening it. Run once per start with a UI for each
+--- period in vim.g.pure_periodic_on_start, so the notes are there from the
+--- start (for Obsidian, for the daily's links to its week and month, for
+--- Claude actions that write in them) and not only once opened. The current
+--- one, not the one of the exact day: a week whose Monday Neovim was not
+--- started still gets its note on the first start. Past ones are not made.
+--- @param kind string  "Daily", "Weekly" or "Monthly"
+function M.createPeriodic(kind)
   local root = vaultPath()
   if not root or vim.fn.isdirectory(root) == 0 then return end
-  local period = periodic.Daily
+  local period = periodic[kind]
+  local dir = templatesPath()
+  -- No template for it: nothing to make (and no error at every start)
+  if not period or not dir or vim.fn.filereadable(dir .. '/' .. kind .. '.md') == 0 then return end
   local when = anchorOf(period, os.time())
   local name = os.date(period.name, when) .. '.md'
 
@@ -792,7 +799,7 @@ function M.createDaily()
     vim.fn.mkdir(vim.fs.dirname(path), 'p')
   end
 
-  local lines = periodicLines('Daily.md', period, when)
+  local lines = periodicLines(kind .. '.md', period, when)
   if not lines then return end
   -- The line endings a :write of a new file would use (the first of
   -- 'fileformats'), like the notes opened and written from Neovim.
@@ -802,6 +809,44 @@ function M.createDaily()
   if vim.fn.writefile(lines, path) == 0 then
     vim.notify('Created ' .. path:sub(#root + 2))
   end
+end
+
+--- Today's daily note on disk (createPeriodic).
+function M.createDaily() M.createPeriodic('Daily') end
+
+--- The period a note named `title` in vault folder `folder` is the note of:
+--- "Weekly", and noon of a day in it, for "2026-W41" in the weekly folder.
+--- Nil when the folder is no period's or the name is not that period's date.
+--- @param folder string  vault-relative
+--- @param title string   file name without ".md"
+--- @return string|nil, integer|nil
+function M.periodicOf(folder, title)
+  local function day(y, m, d) return os.time({ year = y, month = m, day = d, hour = 12 }) end
+  for kind, parse in pairs({
+    Daily = function() local y, m, d = title:match('^(%d+)%-(%d+)%-(%d+)$'); return y and day(y, m, d) end,
+    Monthly = function() local y, m = title:match('^(%d+)%-(%d+)$'); return y and day(y, m, 1) end,
+    -- ISO week W of year Y: week 1 holds 4 January; its Monday, then W-1 weeks
+    Weekly = function()
+      local y, w = title:match('^(%d+)%-W(%d+)$')
+      if not y then return nil end
+      local jan4 = day(y, 1, 4)
+      local monday = jan4 - ((tonumber(os.date('%w', jan4)) + 6) % 7) * 86400
+      return noon(monday + (w - 1) * 7 * 86400)
+    end,
+  }) do
+    local period = periodic[kind]
+    local when = period and pathKey(relFolder(folder)) == pathKey(period.folder) and parse()
+    -- Only a name the period itself would give (no "2026-13", no "2026-W60")
+    if when and os.date(period.name, when) == title then return kind, when end
+  end
+end
+
+--- Open the note of period `kind` that holds `when`, made from its template
+--- when missing (a [[link]] to a week not reached yet, pure/notes.lua).
+--- @param kind string
+--- @param when integer
+function M.openPeriodicAt(kind, when)
+  openPeriodic(kind .. '.md', periodic[kind], when)
 end
 
 --- Open today's daily note, or another day with an offset in days.
@@ -1126,13 +1171,18 @@ vim.api.nvim_create_autocmd('UIEnter', {
   callback = function() vim.schedule(M.cleanTrash) end,
 })
 
--- Today's daily note, once per start with a UI (vim.g.pure_daily_on_start).
--- --headless runs never make one, like the trash above.
+-- The current periodic notes, once per start with a UI: each period in
+-- vim.g.pure_periodic_on_start ({ 'Daily', 'Weekly', 'Monthly' }), or the
+-- daily alone with the older vim.g.pure_daily_on_start. --headless runs never
+-- make one, like the trash above.
 vim.api.nvim_create_autocmd('UIEnter', {
-  group = vim.api.nvim_create_augroup('PureDailyOnStart', { clear = true }),
+  group = vim.api.nvim_create_augroup('PurePeriodicOnStart', { clear = true }),
   once = true,
   callback = function()
-    if vim.g.pure_daily_on_start then vim.schedule(M.createDaily) end
+    local kinds = vim.g.pure_periodic_on_start or (vim.g.pure_daily_on_start and { 'Daily' }) or {}
+    vim.schedule(function()
+      for _, kind in ipairs(kinds) do M.createPeriodic(kind) end
+    end)
   end,
 })
 

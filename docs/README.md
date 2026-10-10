@@ -94,7 +94,8 @@ where to change them.
 | `vim.g.pure_folder_templates` | `{}` | [notes](notes.md) |
 | `vim.g.pure_templates_locale` | `'en'` | [zettelkasten](zettelkasten.md) |
 | `vim.g.pure_trash_cleanup` | off (`true` in configs.lua) | [zettelkasten](zettelkasten.md) |
-| `vim.g.pure_daily_on_start` | off (`true` in configs.lua) | [zettelkasten](zettelkasten.md) |
+| `vim.g.pure_periodic_on_start` | off (`{ 'Daily', 'Weekly', 'Monthly' }` in configs.lua) | [zettelkasten](zettelkasten.md) |
+| `vim.g.pure_daily_on_start` | off (the daily alone; older) | [zettelkasten](zettelkasten.md) |
 | `vim.g.pure_todoist_confirm` | `'all'` | [todoist](todoist.md) |
 | `vim.g.pure_todoist_archive` | off | [todoist](todoist.md) |
 | `vim.g.pure_todoist_sync` | off (`{ interval = 10 }` in configs.lua) | [todoist](todoist.md) |

@@ -408,11 +408,23 @@ end
 ---
 --- With a template the note is made only once one is picked, so cancelling
 --- the pick leaves no empty note behind.
+---
+--- A periodic note ([[…/Weekly/2026-W42]], "Next week →") only asks Yes or
+--- Cancel: its name is its date, so it is made from its own template for that
+--- date, as opening it would (zettelkasten.periodicOf / openPeriodicAt).
 local function create(root, link, from)
   local target = link.target
   local folder, title = target:match('^(.*)/([^/]*)$')
   if not folder then folder, title = newNoteFolder(root, from), target end
   title = title:gsub('%.md$', '')
+  local kind, when = zet().periodicOf(folder, title)
+  if kind then
+    if vim.fn.confirm(('Create the note "%s" (template %s)?'):format(title, kind), '&Yes\n&Cancel', 1) == 1 then
+      zet().openPeriodicAt(kind, when)
+      invalidate()
+    end
+    return
+  end
   local own = folderTemplate(folder)
   local choice = vim.fn.confirm(('Create the note "%s"%s?'):format(title,
     own and (' (template ' .. own:gsub('%.md$', '') .. ')') or ''),

@@ -123,13 +123,18 @@ Picking one of these opens the note for the current period:
 Day steps are counted from noon, so a daylight saving change can never turn
 "yesterday" into two days ago.
 
-**Today's daily note is made when Neovim starts** (with a UI, never in
-`--headless`), without opening it, when `vim.g.pure_daily_on_start` is set
-(`true` in `configs.lua`): it is there from the start, for Obsidian or a
-Claude action that writes in it, not only once it is opened. Same rules as
-above: never a second one, and a note with text is left alone. A Neovim left
-open past midnight makes the next day's on its next start, or when it is
-opened.
+**The current periodic notes are made when Neovim starts** (with a UI, never
+in `--headless`), without opening them: each period listed in
+`vim.g.pure_periodic_on_start` (`{ 'Daily', 'Weekly', 'Monthly' }` in
+`configs.lua`) gets today's, this week's or this month's note. They are there
+from the start, for Obsidian, for the daily's links to its week and month, or
+a Claude action that writes in them, not only once opened. It is the
+*current* one, not a trigger on the exact day: a week whose Monday Neovim was
+not opened gets its note on the first start of that week. Past weeks and
+months are not made. Same rules as above: never a second one, a note with
+text is left alone, and a period without a template is skipped. The older
+`vim.g.pure_daily_on_start = true` makes the daily alone. A Neovim left open
+past midnight makes the next day's on its next start, or when it is opened.
 
 ## Syncing the vault: `:VaultSync`
 
