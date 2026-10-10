@@ -16,7 +16,9 @@
 --    - [ ] Review PR
 --
 --    - text first, then due:<any Todoist date phrase, in English> and a
---      priority p1..p3 as the last word (no pN = normal priority)
+--      priority p1..p3 as the last word (no pN = normal priority), and
+--      labels last of all: @later @home (a label set on a task goes to its
+--      subtasks too, and so does taking it off)
 --    - indenting a line makes it a subtask of the line above it
 --    - the ## heading is the project: move a line under another to move it
 --    - new line = new task, deleted line = deleted task, [x] = complete
@@ -198,13 +200,63 @@ local function oneLine(s)
   return (tostring(s or ''):gsub('\n', ' '):gsub('%s%s+', ' '))
 end
 
+--- Labels as the lines show them: "@later @home", sorted ('' for none).
+local function labelsText(list)
+  local out = {}
+  for _, l in ipairs(list or {}) do table.insert(out, '@' .. l) end
+  table.sort(out)
+  return table.concat(out, ' ')
+end
+
+--- The labels of an "@later @home" text, as a list.
+local function parseLabels(s)
+  local out = {}
+  for l in (s or ''):gmatch('@([%w_%-]+)') do table.insert(out, l) end
+  return out
+end
+
+--- Labels don't pass down to subtasks in Todoist: after a task's labels
+--- change from `old` to `new`, give every task under it (shown or not) the
+--- same change, so a whole branch parks with its top (@later). `done()` at
+--- the end, failures included.
+local function propagateLabels(id, old, new, done)
+  local had, has = {}, {}
+  for _, l in ipairs(old or {}) do had[l] = true end
+  for _, l in ipairs(new or {}) do has[l] = true end
+  local function step(parent, finish)
+    getAll('/tasks?parent_id=' .. parent, function(err, kids)
+      local i = 0
+      local function nextKid()
+        i = i + 1
+        local k = not err and kids and kids[i]
+        if not k then return finish() end
+        local set = {}
+        for _, l in ipairs(k.labels or {}) do set[l] = true end
+        for l in pairs(had) do if not has[l] then set[l] = nil end end
+        for l in pairs(has) do set[l] = true end
+        request('POST', '/tasks/' .. k.id, function() step(k.id, nextKid) end, { labels = vim.tbl_keys(set) })
+      end
+      nextKid()
+    end)
+  end
+  step(id, done)
+end
+
 --- Split a task's text from its metadata, which follows it after a single
 --- space: 'due:<date phrase>' (spaces allowed: 'due:next monday 10:00') and a
---- priority 'p1'..'p4' as the last word, before or after the due date.
---- Returns content, due ('' if none), priority (API value, 4 = p1) and the
---- ranges of the metadata in `s` ({ from, to, kind }) for highlighting.
+--- priority 'p1'..'p4' as the last word, before or after the due date;
+--- labels '@later' last of all.
+--- Returns content, due ('' if none), priority (API value, 4 = p1), the
+--- ranges of the metadata in `s` ({ from, to, kind }) for highlighting and
+--- the labels.
 local function splitMeta(s)
-  local ranges, priority = {}, 1
+  local ranges, priority, labels = {}, 1, {}
+  while true do
+    local head, l = s:match('^(.-)%s+@([%w_%-]+)%s*$')
+    if not head then break end
+    table.insert(labels, 1, l)
+    s = head
+  end
 
   -- A trailing ' pN' word; `offset` maps positions in `part` back to `s`.
   local function takePriority(part, offset)
@@ -225,7 +277,7 @@ local function splitMeta(s)
     content = s:sub(1, at - 1)
   end
   content = takePriority(content, 0)
-  return vim.trim(content), due, priority, ranges
+  return vim.trim(content), due, priority, ranges, labels
 end
 
 -- Obsidian's extra checkbox states ([~] in progress, [!] important, [>]
@@ -278,6 +330,7 @@ local function taskLine(t, depth, mark)
   if due ~= '' then table.insert(parts, 'due:' .. due) end
   local p = priorityLabel(t.priority):lower()
   if p ~= '' then table.insert(parts, p) end
+  if labelsText(t.labels) ~= '' then table.insert(parts, labelsText(t.labels)) end
   return table.concat(parts, ' ') .. ' ‹' .. t.id .. '›'
 end
 
@@ -305,11 +358,12 @@ local function parseLine(line)
     body = after
   end
 
-  local content, due, priority = splitMeta(body)
+  local content, due, priority, _, labels = splitMeta(body)
   if content == '' then return nil end
 
   local width = indent:gsub('\t', '  ')
-  return { indent = #width, checked = checked, mark = mark, content = content, due = due, priority = priority, id = id }
+  return { indent = #width, checked = checked, mark = mark, content = content, due = due, priority = priority, id = id,
+    labels = labels }
 end
 
 --- Hide the ids and colour the metadata. Re-run on every change, since
@@ -576,6 +630,7 @@ local function render(tasks, projects)
     state.snapshot[t.id] = {
       content = oneLine(t.content), due = dueText(t), priority = tonumber(t.priority) or 1,
       project_id = t.project_id, parent_id = shown_parent, checked = t.checked and true or false,
+      labels = t.labels or {},
     }
     for _, c in ipairs(children[t.id] or {}) do emit(c, depth + 1, t.id) end
   end
@@ -604,7 +659,7 @@ local function render(tasks, projects)
   if not state.filter then archive.snapshot(tasks, projects) end
   vim.api.nvim_buf_clear_namespace(state.buf, hint_ns, 0, -1)
   vim.api.nvim_buf_set_extmark(state.buf, hint_ns, 0, 0, {
-    virt_lines = { { { ':w apply · <CR>/x toggle · r reload · q close · indent = subtask · due:…  p1-p3', 'Comment' } } },
+    virt_lines = { { { ':w apply · <CR>/x toggle · r reload · q close · indent = subtask · due:…  p1-p3  @label', 'Comment' } } },
   })
 end
 
@@ -699,6 +754,7 @@ local function plan(items, seen)
       if item.content ~= s.content then changes.content = item.content end
       if item.due ~= s.due then changes.due_string = item.due ~= '' and item.due or 'no date' end
       if item.priority ~= s.priority then changes.priority = item.priority end
+      if labelsText(item.labels) ~= labelsText(s.labels) then changes.labels = item.labels end
       if next(changes) then table.insert(ops.update, { item = item, body = changes }) end
 
       -- Compared with the parent as shown, so a subtask whose real parent is
@@ -745,7 +801,8 @@ local function apply(ops, done, log)
 
   for _, item in ipairs(ops.create) do
     add(function(next_call)
-      local body = { content = item.content, project_id = item.project_id, priority = item.priority }
+      local body = { content = item.content, project_id = item.project_id, priority = item.priority,
+        labels = #item.labels > 0 and item.labels or nil }
       if item.parent then
         if not item.parent.id then
           table.insert(errors, ('line %d: parent was not created'):format(item.lnum))
@@ -783,6 +840,14 @@ local function apply(ops, done, log)
             table.insert(diffs, ('due: %s → %s'):format((was.due or '') ~= '' and was.due or 'none', u.item.due ~= '' and u.item.due or 'none'))
           end
           if u.body.priority then table.insert(diffs, ('priority: p%d → p%d'):format(5 - (was.priority or 1), 5 - u.body.priority)) end
+          if u.body.labels then
+            table.insert(diffs, ('labels: %s → %s'):format(labelsText(was.labels) ~= '' and labelsText(was.labels) or 'none',
+              labelsText(u.body.labels) ~= '' and labelsText(u.body.labels) or 'none'))
+            return propagateLabels(u.item.id, was.labels, u.body.labels, function()
+              table.insert(log, ('edited · %s · %s'):format(u.item.content, table.concat(diffs, '; ')))
+              next_call()
+            end)
+          end
           table.insert(log, ('edited · %s · %s'):format(u.item.content, table.concat(diffs, '; ')))
         end
         next_call()
@@ -1364,6 +1429,7 @@ local function taskFields(t, projects)
     d = t.due and (t.due.is_recurring and t.due.string or t.due.date) or '',
     p = tonumber(t.priority) or 1,
     j = projects[t.project_id] or '',
+    l = labelsText(t.labels),
   }
 end
 
@@ -1382,6 +1448,7 @@ local function syncLine(t, depth, projects)
   if f.d ~= '' then table.insert(parts, f.d) end
   if priorityLabel(f.p) ~= '' then table.insert(parts, priorityLabel(f.p)) end
   if f.j ~= '' then table.insert(parts, f.j) end
+  if f.l ~= '' then table.insert(parts, f.l) end
   return table.concat(parts, ' · ')
 end
 
@@ -1445,13 +1512,14 @@ local function regionKey(path, block)
   return vim.fs.normalize(path) .. '\n' .. (block.filter or '')
 end
 
---- A task line of a region, parsed: { depth, checked, id?, c, d, p, j? }.
+--- A task line of a region, parsed: { depth, checked, id?, c, d, p, j?, l }.
 --- " · " parts after the text: P1..P3 is the priority, a project's name the
---- project, anything else the due date (any Todoist phrase: "tomorrow").
+--- project, "@later @home" the labels, anything else the due date (any
+--- Todoist phrase: "tomorrow").
 local function parseItem(line, by_name)
   local indent, mark, rest = line:match('^(%s*)[-*] %[(.)%] ?(.*)$')
   if not indent then return nil end
-  local item = { depth = #(indent:gsub('\t', '  ')), checked = mark == 'x' or mark == 'X', d = '', p = 1 }
+  local item = { depth = #(indent:gsub('\t', '  ')), checked = mark == 'x' or mark == 'X', d = '', p = 1, l = '' }
   local text, id, tail = rest:match('^%[(.-)%]%(' .. vim.pesc(task_url) .. '([%w_]+)%)(.*)$')
   local plain, pid, ptail = rest:match('^(.-)%s*%[↗%]%(' .. vim.pesc(task_url) .. '([%w_]+)%)(.*)$')
   if plain and (not text or plain:find('[[', 1, true)) then
@@ -1469,6 +1537,8 @@ local function parseItem(line, by_name)
     local n = part:match('^[Pp]([1-3])$')
     if n then
       item.p = 5 - tonumber(n)
+    elseif part:match('^@') then
+      item.l = labelsText(parseLabels(part))
     elseif by_name[part] then
       item.j = part
     elseif part ~= '' and item.d == '' then
@@ -1501,6 +1571,7 @@ local function regionOps(lines, region, key, by_name, ops)
           if item.c ~= '' and item.c ~= was.c then body.content = item.c end
           if item.d ~= was.d then body.due_string = item.d ~= '' and item.d or 'no date' end
           if item.p ~= was.p then body.priority = item.p end
+          if item.l ~= (was.l or '') then body.labels, item.was_l = parseLabels(item.l), was.l end
           if next(body) then table.insert(ops.update, { item = item, body = body }) end
           if item.j and item.j ~= was.j then
             table.insert(ops.move, { item = item, project_id = by_name[item.j] })
@@ -1748,6 +1819,11 @@ function M.sync(paths)
       end
       for _, u in ipairs(ops.update) do
         call('POST', '/tasks/' .. u.item.id, u.body, 'edit "' .. u.item.c .. '"')
+        if u.body.labels then
+          table.insert(calls, function(done)
+            propagateLabels(u.item.id, parseLabels(u.item.was_l), u.body.labels, done)
+          end)
+        end
       end
       for _, m in ipairs(ops.move) do
         call('POST', '/tasks/' .. m.item.id .. '/move', { project_id = m.project_id }, 'move "' .. m.item.c .. '"')
@@ -1756,6 +1832,7 @@ function M.sync(paths)
         local body = { content = c.item.c }
         if c.item.d ~= '' then body.due_string = c.item.d end
         if c.item.p > 1 then body.priority = c.item.p end
+        if c.item.l ~= '' then body.labels = parseLabels(c.item.l) end
         if c.parent_id then
           body.parent_id = c.parent_id
         elseif c.item.j then
@@ -2082,6 +2159,9 @@ function M.text(filter, with_ids)
     if f.d ~= '' then table.insert(meta, f.d) end
     if f.p > 1 then table.insert(meta, priorityLabel(f.p)) end
     if f.j ~= '' then table.insert(meta, f.j) end
+    -- Parked tasks (@later) stay, labelled: the action decides (the vault's
+    -- daily note takes one only when nothing else is left for today).
+    if f.l ~= '' then table.insert(meta, f.l) end
     if with_ids then table.insert(meta, 'id:' .. t.id) end
     table.insert(out, ('%s- [ ] %s%s'):format(string.rep('  ', depth), f.c,
       #meta > 0 and (' · ' .. table.concat(meta, ' · ')) or ''))
@@ -2149,5 +2229,8 @@ function M.act(a)
   if err then return 'Todoist: ' .. err end
   return ('Todoist: %s "%s"'):format(what, (data and data.content) or a.add or a.content or a.complete or a.update)
 end
+
+-- For tests.
+M._splitMeta, M._parseItem, M._syncLine, M._propagateLabels = splitMeta, parseItem, syncLine, propagateLabels
 
 return M

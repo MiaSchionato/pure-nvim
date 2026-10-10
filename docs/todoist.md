@@ -47,6 +47,7 @@ Edit it as text; `:w` works out the difference and sends it:
 | change the text | renamed |
 | `due:<phrase>` at the end | due date, any English Todoist phrase (`due:next monday`) |
 | `p1`, `p2`, `p3` as the last word | priority (no `pN` = normal) |
+| `@later` (or more: `@later @home`) after everything | labels; removing it removes the label. Set on a task, it goes to all its subtasks too (Todoist does not pass labels down), and so does taking it off |
 | indent under another line | becomes its subtask |
 | move the line under another `##` | moved to that project |
 | copy a line | a **new** task (each line ends in a hidden id; a copy is new) |
@@ -109,7 +110,8 @@ filter: "today | overdue"
 <!-- /todoist -->
 ````
 
-- Each task links to it in Todoist, then due date · priority · project.
+- Each task links to it in Todoist, then due date · priority · project ·
+  labels (`@later`).
   Dates are written as dates (a phrase like "today" would be wrong
   tomorrow); recurring tasks keep their phrase ("every monday").
 - **Only the lines between the markers are ever rewritten**, and only when
@@ -125,14 +127,22 @@ on the next sync:
 | change or add the date part (`· 2026-09-30`, `· tomorrow`, any Todoist phrase) | new due date; removing it clears the date |
 | change the priority part (`· P2`), or add one | new priority (removing it: normal) |
 | change the project part to another project's name | moved to that project |
+| add or change the labels part (`· @later`), or remove it | those labels; set on a task, they go to all its subtasks too, and so does taking them off |
 | a new line: `- [ ] Buy milk` | a new task, in the Inbox |
-| … with parts: `- [ ] Buy milk · today · P3 · Home` | with that date, priority and project |
+| … with parts: `- [ ] Buy milk · today · P3 · Home · @later` | with that date, priority, project and label |
 | … indented under a task | a subtask of it |
 | delete a line | the task is deleted |
 
 The parts after the text are told apart by what they are: `P1`–`P3` is the
-priority, the name of one of your projects is the project, anything else is
-the date. A new task only stays in the list if it matches the block's filter
+priority, the name of one of your projects is the project, a part starting
+with `@` the labels, anything else is the date.
+
+**Parking tasks with `@later`.** A label is how a task is set aside without
+a project of its own (the free plan counts projects): a block filtered with
+`!@later` (`(today | overdue | no date) & #Work & !@later`) leaves them out,
+and a second block without it shows everything. Labelling an umbrella task
+parks its whole branch, since the label is applied to every subtask under
+it. A new task only stays in the list if it matches the block's filter
 (a task with no date leaves a `today` list after the sync: it is in Todoist,
 in the Inbox).
 
@@ -210,7 +220,8 @@ model answers with `<todoist add=…/>`, `<todoist update=ID …/>` and
 ## For the LLM actions: `context: todoist`
 
 `require('pure.todoist').text(filter)` returns the tasks of `filter` (default
-`today | overdue | no date`, as a daily note's blocks), straight from Todoist,
+`today | overdue | no date`, as a daily note's blocks; parked tasks included,
+with their `@later`, for the action to weigh), straight from Todoist,
 one plain line each, subtasks indented: `- [ ] Task · 2026-09-30 · P1 ·
 Project`. A Claude / Ollama action gets them with `context: todoist`
 ([llm.md](llm.md)): much less than the synced list, whose every task
