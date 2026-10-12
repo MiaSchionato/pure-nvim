@@ -40,7 +40,7 @@ When a module changes, update its page here in the same commit.
   treesitter, oil, copilot.
 - `lua/pure/` – the home-made modules documented here.
 - `lua/themes/` – colorschemes; the chosen one is remembered across restarts
-  (`vim.g.MY_THEME`, saved by Neovim in the ShaDa file).
+  (a file in `stdpath('data')`, see `ui.md`), or "omarchy" to follow the Omarchy theme.
 
 The `windows` branch is `main` plus a Windows-only block in `init.lua` that
 makes Neovim run shell commands through Git bash (the pickers need POSIX

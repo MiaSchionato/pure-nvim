@@ -87,9 +87,20 @@ elsewhere `'shell'`.
 
 ## Themes (`lua/themes/colorschemes.lua`, `colors/`)
 
-`<leader>fc` picks a colorscheme; it is remembered across restarts. The
-default is `NeoSolarized`; when a theme is not installed, `myghtfly` (the
-local one in `colors/`) is used instead. `<leader>ox` makes the background
+`<leader>fc` picks a colorscheme; it is remembered across restarts, in
+`stdpath('data')/colorscheme` (ShaDa carried it before, but only on a clean exit,
+and the last instance to exit overwrote the others). The default is
+`NeoSolarized`; when a theme is not installed, `myghtfly` (the local one in
+`colors/`) is used instead.
+
+The first entry of the list, **omarchy**, follows the Omarchy theme: it uses the
+colorscheme that goes with the current theme (`omarchy theme current`), now, on
+every start, and when the theme changes while Neovim is open (checked when the
+terminal gets focus back). The colorscheme is read from the theme's own
+`neovim.lua` (`colorscheme = "…"`), or matched by name when the theme has none
+(`lua/pure/omarchy-theme.lua`). A theme plugin that is not installed is added
+with `vim.pack`, which asks first. A theme with no matching colorscheme (e.g.
+`vantablack`) gives a warning and `NeoSolarized`. `<leader>ox` makes the background
 transparent. In Neovide the transparency is off (`configs/neovide.lua`).
 
 On startup, once the colorscheme has been applied, the `Normal` background is
