@@ -15,7 +15,11 @@ Todoist → Settings → Integrations → Developer → API token. Then either:
 
 - `:TodoistToken` – hidden input; saved to `stdpath('data')/todoist_token`,
   outside the repository; or
-- the `TODOIST_API_TOKEN` environment variable (wins over the file).
+- the `TODOIST_API_TOKEN` environment variable (wins over everything); or
+- Proton Pass: a Secure Note titled `nvim-todoist` whose body is the token
+  (read with `pass-cli`, see `lua/pure/protonpass.lua`; wins over the file).
+  Both Proton Pass secrets are read in the background at startup (in parallel),
+  so `pass-cli`'s half second never blocks the first screen.
 
 Without a token Neovim asks on startup (Yes / Later / Never ask).
 **Never type the token in a shell**: shell history files can end up in git.

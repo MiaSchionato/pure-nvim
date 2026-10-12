@@ -42,12 +42,22 @@ local SCOPES = 'https://www.googleapis.com/auth/calendar.events '
 --  Credentials
 -- -----------------------------------------------------------------------------
 
+local pass_title = 'calendar'
+
 local function readCreds()
+  local pp = require('pure.protonpass').get(pass_title)
+  if pp then
+    local okp, datap = pcall(vim.json.decode, pp)
+    if okp and type(datap) == 'table' then return datap end
+  end
   local ok, data = pcall(function() return vim.json.decode(table.concat(vim.fn.readfile(creds_file), '\n')) end)
   return ok and type(data) == 'table' and data or nil
 end
 
 local function writeCreds(c)
+  -- Into Proton Pass when the note is there; the local file otherwise.
+  local pass = require('pure.protonpass')
+  if pass.get(pass_title) and pass.set(pass_title, vim.json.encode(c)) then return end
   vim.fn.mkdir(data_dir, 'p')
   vim.fn.writefile({ vim.json.encode(c) }, creds_file)
   -- Only this user may read it (a no-op on Windows).
@@ -268,7 +278,8 @@ end
 vim.api.nvim_create_autocmd('VimEnter', {
   group = vim.api.nvim_create_augroup('PureGcal', { clear = true }),
   once = true,
-  callback = askOnStartup,
+  -- After the Proton Pass read, so connected() does not block the first screen.
+  callback = function() require('pure.protonpass').on_ready(askOnStartup) end,
 })
 if vim.v.vim_did_enter == 1 then askOnStartup() end
 

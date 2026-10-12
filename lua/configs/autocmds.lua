@@ -33,7 +33,10 @@ vim.api.nvim_create_autocmd("VimEnter", {
     vim.api.nvim_set_hl(0,"DiagnosticUnnecessary", {})
 
     -- Apply background color from nightfly
-    vim.api.nvim_set_hl(0,"Normal", {bg='#011627'})
+    -- vim.api.nvim_set_hl(0,"Normal", {bg='#011627'})
+    
+    -- Transparent background
+    vim.api.nvim_set_hl(0,"Normal", {bg='NONE'})
   end
 })
 
