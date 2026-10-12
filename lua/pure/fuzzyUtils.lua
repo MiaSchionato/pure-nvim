@@ -551,9 +551,21 @@ function M.fuzzyOldfiles()
 end
 
 function M.fuzzyColorscheme()
-  pickList(vim.fn.getcompletion("", "color"), { title = "Colorschemes" }, function(theme)
-    vim.cmd("colorscheme " .. vim.fn.fnameescape(theme))
-    vim.g.MY_THEME = theme
+  -- "omarchy" first: it follows the Omarchy theme (pure/omarchy-theme.lua).
+  local okOm, omarchy = pcall(require, 'pure.omarchy-theme')
+  local items = vim.fn.getcompletion("", "color")
+  if okOm then table.insert(items, 1, omarchy.LABEL) end
+
+  pickList(items, { title = "Colorschemes" }, function(theme)
+    if okOm and theme == omarchy.LABEL then
+      vim.g.MY_THEME = omarchy.NAME
+      omarchy.save(omarchy.NAME)
+      omarchy.apply()
+    else
+      vim.cmd("colorscheme " .. vim.fn.fnameescape(theme))
+      vim.g.MY_THEME = theme
+      if okOm then omarchy.save(theme) end
+    end
     if vim.g.neovide then
       vim.api.nvim_set_hl(0, 'Normal', { bg = "#060b1e" })
     end
