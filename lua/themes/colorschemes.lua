@@ -3,9 +3,10 @@
 -- The statusline has its own colours for themes that do not define its
 -- groups, so any theme works.
 --
--- The theme picked with <leader>fc is remembered across restarts by Neovim
--- itself: global variables named in all capitals are saved in the ShaDa file
--- (the '!' flag of 'shada'), so MY_THEME comes back on the next start.
+-- The theme picked with <leader>fc is remembered across restarts in
+-- stdpath('data')/colorscheme (see pure/omarchy-theme.lua); configs/autocmds.lua
+-- reads it when it applies the colorscheme. MY_THEME is only the default and
+-- the session's current pick: ShaDa also saved it, but only on a clean exit.
 vim.g.MY_THEME = vim.g.MY_THEME or "NeoSolarized"
 
 local utils = require("configs.functions")

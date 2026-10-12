@@ -70,6 +70,8 @@ local no_prompt_file = vim.fn.stdpath('data') .. '/todoist_no_prompt'
 local function token()
   local env = vim.env.TODOIST_API_TOKEN
   if env and env ~= '' then return env end
+  local pp = require('pure.protonpass').get('todoist')
+  if pp then return pp end
   local f = io.open(token_file, 'r')
   if not f then return nil end
   local t = vim.trim(f:read('*l') or '')
@@ -2111,7 +2113,8 @@ vim.api.nvim_create_autocmd('VimEnter', {
   -- Scheduled so the dashboard and the first screen are drawn before the
   -- question takes the command line.
   callback = function()
-    vim.schedule(askOnStartup)
+    -- After the Proton Pass read, so token() does not block the first screen.
+    require('pure.protonpass').on_ready(askOnStartup)
     -- Warm the default list in the background, a moment after startup so it
     -- never competes with drawing the first screen.
     vim.defer_fn(function()

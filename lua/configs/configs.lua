@@ -10,7 +10,7 @@
 --    2. Plugins        the settings of this configuration's modules (lua/pure/,
 --                      all vim.g.pure_*), one section per plugin
 --                        Vault · New files · Markdown · Todoist · Calendar
---                        · LLMs · Dashboard · Key hints · Indent guide
+--                        · Proton Pass · LLMs · Dashboard · Key hints · Indent guide
 --                        · Terminal · Neovide · Advanced
 --
 --  Every line says what it does. For a plugin setting the comment also gives
@@ -306,6 +306,29 @@ vim.g.pure_calendar_confirm = 'delete'
 -- is opened or saved, and on :CalendarSync. false: never on a timer.
 -- Default: { interval = 15 }.
 vim.g.pure_calendar_sync = { interval = 15 }
+
+-- -----------------------------------------------------------------------------
+--  Proton Pass  (pure/protonpass.lua: reads the Todoist and Calendar secrets
+--  through pass-cli, so they need not be on disk; the local files are the
+--  fallback)
+-- -----------------------------------------------------------------------------
+-- false turns it off. Default true.
+vim.g.pure_protonpass = true
+
+-- Vault holding the items. Default 'Personal'. Changed.
+vim.g.pure_protonpass_vault = 'APIs'
+
+-- Item title and field of each secret (add `vault` to one to override the vault
+-- above). Defaults: title 'nvim-todoist' / 'nvim-google-calendar', field 'note'.
+-- The Calendar field holds {"client_id","client_secret","refresh_token"} as JSON.
+vim.g.pure_protonpass_items = {
+  todoist = { title = 'nvim-todoist', field = 'Chave API' },
+  calendar = { title = 'nvim-google-calendar', field = 'Chave API' },
+}
+
+-- Read both secrets in the background at startup, so pass-cli (about half a
+-- second per call) never blocks the first request.
+require('pure.protonpass').prefetch()
 
 -- -----------------------------------------------------------------------------
 --  LLMs: Claude, Ollama, agy  (pure/llm.lua, <leader>a)

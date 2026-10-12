@@ -21,7 +21,7 @@ split and make fzf quit.)
 | `<leader>f/` | recent files | `:oldfiles` |
 | `<leader>fj` | jump list | with a preview of the spot |
 | `<leader>fh` | help | Neovim's help files and every section of these docs (`pure todoist › …`) |
-| `<leader>fc` | colorschemes | the choice is remembered across restarts |
+| `<leader>fc` | colorschemes | the choice is remembered across restarts; **omarchy** (first) follows the Omarchy theme |
 | `<leader>fe` | explorer | walk folders; type a new name to create a file, or `name/` for a folder |
 | `<leader>gl` | git log | shows the picked commit in a split (`q` closes) |
 | `<leader>n…` | new file | straight into its folder, asking only the name (`nh` home, `n.` ~/.config, `nn` nvim, `ne` here; `vim.g.pure_new_file_ask_name = false`: an unnamed buffer there instead). `nf` picks the folder first; `nv` is a note in the vault's inbox; `nd` a new folder here |
