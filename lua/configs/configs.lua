@@ -262,6 +262,21 @@ vim.g.pure_md_bullets = { '•', '◦', '▪', '▫' }
 vim.g.pure_tasks_done = 'xX-'
 
 -- -----------------------------------------------------------------------------
+--  Link view  (pure/linkview.lua, <leader>vp preview, <leader>vq quick edit)
+-- -----------------------------------------------------------------------------
+-- 'key': the preview of the linked note only on its key. 'auto': also after
+-- the cursor rests on a link. 'off': no preview and no quick edit.
+-- Default: 'key'.
+vim.g.linkview_preview = 'key'
+
+-- With 'auto': milliseconds the cursor rests on a link before the preview
+-- shows. Default: 600.
+vim.g.linkview_delay = 600
+
+-- The keys (give only the one you change). Default below.
+vim.g.linkview_keys = { preview = '<leader>vp', edit = '<leader>vq' }
+
+-- -----------------------------------------------------------------------------
 --  Todoist  (pure/todoist.lua, <leader>td; the token: :TodoistToken)
 -- -----------------------------------------------------------------------------
 -- When :w in the task list asks before sending: 'all' (every save), 'delete'

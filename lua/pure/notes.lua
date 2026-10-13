@@ -508,6 +508,35 @@ function M.follow(urls_only)
   return true
 end
 
+--- Where the link under the cursor leads, without following it (for
+--- pure/linkview.lua): { path, sub, name }, or { missing = 'Name' } when no such
+--- note exists, or nil when the cursor is not on a note link.
+function M.target()
+  local link = linkAtCursor()
+  if not link or link.kind == 'url' then return nil end
+  local parts = link.kind == 'wiki' and splitInner(link.inner) or splitInner(urldecode(link.inner))
+  local idx, root = M.index()
+  local here = vim.api.nvim_buf_get_name(0)
+  local from = root and here ~= '' and relTo(root, here) or nil
+
+  if parts.target == '' then
+    return here ~= '' and { path = here, sub = parts.sub, name = vim.fn.fnamemodify(here, ':t:r') } or nil
+  end
+  if link.kind == 'md' and not from and here ~= '' then
+    local p = vim.fs.normalize(vim.fs.dirname(here) .. '/' .. parts.target)
+    for _, c in ipairs({ p, p .. '.md' }) do
+      if vim.uv.fs_stat(c) then return { path = c, sub = parts.sub, name = vim.fn.fnamemodify(c, ':t:r') } end
+    end
+  end
+  if not root then return nil end
+  local rel = resolve(idx, parts.target, from) or resolve(M.index(true), parts.target, from)
+  if not rel then return { missing = parts.target } end
+  return { path = root .. '/' .. rel, sub = parts.sub, name = stemOf(rel) }
+end
+
+--- The same heading / ^block lookup the links use, for pure/linkview.lua.
+M.jump, M.slug = jumpTo, slug
+
 --- <CR> in markdown: follow a link, open a ```todoist block, toggle a
 --- checkbox, fold a heading; else a plain <CR>.
 function M.enter()
