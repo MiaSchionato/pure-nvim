@@ -120,6 +120,7 @@ selected; in normal mode `>>` / `<<` indent.
 |---|---|
 | `is` / `as` | inside / around `[ ]` |
 | `ic` / `ac` | inside / around `{ }` |
+| `ip` / `ap` | inside / around `( )` (`p` is parentheses, not paragraph; use `i}` for a paragraph) |
 | `iq` / `aq` | inside / around the nearest quotes of any kind |
 | `i.` / `a.` | a sentence |
 | `in` / `an` | the treesitter node: child / parent (visual: `[n` `]n` `[N` `]N` move between nodes) |
