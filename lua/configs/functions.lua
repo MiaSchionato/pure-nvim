@@ -12,6 +12,29 @@ function M.ConfigHighlightByColorscheme(colorscheme, highlightGroups)
   })
 end
 
+--- Give floating windows (fuzzy finder, pickers, popups, notifications) the
+--- same background as the editor: whatever `Normal` has under the current
+--- colorscheme, so every theme gets matching floats instead of its own panel
+--- colour or a transparent one.
+local floatBgGroups = {
+  "NormalFloat", "FloatBorder", "FloatTitle", "FloatFooter",
+  "Pmenu", "PmenuSbar", "PmenuBorder",
+}
+local themeBg
+--- `fresh`: a colorscheme was just applied, so forget the previous theme's
+--- background. Later calls (after Normal was made transparent) keep using the
+--- theme's own colour rather than going transparent too.
+function M.syncFloatBg(fresh)
+  if fresh then themeBg = nil end
+  local normal = vim.api.nvim_get_hl(0, { name = "Normal", link = false })
+  themeBg = normal.bg or themeBg
+  for _, group in ipairs(floatBgGroups) do
+    local hl = vim.api.nvim_get_hl(0, { name = group, link = false })
+    hl.bg, hl.ctermbg = themeBg, nil
+    vim.api.nvim_set_hl(0, group, hl)
+  end
+end
+
 function M.MyTabline()
   local line = ""
   local tabs = vim.api.nvim_list_tabpages()

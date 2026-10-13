@@ -49,9 +49,22 @@ vim.api.nvim_create_autocmd("VimEnter", {
     -- Apply background color from nightfly
     -- vim.api.nvim_set_hl(0,"Normal", {bg='#011627'})
     
+    -- Floats take the theme's background before Normal is made transparent.
+    require('configs.functions').syncFloatBg(true)
+
     -- Transparent background
     vim.api.nvim_set_hl(0,"Normal", {bg='NONE'})
   end
+})
+
+-- Floats follow the theme's Normal background (see syncFloatBg); the scheduled
+-- call runs again after any Normal override (neovide.lua).
+vim.api.nvim_create_autocmd("ColorScheme", {
+  callback = function()
+    local func = require('configs.functions')
+    func.syncFloatBg(true)
+    vim.schedule(func.syncFloatBg)
+  end,
 })
 
 -- Dashboard

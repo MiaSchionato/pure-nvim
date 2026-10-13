@@ -1798,24 +1798,39 @@ local MOVE_RULES = '\n\nTo move or rename a file, use no tool: put one line per 
 
 --- Told to every model when an action has Todoist in its tools: no model has
 --- a Todoist tool, so the changes come as <todoist/> lines that Neovim sends
---- after the answer (todoist.act), with the open tasks given here to compare.
-local TODOIST_RULES = '\n\nTo change Todoist, use no tool: put one line per change in your answer. '
-  .. 'The value of add IS the new task\'s text (there is no content field when adding). For example, '
-  .. 'a task with two steps under it:\n'
-  .. '<todoist add="Finish the chimp video" project="Work" ref="t1"/>\n'
-  .. '<todoist add="Color grade" parent="t1" ref="t2"/>\n'
-  .. '<todoist add="Match the cameras" parent="t2" due="tomorrow 10am" priority="p2"/>\n'
-  .. 'Changing or completing an open task (its ID from the list below):\n'
-  .. '<todoist update="ID" content="new text" due="…" priority="…" parent="…"/>\n'
-  .. '<todoist complete="ID"/>\n'
-  .. 'Every line is sent as written, so write each change once, with its real text: no draft, example '
-  .. 'or corrected lines. Leave out what does not change. description is optional. due is any Todoist date phrase '
-  .. 'in English, priority p1 (urgent) to p4, project an existing project\'s name. parent makes a subtask '
-  .. '(any depth): the ID of an open task, or the ref of a task added in an earlier line of this answer '
-  .. '(a subtask takes its parent\'s project; on update it moves the task there). No double quotes inside '
-  .. 'a value. IDs come from the open tasks below. Never add a task that is already there: update it. '
-  .. 'Neovim sends the lines when you are done; you will not see the result, so say in your answer what '
-  .. 'you asked to change.\n<todoist_tasks>\n%s\n</todoist_tasks>'
+--- after the answer (todoist.act), with the open tasks given here to compare
+--- and the note's own tasks already picked out (todoist.noteTasks): a small
+--- local model took the status legend for tasks and made up IDs.
+local TODOIST_RULES = [[
+
+
+TODOIST. You have no Todoist tool: you change Todoist by writing lines in your answer, one per change.
+Neovim sends every line exactly as written, so write each change once, with its real text (never a
+draft, an example or a placeholder).
+
+Add a task (the value of add IS its text):  <todoist add="Finish the chimp video" project="Work" ref="a"/>
+Add a subtask under it (any depth):         <todoist add="Color grade" parent="a" ref="b"/>
+                                            <todoist add="Match the cameras" parent="b" due="tomorrow"/>
+Change an open task:                        <todoist update="ID" content="New text" due="friday" priority="p2"/>
+Move an open task under another:            <todoist update="ID" parent="ID or ref"/>
+Complete an open task:                      <todoist complete="ID"/>
+
+- ID is the id:… of a task in <todoist_tasks>, copied exactly. Never make one up: a line with any other
+  ID is refused. ref is a short name you give a task you add, for its subtasks' parent.
+- The tasks to bring over are the ones in <note_tasks> (already without lists Neovim writes and the
+  status legend). [ ] is open, [x] done; other marks ([~] [!] [>] [-]) are open too.
+- A task already in <todoist_tasks> (same meaning, other words) is not added again.
+- Optional: due (a Todoist date phrase in English), priority p1 (urgent) to p4, project (an existing
+  project's name; a subtask takes its parent's), description. No double quotes inside a value.
+- You will not see the result: say in your answer what you asked to change.
+
+<todoist_tasks>
+%s
+</todoist_tasks>
+
+<note_tasks>
+%s
+</note_tasks>]]
 
 local function run(opts)
   local active = parseModel(opts.model)
@@ -1843,7 +1858,17 @@ local function run(opts)
   local todoist = vim.iter(opts.tools or {}):any(function(t) return t:match('^%a+') == 'Todoist' end)
   if todoist then
     opts.tools = vim.tbl_filter(function(t) return t:match('^%a+') ~= 'Todoist' end, opts.tools)
-    opts.prompt = opts.prompt .. TODOIST_RULES:format(require('pure.todoist').text('all', true))
+    local todo = require('pure.todoist')
+    local open = todo.text('all', true)
+    -- The note the request is about (opts.buf): another buffer may be
+    -- current by the time run() is called
+    local src = opts.buf and vim.api.nvim_buf_is_valid(opts.buf) and opts.buf or 0
+    local tasks, skip = todo.noteTasks(vim.api.nvim_buf_get_lines(src, 0, -1, false))
+    -- For act: the IDs a line may name (these, and the refs of its own adds)
+    -- and the texts it may not add (the legend's, the done tasks')
+    todoist = { _known = {}, _skip = skip }
+    for id in open:gmatch('id:(%S+)') do todoist._known[id] = true end
+    opts.prompt = opts.prompt .. TODOIST_RULES:format(open, tasks)
   end
   -- The user context goes with every new conversation (a follow-up's
   -- session already has it), and <remember> is taken out of the answer.
@@ -1885,7 +1910,7 @@ local function run(opts)
       if #moved > 0 then clean = vim.trim(clean) .. '\n\n' .. table.concat(moved, '\n') end
     end
     if todoist and not err and clean then
-      local done, refs = {}, {}
+      local done, refs = {}, { _known = todoist._known, _skip = todoist._skip }
       clean = clean:gsub('[ \t]*<todoist%s+(.-)%s*/?>[ \t]*\n?', function(attrs)
         local a = {}
         for k, v in attrs:gmatch('(%w+)="([^"]*)"') do a[k] = v end
@@ -2798,6 +2823,7 @@ function M.write(instruction, range, extra)
     end
 
     run({
+      buf = buf,
       prompt = prompt,
       cwd = extra.cwd or workdir(buf),
       tools = extra.tools,
@@ -3220,6 +3246,7 @@ function M.runAction(a, ctx)
     end
     writing[buf] = { toggle = function() open = not open; redraw() end }
     run({
+      buf = buf,
       prompt = AGENT_RULES .. '\n\n' .. context(buf, ctx.range) .. '\n\nTask: ' .. body,
       tools = a.tools or READ_TOOLS,
       model = a.model,
