@@ -98,6 +98,7 @@ See [llm.md](llm.md).
 | `<leader>fg` | n | Grep |
 | `<leader>fh` | n | Help tags |
 | `<leader>fj` | n | Jump list |
+| `<leader>f"` | n | Registers (Enter: make it the register p pastes) |
 | `<leader>fl` | n | Notes linking here (backlinks, also <leader>vb) |
 | `<leader>fn` | n | Find in nvim config |
 | `<leader>fv` | n | Find in Atlas, the Obsidian vault |
@@ -207,6 +208,8 @@ See [manim.md](manim.md).
 | `<leader>vg` | n | Grep the vault |
 | `<leader>vn` | n | New note (inbox, asks the name only) |
 | `<leader>vr` | n | Rename note, fix links to it |
+| `<leader>vp` | n | Preview the linked note |
+| `<leader>vq` | n | Quick edit the linked note |
 | `<leader>vs` | n | Sync the vault (git) |
 | `<leader>vN` | n | New note from a template (born in its folder) |
 | `<leader>vt` | n | Apply a template |
@@ -296,6 +299,7 @@ See [manim.md](manim.md).
 | `ac` | Outer curly brackets |
 | `ai` | Outer indent scope |
 | `an` | Select parent (outer) node |
+| `ap` | Outer parentheses |
 | `aq` | Smart outer quotes |
 | `as` | Outer square brackets |
 | `gc` | Toggle comment |
@@ -305,6 +309,7 @@ See [manim.md](manim.md).
 | `ic` | Inner curly brackets |
 | `ii` | Inner indent scope |
 | `in` | Select child (inner) node |
+| `ip` | Inner parentheses (not paragraph; the paragraph is `i}`) |
 | `iq` | Smart inner quotes |
 | `is` | Inner square brackets |
 | `s` | Surround selection |
@@ -323,7 +328,7 @@ See [manim.md](manim.md).
 
 | Key | What |
 |---|---|
-| `<Esc><Esc>` | Close terminal |
+| `<Esc><Esc>` | Close the floating terminal (not the one in a tab) |
 | `<S-Esc>` | Leave terminal mode |
 
 Text objects (`is`, `ic`, `iq`, `ii`, `in` …): see [editing.md](editing.md).

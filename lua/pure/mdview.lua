@@ -577,10 +577,19 @@ local function reconcile(buf, want, rows)
   local keep = {}
   local from, to = 0, -1
   if rows then from, to = { rows[1], 0 }, { rows[2], -1 } end
-  for _, m in ipairs(vim.api.nvim_buf_get_extmarks(buf, ns, from, to, {})) do
+  for _, m in ipairs(vim.api.nvim_buf_get_extmarks(buf, ns, from, to, { details = true })) do
     local id = m[1]
     -- Keyed by where the mark is now: edits move marks with the text.
     local key = have[id] and (m[2] .. ':' .. m[3] .. ':' .. have[id])
+    -- Replacing a whole line (cycling a checkbox) collapses the marks on it
+    -- onto the line below, where a conceal of end_col 2 became one of width
+    -- 0 and still passed for the real one: the bullet below stayed visible.
+    -- A mark whose end is no longer the one it was drawn with is stale.
+    local drawn_end = key and have[id]:match('end_col = (%d+)')
+    if drawn_end and (m[4].end_col ~= tonumber(drawn_end)
+        or (not have[id]:find('end_row', 1, true) and (m[4].end_row or m[2]) ~= m[2])) then
+      key = nil
+    end
     if key and not keep[key] then
       keep[key] = id
     else

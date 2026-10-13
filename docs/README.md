@@ -18,6 +18,7 @@ When a module changes, update its page here in the same commit.
 | [llm.md](llm.md) | LLMs (Claude, Ollama, agy) from keys: write into the buffer, the chat, actions, requests in notes |
 | [manim.md](manim.md) | Manim: the scene you are writing plays in a window, again on every save |
 | [notes.md](notes.md) | Links between notes: follow, complete `[[`, rename without breaking links, backlinks |
+| [linkview.md](linkview.md) | Preview and quick edit of the note a link points to, in a floating window |
 | [zettelkasten.md](zettelkasten.md) | Obsidian vault, note templates, daily / weekly / monthly notes |
 | [markdown.md](markdown.md) | How markdown is drawn: headings, tasks, tables, wikilinks, frontmatter, footnotes |
 | [keyhint.md](keyhint.md) | The window that lists the keys after `<leader>` |
