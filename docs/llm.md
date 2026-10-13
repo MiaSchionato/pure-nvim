@@ -222,6 +222,13 @@ replaces with what was done (`Todoist: added "…"`):
 of a task added earlier in the same answer; on `update` it moves the task
 under that one.
 
+The model is also given the note's own tasks (`<note_tasks>`), picked out by
+`todoist.noteTasks`: without the regions Neovim writes, code blocks and the
+status legend. A small local model took the legend for tasks, added `[x]`
+ones and made up IDs, so `todoist.act` refuses: an `update`, `complete` or
+`parent` whose ID is not an open task (nor a `ref` of the answer), and an
+`add` of a legend or done task's text.
+
 It works the same on Claude, agy and Ollama, and the `todoist` blocks of open
 notes are redrawn after. The vault's "Sincronizar com Todoist" action uses it
 to bring the current note's `- [ ]` tasks into Todoist.
