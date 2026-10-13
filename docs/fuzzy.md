@@ -20,6 +20,7 @@ split and make fzf quit.)
 | `<leader>fb` | buffers | open buffers |
 | `<leader>f/` | recent files | `:oldfiles` |
 | `<leader>fj` | jump list | with a preview of the spot |
+| `<leader>f"` | registers | every register with text; `Enter` makes it the unnamed register (the one `p` pastes) |
 | `<leader>fh` | help | Neovim's help files and every section of these docs (`pure todoist › …`) |
 | `<leader>fc` | colorschemes | the choice is remembered across restarts; **omarchy** (first) follows the Omarchy theme |
 | `<leader>fe` | explorer | walk folders; type a new name to create a file, or `name/` for a folder |

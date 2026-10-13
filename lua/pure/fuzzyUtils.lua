@@ -526,6 +526,34 @@ function M.fuzzyJump()
 end
 
 
+--- Every register with something in it, one per line as `name │ start of the
+--- text`; Enter makes the pick the unnamed register (the one p pastes), same
+--- type (characterwise, linewise or blockwise) as it had.
+function M.fuzzyRegisters()
+  local names = {}
+  for name in ('"0123456789abcdefghijklmnopqrstuvwxyz-.:/%#+*'):gmatch('.') do
+    local ok, info = pcall(vim.fn.getreginfo, name)
+    local text = ok and info and table.concat(info.regcontents or {}, '\n') or ''
+    if text ~= '' then
+      -- A line break shows as ↵ and a tab as a space; fzf lists one line
+      local shown = text:gsub('\n', '↵'):gsub('\t', ' ')
+      table.insert(names, { name = name, line = ('%s │ %s'):format(name, shown), info = info })
+    end
+  end
+  if #names == 0 then return vim.notify('No register has text', vim.log.levels.INFO) end
+
+  pickList(vim.tbl_map(function(r) return r.line end, names),
+    { title = 'Registers (Enter: make it the register p pastes)', fzf = '--no-sort' },
+    function(selection)
+      for _, r in ipairs(names) do
+        if r.line == selection then
+          vim.fn.setreg('"', r.info.regcontents, r.info.regtype)
+          return vim.notify(('Register " is now %s'):format(r.name == '"' and 'itself' or r.name))
+        end
+      end
+    end)
+end
+
 function M.fuzzyBuffers()
   local buffers = {}
   for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
