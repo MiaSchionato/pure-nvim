@@ -155,15 +155,18 @@ function M.getOpts(base_opts, desc)
   return vim.tbl_extend("force", base_opts, {desc = desc})
 end
 
-function M.createWindow(title, ratio)
-  local buf = vim.api.nvim_create_buf(false, true)
+--- A centred floating window. `opts`: enter (default true) false leaves the
+--- focus where it was; buf shows an existing buffer instead of a new scratch one.
+function M.createWindow(title, ratio, opts)
+  opts = opts or {}
+  local buf = opts.buf or vim.api.nvim_create_buf(false, true)
   local height = math.ceil(vim.o.lines * ratio)
   local width = math.ceil(vim.o.columns * ratio)
   if title == " " then
     title = nil
   end
 
-  local win = vim.api.nvim_open_win(buf, true,{
+  local win = vim.api.nvim_open_win(buf, opts.enter ~= false, {
     relative = "editor",
     width = width,
     height = height,

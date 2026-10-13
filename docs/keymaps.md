@@ -208,6 +208,8 @@ See [manim.md](manim.md).
 | `<leader>vg` | n | Grep the vault |
 | `<leader>vn` | n | New note (inbox, asks the name only) |
 | `<leader>vr` | n | Rename note, fix links to it |
+| `<leader>vp` | n | Preview the linked note |
+| `<leader>vq` | n | Quick edit the linked note |
 | `<leader>vs` | n | Sync the vault (git) |
 | `<leader>vN` | n | New note from a template (born in its folder) |
 | `<leader>vt` | n | Apply a template |
