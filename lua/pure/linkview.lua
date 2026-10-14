@@ -3,20 +3,22 @@
 -- =============================================================================
 --  Look at a linked note without leaving the one you are writing:
 --
---    <leader>vp   preview: a floating, read-only window with the note the
---                 link under the cursor points to (just the section for
---                 [[Note#Heading]], just the block for [[Note#^id]]), without
---                 its frontmatter. Moving the cursor closes it; the key again
---                 closes it too.
+--    hover        preview: a small read-only window next to the cursor, like
+--                 the suggestion menu, with the note the link under the cursor
+--                 points to (just the section for [[Note#Heading]], just the
+--                 block for [[Note#^id]]), without its frontmatter. It shows
+--                 when the cursor rests on a link and closes when it moves.
+--    <leader>vp   the same on a key (toggles it).
 --    <leader>vq   quick edit: the note itself (the real buffer, not a copy)
 --                 in a floating window. :w saves; q or <Esc> in normal mode
 --                 closes it, saving what changed, and unloads the note again
 --                 if it was not open before.
 --
 --  Settings (vim.g.*, described in configs/configs.lua):
---    linkview_preview   'key' (default: only on the key), 'auto' (also after
---                       the cursor rests on a link) or 'off' (nothing)
+--    linkview_preview   'auto' (default: also after the cursor rests on a
+--                       link), 'key' (only on the key) or 'off' (nothing)
 --    linkview_delay     ms the cursor rests before 'auto' shows it (default 600)
+--    linkview_size      { width = 64, rows = 12 } at most, for the preview
 --    linkview_keys      { preview = '<leader>vp', edit = '<leader>vq' }
 -- =============================================================================
 
@@ -27,9 +29,14 @@ local notes = require('pure.notes')
 
 local DEFAULT_KEYS = { preview = '<leader>vp', edit = '<leader>vq' }
 
+local DEFAULT_SIZE = { width = 64, rows = 12 }
+
+local edits = {}    -- quick edit window -> its buffer
+local buf_keys = {} -- buffer -> the keys mapped on it for the quick edits
+
 local shown = { win = nil, from = nil } -- the preview window, and the buffer it was asked in
 
-local function mode() return vim.g.linkview_preview or 'key' end
+local function mode() return vim.g.linkview_preview or 'auto' end
 
 -- -----------------------------------------------------------------------------
 --  What to show
@@ -137,25 +144,46 @@ function M.preview(quiet)
   if #lines == 0 then lines = { '(empty note)' } end
 
   local from = vim.api.nvim_get_current_buf()
-  local win, buf = func.createWindow(' ' .. t.name .. (t.sub and ('#' .. t.sub) or '') .. ' ', 0.6, { enter = false })
+  local buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
   vim.bo[buf].filetype = 'markdown'
   vim.bo[buf].modifiable = false
   vim.bo[buf].bufhidden = 'wipe'
+
+  -- Like the suggestion menu: small, next to the cursor, the menu's colours
+  -- and border, and it never takes the focus.
+  local size = vim.tbl_extend('force', DEFAULT_SIZE, vim.g.linkview_size or {})
+  local longest = 0
+  for _, l in ipairs(lines) do longest = math.max(longest, vim.fn.strdisplaywidth(l)) end
+  local width = math.max(math.min(size.width, longest, vim.o.columns - 4), 20)
+  local rows = 0
+  for _, l in ipairs(lines) do rows = rows + math.max(1, math.ceil(vim.fn.strdisplaywidth(l) / width)) end
+  -- Below the cursor line, or above it when there is more room there
+  local line = vim.fn.winline() + vim.fn.win_screenpos(0)[1] - 1
+  local below = vim.o.lines - vim.o.cmdheight - line - 2
+  local above = line - 3
+  local up = rows > below and above > below
+  local height = math.max(math.min(rows, size.rows, up and above or below), 1)
+  local col = math.min(0, vim.o.columns - 2 - (vim.fn.wincol() + vim.fn.win_screenpos(0)[2] - 1) - width)
+  local border = (vim.o.pumborder ~= '' and vim.o.pumborder) or 'rounded'
+  local win = vim.api.nvim_open_win(buf, false, {
+    relative = 'cursor',
+    anchor = up and 'SW' or 'NW',
+    row = up and 0 or 1,
+    col = col,
+    width = width,
+    height = height,
+    style = 'minimal',
+    border = border,
+    title = ' ' .. t.name .. (t.sub and ('#' .. t.sub) or '') .. ' ',
+    focusable = false,
+    zindex = 60,
+  })
+  vim.wo[win].winhighlight = 'NormalFloat:Pmenu,FloatBorder:PmenuBorder,FloatTitle:Pmenu'
   vim.wo[win].wrap = true
   vim.wo[win].linebreak = true
   vim.wo[win].conceallevel = 0
   shown.win, shown.from = win, from
-  -- A short note leaves empty rows: shrink to what it needs.
-  local rows = 0
-  local width = vim.api.nvim_win_get_width(win)
-  for _, l in ipairs(lines) do rows = rows + math.max(1, math.ceil(vim.fn.strdisplaywidth(l) / math.max(width, 1))) end
-  if rows < vim.api.nvim_win_get_height(win) then
-    vim.api.nvim_win_set_height(win, math.max(rows, 1))
-    local cfg = vim.api.nvim_win_get_config(win)
-    cfg.row = math.max(math.ceil((vim.o.lines - rows - 2) / 2), 0)
-    vim.api.nvim_win_set_config(win, cfg)
-  end
 end
 
 -- -----------------------------------------------------------------------------
@@ -187,21 +215,40 @@ function M.edit()
   if t.sub and t.sub ~= '' then notes.jump(t.sub) end
 
   -- q and <Esc> close it, unless the buffer already has them for something
-  local mapped = {}
-  for _, key in ipairs({ 'q', '<Esc>' }) do
-    if vim.fn.maparg(key, 'n', false, true).buffer ~= 1 then
-      vim.keymap.set('n', key, function()
-        if vim.api.nvim_win_is_valid(win) then vim.api.nvim_win_close(win, true) end
-      end, { buffer = buf, nowait = true, desc = 'Close the quick edit' })
-      table.insert(mapped, key)
+  -- else. The same note can be in several quick edits at once (A opens B
+  -- opens A), so the key closes the window it was pressed in, and the
+  -- mapping goes away with the last of them.
+  edits[win] = buf
+  local mapped = buf_keys[buf]
+  if not mapped then
+    mapped = {}
+    for _, key in ipairs({ 'q', '<Esc>' }) do
+      if vim.fn.maparg(key, 'n', false, true).buffer ~= 1 then
+        vim.keymap.set('n', key, function()
+          local cur = vim.api.nvim_get_current_win()
+          if edits[cur] == buf then
+            vim.api.nvim_win_close(cur, true)
+          else -- the note is also open in a normal window: the key keeps its own meaning
+            vim.api.nvim_feedkeys(vim.keycode(key), 'n', false)
+          end
+        end, { buffer = buf, nowait = true, desc = 'Close the quick edit' })
+        table.insert(mapped, key)
+      end
     end
+    buf_keys[buf] = mapped
   end
 
   vim.api.nvim_create_autocmd('WinClosed', {
     pattern = tostring(win),
     once = true,
     callback = function()
-      for _, key in ipairs(mapped) do pcall(vim.keymap.del, 'n', key, { buffer = buf }) end
+      edits[win] = nil
+      local others = false
+      for _, b in pairs(edits) do others = others or b == buf end
+      if not others then
+        for _, key in ipairs(mapped) do pcall(vim.keymap.del, 'n', key, { buffer = buf }) end
+        buf_keys[buf] = nil
+      end
       if not vim.api.nvim_buf_is_valid(buf) then return end
       if vim.bo[buf].modified then
         vim.api.nvim_buf_call(buf, function() pcall(vim.cmd, 'silent update') end)
