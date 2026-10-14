@@ -10,14 +10,17 @@
 --                 when the cursor rests on a link and closes when it moves.
 --    <leader>vp   the same on a key (toggles it).
 --    <leader>vq   quick edit: the note itself (the real buffer, not a copy)
---                 in a floating window. :w saves; q or <Esc> in normal mode
---                 closes it, saving what changed, and unloads the note again
---                 if it was not open before.
+--                 in a floating window; it can be nested (a link inside a
+--                 quick edit). :w saves. q or <Esc><Esc> in normal mode, or :q,
+--                 closes ALL the quick edits and goes back to the window they
+--                 started from (so does entering any normal window); a note
+--                 with unsaved changes asks first. A note that was not open
+--                 before is unloaded again.
 --
 --  Settings (vim.g.*, described in configs/configs.lua):
 --    linkview_preview   'auto' (default: also after the cursor rests on a
 --                       link), 'key' (only on the key) or 'off' (nothing)
---    linkview_delay     ms the cursor rests before 'auto' shows it (default 600)
+--    linkview_delay     ms the cursor rests before 'auto' shows it (default 300)
 --    linkview_size      { width = 64, rows = 12 } at most, for the preview
 --    linkview_keys      { preview = '<leader>vp', edit = '<leader>vq' }
 -- =============================================================================
@@ -31,7 +34,10 @@ local DEFAULT_KEYS = { preview = '<leader>vp', edit = '<leader>vq' }
 
 local DEFAULT_SIZE = { width = 64, rows = 12 }
 
-local edits = {}    -- quick edit window -> its buffer
+local edits = {}    -- quick edit window -> { buf, seq }
+local seq = 0       -- opening order of the quick edits
+local closing = false
+local origin = nil  -- the window the first quick edit was opened from
 local buf_keys = {} -- buffer -> the keys mapped on it for the quick edits
 
 local shown = { win = nil, from = nil } -- the preview window, and the buffer it was asked in
@@ -190,6 +196,48 @@ end
 --  Quick edit
 -- -----------------------------------------------------------------------------
 
+--- Ready to let go of the buffer: when it has unsaved changes, ask. Yes saves,
+--- No throws them away, Cancel keeps everything open (returns false).
+local function settle(buf)
+  if not vim.api.nvim_buf_is_valid(buf) or not vim.bo[buf].modified then return true end
+  local name = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buf), ':t:r')
+  local choice = vim.fn.confirm('Save changes to "' .. name .. '"?', '&Yes\n&No\n&Cancel', 1)
+  if choice == 1 then
+    vim.api.nvim_buf_call(buf, function() pcall(vim.cmd, 'silent update') end)
+    return not vim.bo[buf].modified
+  elseif choice == 2 then
+    vim.api.nvim_buf_call(buf, function() pcall(vim.cmd, 'silent edit!') end)
+    return true
+  end
+  return false
+end
+
+--- Close every quick edit window, the innermost first, and go back to the
+--- window the first one was opened from. A modified note asks first; Cancel
+--- stops and leaves the rest open.
+function M.closeAll()
+  if closing then return end
+  closing = true
+  local wins = vim.tbl_keys(edits)
+  table.sort(wins, function(x, y) return edits[x].seq > edits[y].seq end)
+  local done = true
+  for _, win in ipairs(wins) do
+    if vim.api.nvim_win_is_valid(win) then
+      if not settle(edits[win].buf) then
+        done = false
+        vim.api.nvim_set_current_win(win)
+        break
+      end
+      pcall(vim.api.nvim_win_close, win, true)
+    end
+  end
+  closing = false
+  if done and origin and vim.api.nvim_win_is_valid(origin) then
+    pcall(vim.api.nvim_set_current_win, origin)
+  end
+  if done then origin = nil end
+end
+
 --- The note under the cursor, in a floating window, as the real buffer.
 function M.edit()
   M.closePreview()
@@ -202,6 +250,7 @@ function M.edit()
     return vim.notify(t.name .. ' is not a markdown note', vim.log.levels.INFO)
   end
 
+  if next(edits) == nil then origin = vim.api.nvim_get_current_win() end
   local nr = vim.fn.bufnr(t.path)
   local was_open = nr ~= -1 and vim.api.nvim_buf_is_loaded(nr)
   local buf = vim.fn.bufadd(t.path)
@@ -214,24 +263,24 @@ function M.edit()
   vim.wo[win].concealcursor = 'nc'
   if t.sub and t.sub ~= '' then notes.jump(t.sub) end
 
-  -- q and <Esc> close it, unless the buffer already has them for something
-  -- else. The same note can be in several quick edits at once (A opens B
-  -- opens A), so the key closes the window it was pressed in, and the
-  -- mapping goes away with the last of them.
-  edits[win] = buf
+  -- q and <Esc><Esc> close ALL the quick edits (they can be nested, and the
+  -- same note can be in several of them), unless the buffer already has the
+  -- key for something else. The mapping goes away with the last window.
+  seq = seq + 1
+  edits[win] = { buf = buf, seq = seq }
   local mapped = buf_keys[buf]
   if not mapped then
     mapped = {}
-    for _, key in ipairs({ 'q', '<Esc>' }) do
+    for _, key in ipairs({ 'q', '<Esc><Esc>' }) do
       if vim.fn.maparg(key, 'n', false, true).buffer ~= 1 then
         vim.keymap.set('n', key, function()
-          local cur = vim.api.nvim_get_current_win()
-          if edits[cur] == buf then
-            vim.api.nvim_win_close(cur, true)
+          local cur = edits[vim.api.nvim_get_current_win()]
+          if cur and cur.buf == buf then
+            M.closeAll()
           else -- the note is also open in a normal window: the key keeps its own meaning
             vim.api.nvim_feedkeys(vim.keycode(key), 'n', false)
           end
-        end, { buffer = buf, nowait = true, desc = 'Close the quick edit' })
+        end, { buffer = buf, nowait = true, desc = 'Close the quick edits' })
         table.insert(mapped, key)
       end
     end
@@ -244,19 +293,17 @@ function M.edit()
     callback = function()
       edits[win] = nil
       local others = false
-      for _, b in pairs(edits) do others = others or b == buf end
+      for _, e in pairs(edits) do others = others or e.buf == buf end
       if not others then
         for _, key in ipairs(mapped) do pcall(vim.keymap.del, 'n', key, { buffer = buf }) end
         buf_keys[buf] = nil
       end
-      if not vim.api.nvim_buf_is_valid(buf) then return end
-      if vim.bo[buf].modified then
-        vim.api.nvim_buf_call(buf, function() pcall(vim.cmd, 'silent update') end)
-      end
+      -- Closed some other way (:q, :close): the rest goes with it
+      if next(edits) and not closing then vim.schedule(M.closeAll) end
       -- Not open before: leave nothing behind (unless another window shows it)
       vim.schedule(function()
         if was_open or not vim.api.nvim_buf_is_valid(buf) or #vim.fn.win_findbuf(buf) > 0 then return end
-        if vim.bo[buf].modified then return end -- saving failed: keep it
+        if vim.bo[buf].modified then return end -- unsaved: keep it
         pcall(vim.api.nvim_buf_delete, buf, {})
       end)
     end,
@@ -274,6 +321,27 @@ if mode() ~= 'off' then
 end
 
 local group = vim.api.nvim_create_augroup('LinkView', { clear = true })
+
+-- :q in a quick edit: ask about unsaved changes first (Cancel: Vim's own
+-- "no write since last change" stops the :q when it is the only window)
+vim.api.nvim_create_autocmd('QuitPre', {
+  group = group,
+  callback = function()
+    local e = edits[vim.api.nvim_get_current_win()]
+    if e and not closing then settle(e.buf) end
+  end,
+})
+
+-- Back in a normal window: the quick edits are over
+vim.api.nvim_create_autocmd('WinEnter', {
+  group = group,
+  callback = function()
+    if closing or next(edits) == nil then return end
+    local cur = vim.api.nvim_get_current_win()
+    if edits[cur] or vim.api.nvim_win_get_config(cur).relative ~= '' then return end
+    vim.schedule(M.closeAll)
+  end,
+})
 local timer = vim.uv.new_timer()
 
 vim.api.nvim_create_autocmd({ 'CursorMoved', 'InsertEnter', 'BufLeave' }, {
@@ -285,7 +353,7 @@ vim.api.nvim_create_autocmd({ 'CursorMoved', 'InsertEnter', 'BufLeave' }, {
     timer:stop()
     if mode() ~= 'auto' or args.event ~= 'CursorMoved' or vim.bo[args.buf].filetype ~= 'markdown' then return end
     local pos = vim.api.nvim_win_get_cursor(0)
-    timer:start(vim.g.linkview_delay or 600, 0, vim.schedule_wrap(function()
+    timer:start(vim.g.linkview_delay or 300, 0, vim.schedule_wrap(function()
       if vim.api.nvim_get_current_buf() ~= args.buf or vim.fn.mode() ~= 'n' then return end
       if not vim.deep_equal(vim.api.nvim_win_get_cursor(0), pos) then return end
       M.preview(true)

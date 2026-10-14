@@ -278,8 +278,8 @@ vim.g.remote_socket = '/tmp/nvim-atlas.sock'
 vim.g.linkview_preview = 'auto'
 
 -- With 'auto': milliseconds the cursor rests on a link before the preview
--- shows. Default: 600.
-vim.g.linkview_delay = 600
+-- shows. Default: 300.
+vim.g.linkview_delay = 300
 
 -- The most the preview takes: columns and rows. Default below.
 vim.g.linkview_size = { width = 64, rows = 12 }
