@@ -262,6 +262,14 @@ vim.g.pure_md_bullets = { '•', '◦', '▪', '▫' }
 vim.g.pure_tasks_done = 'xX-'
 
 -- -----------------------------------------------------------------------------
+--  Remote  (pure/remote.lua)
+-- -----------------------------------------------------------------------------
+-- The first Neovim started listens at this address, so the Flow Launcher
+-- plugin (or `nvim --server ADDRESS --remote FILE`) opens a file in it.
+-- '' or false: do not listen. Default: '/tmp/nvim-atlas.sock'.
+vim.g.remote_socket = '/tmp/nvim-atlas.sock'
+
+-- -----------------------------------------------------------------------------
 --  Link view  (pure/linkview.lua, <leader>vp preview, <leader>vq quick edit)
 -- -----------------------------------------------------------------------------
 -- 'key': the preview of the linked note only on its key. 'auto': also after

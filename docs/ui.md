@@ -85,6 +85,20 @@ The shell: `vim.g.pure_terminal_shell` if set; on Windows the first of `nu`,
 `pwsh`, `powershell` found (separate from the Git bash the pickers use);
 elsewhere `'shell'`.
 
+## Remote (`lua/pure/remote.lua`)
+
+The first Neovim started listens at a fixed address, `/tmp/nvim-atlas.sock`
+(`vim.g.remote_socket`; `''` turns it off), so a program outside can open a
+file in it instead of starting another one:
+
+```
+nvim --server /tmp/nvim-atlas.sock --remote 'Atlas/0-Inbox/Note.md'
+```
+
+The Flow Launcher plugin `nv` does this. A Neovim started while another owns
+the address does not listen there; a socket left by a Neovim that died is
+replaced. Not on Windows (named pipes) and not in headless runs.
+
 ## Themes (`lua/themes/colorschemes.lua`, `colors/`)
 
 `<leader>fc` picks a colorscheme; it is remembered across restarts, in
