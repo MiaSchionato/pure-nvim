@@ -78,8 +78,16 @@ theme's `DiagnosticWarn` / `DiagnosticError`.
 |---|---|
 | `<leader>tt` | floating terminal (toggle; it keeps running when hidden) |
 | `<leader>tg` | floating terminal running `gemini` |
-| `<Esc><Esc>` | close the terminal |
-| `<S-Esc>` | leave terminal mode (to scroll / copy) |
+| `<Esc>` | leave terminal mode at once (to scroll / copy) |
+| `<Esc>` again, within 250 ms | close (hide) the terminal; it keeps running |
+| `<A-Esc>` | send a real `<Esc>` to the shell |
+| `<Esc><Esc>` | close the terminal, for the ones running a command (`<leader>tc`, `<leader>tg`) |
+| `<S-Esc>` | leave terminal mode |
+
+`vim.g.terminal_esc_ms` (default 250) is the time for the second `<Esc>`;
+`0` / `false` goes back to `<Esc><Esc>` only, with `<Esc>` reaching the
+shell. The terminal in a tab (`<leader>tm`) is not touched. The fuzzy pickers
+are never left with `<Esc>`: it always closes them (see [fuzzy.md](fuzzy.md)).
 
 The shell: `vim.g.pure_terminal_shell` if set; on Windows the first of `nu`,
 `pwsh`, `powershell` found (separate from the Git bash the pickers use);

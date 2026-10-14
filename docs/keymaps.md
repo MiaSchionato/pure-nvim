@@ -328,7 +328,8 @@ See [manim.md](manim.md).
 
 | Key | What |
 |---|---|
-| `<Esc><Esc>` | Close the floating terminal (not the one in a tab) |
+| `<Esc>` then `<Esc>` again (250 ms) | Leave terminal mode, then close the floating terminal (not the one in a tab); `<A-Esc>` sends a real `<Esc>`. See [ui.md](ui.md) |
+| `<Esc><Esc>` | Close a floating terminal that runs a command |
 | `<S-Esc>` | Leave terminal mode |
 
 Text objects (`is`, `ic`, `iq`, `ii`, `in` …): see [editing.md](editing.md).

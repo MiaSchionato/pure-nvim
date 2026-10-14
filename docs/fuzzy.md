@@ -6,7 +6,7 @@ terminal; the choice comes back to Neovim when fzf exits. Needs `fzf`, `fd`,
 `windows` branch sets that up).
 
 In any picker: type to filter, arrows or `Ctrl-j` / `Ctrl-k` to move, `Enter`
-to pick, `Esc` to cancel. (Arrows are turned into `Ctrl-k` / `Ctrl-j`
+to pick, `Esc` to cancel (a single `Esc` always closes the picker, even with a global terminal-mode `Esc` that leaves terminal mode). (Arrows are turned into `Ctrl-k` / `Ctrl-j`
 before they reach fzf: on Windows an arrow's escape sequence could arrive
 split and make fzf quit.)
 
