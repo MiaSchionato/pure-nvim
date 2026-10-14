@@ -272,14 +272,17 @@ vim.g.remote_socket = '/tmp/nvim-atlas.sock'
 -- -----------------------------------------------------------------------------
 --  Link view  (pure/linkview.lua, <leader>vp preview, <leader>vq quick edit)
 -- -----------------------------------------------------------------------------
--- 'key': the preview of the linked note only on its key. 'auto': also after
--- the cursor rests on a link. 'off': no preview and no quick edit.
--- Default: 'key'.
-vim.g.linkview_preview = 'key'
+-- 'auto': the preview of the linked note shows when the cursor rests on a
+-- link, like the suggestion menu (and on its key). 'key': only on the key.
+-- 'off': no preview and no quick edit. Default: 'auto'.
+vim.g.linkview_preview = 'auto'
 
 -- With 'auto': milliseconds the cursor rests on a link before the preview
 -- shows. Default: 600.
 vim.g.linkview_delay = 600
+
+-- The most the preview takes: columns and rows. Default below.
+vim.g.linkview_size = { width = 64, rows = 12 }
 
 -- The keys (give only the one you change). Default below.
 vim.g.linkview_keys = { preview = '<leader>vp', edit = '<leader>vq' }

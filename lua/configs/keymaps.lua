@@ -210,6 +210,10 @@ map({ 'x', 'o' }, 'is', 'i[', { desc = "Inner square brackets" })
 map({ 'x', 'o' }, 'as', 'a[', { desc = "Outer square brackets" })
 map({ 'x', 'o' }, 'ic', [[i{]], { desc = "Inner curly brackets" })
 map({ 'x', 'o' }, 'ac', [[a}]], { desc = "Outer curly brackets" })
+-- p is for parentheses, not paragraphs: dip deletes inside (...). The
+-- paragraph is still there as i} / a}.
+map({ 'x', 'o' }, 'ip', [[i(]], { desc = "Inner parentheses" })
+map({ 'x', 'o' }, 'ap', [[a(]], { desc = "Outer parentheses" })
 map({ 'x', 'o' }, 'i.', [[is]], { desc = "Inner sentence" })
 map({ 'x', 'o' }, 'a.', [[as]], { desc = "Outer sentence" })
 
@@ -241,9 +245,10 @@ map("n", "cs", sur.changeSurround, { desc = "Change surround" })
 map('n', "<leader>p", '"+p', func.getOpts(opts, "Paste from clipboard"))
 map("x", "<leader>p", [["_dP]], func.getOpts(opts, "Paste over without yanking"))
 map({ 'n', 'v' }, "<leader>y", '"+y', func.getOpts(opts, "Yank to clipboard"))
+map({ 'n', 'v' }, "<C-c>", '"+y', func.getOpts(opts, "Yank to clipboard"))
+map({ 'n', 'v' }, "<C-v>", '"+p', func.getOpts(opts, "Paste from clipboard"))
+
 map({ 'n', 'v' }, "<leader>D", '"_d', func.getOpts(opts, "Delete without yanking"))
-map('n', "<leader>r", [[:%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><Left>]],
-  { desc = "Rename word under cursor" })
 
 map('v', "<leader>s", [[:s/\%V]], { desc = "Substitute inside selection" })
 map('v', "<leader>n", [[:norm]], func.getOpts(opts, "Run normal command on selection"))
@@ -321,6 +326,8 @@ map('n', "<leader>f/", fzf.fuzzyOldfiles, func.getOpts(opts, "Recent files"))
 map('n', "<leader>fh", fzf.fuzzyHelp, func.getOpts(opts, "Help tags"))
 map('n', "<leader>fb", fzf.fuzzyBuffers, func.getOpts(opts, "Buffers"))
 map('n', "<leader>fj", fzf.fuzzyJump, func.getOpts(opts, "Jump list"))
+map('n', '<leader>f"', fzf.fuzzyRegisters, func.getOpts(opts, "Registers (Enter: make it the register p pastes)"))
+map('n', "<leader>f'", fzf.fuzzyRegisters, func.getOpts(opts, "Registers (Enter: make it the register p pastes)"))
 map('n', '<leader>fl', function() require('pure.notes').backlinks() end, func.getOpts(opts, "Notes linking here (backlinks, also <leader>vb)"))
 map('n', '<leader>fc', fzf.fuzzyColorscheme, func.getOpts(opts, "Colorschemes"))
 
@@ -534,16 +541,37 @@ map('n', '<leader>u', function()
 end, func.getOpts(opts, "Undotree"))
 
 -- =============================================================================
+--  Next level keymaps (Care, powerfull wizardry)
+-- =============================================================================
+map("x", "@", [[:<C-u>execute "'<,'>normal @".nr2char(getchar())<CR>]], func.getOpts(opts, "Apply macro to selection"))
+
+map('n', "<leader>r", [[:%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><Left>]], func.getOpts(opts, "Rename word under cursor"))
+
+map('v', "<leader>r", [["hy:%s/<C-r>h/<C-r>h/gI<Left><Left><Left>]], func.getOpts(opts, "Rename visual selection"))
+
+-- -- Add undo break-points for punctuation in insert mode
+local chars = { ",", ".", "!", "?", ";" }
+for _, char in ipairs(chars) do
+    vim.keymap.set("i", char, char .. "<c-g>u", { desc = "Undo breakpoint" })
+end
+
+-- Prevent overwriting the default register when deleting empty lines
+map("n", "dd", function()
+    if vim.api.nvim_get_current_line():match("^%s*$") then
+        return '"_dd'
+    end
+    return "dd"
+end, { expr = true, desc = "Smart dd" })
+
+-- =============================================================================
 --  Terminal
 -- =============================================================================
 map('n', '<leader>tt', term.toggleTerminal, func.getOpts(opts, "Toggle terminal"))
-map('n', '<leader>tg', function() term.toggleTerminal("gemini") end,
-  func.getOpts(opts, "Toggle Gemini terminal"))
-map('t', '<S-esc>', [[<C-\><C-n>]], func.getOpts(opts, "Leave terminal mode"))
---  <S-Esc> only reaches Neovim on terminals reporting it as a distinct key
---  (CSI-u style); most send a plain <Esc>. <Esc><Esc> works everywhere and still
---  leaves a single <Esc> for the shell and for TUIs running inside it.
-map('t', '<Esc><Esc>', [[<C-\><C-n>:q<CR>]], func.getOpts(opts, "Close terminal"))
+map('n', '<leader>tc', function() term.toggleTerminal("claude") end, func.getOpts(opts, "Toggle terminal Claude"))
+map('n', '<leader>tm', "<CMD>tabnew | terminal<CR>i", func.getOpts(opts, "New tab on terminal mode"))
+map('t', '<S-Del>', [[<C-\><C-n>]], func.getOpts(opts, "Leave terminal mode")) 
+-- <Esc><Esc> closes only the floating terminal (terms.lua maps it in that
+-- buffer); the terminal in a tab, <leader>tm, keeps both Escs for its shell.
 
 -- =============================================================================
 --  Debug
