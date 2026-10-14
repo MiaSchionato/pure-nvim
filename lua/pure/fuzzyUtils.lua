@@ -177,6 +177,17 @@ function M.fuzzyLogic(opts)
   vim.keymap.set('t', '<Up>', '<C-k>', term_opts)
   vim.keymap.set('t', '<Down>', '<C-j>', term_opts)
 
+  -- <Esc> always closes a picker, never just leaves terminal mode (a global
+  -- terminal-mode <Esc> would, and fzf then never saw it): stop fzf, and
+  -- TermClose below cleans up and calls on_cancel. Same for q / <Esc> if the
+  -- picker ever ends up in terminal-normal mode.
+  local function cancelPicker()
+    local job = vim.b[buf].terminal_job_id
+    if job then pcall(vim.fn.jobstop, job) end
+  end
+  vim.keymap.set({ 't', 'n' }, '<Esc>', cancelPicker, term_opts)
+  vim.keymap.set('n', 'q', cancelPicker, term_opts)
+
   vim.api.nvim_create_autocmd("TermClose", {
     buffer = buf,
     callback = function()
