@@ -178,6 +178,8 @@ vim.api.nvim_create_autocmd("FileType", {
     if vim.bo[args.buf].buftype == "" then
       vim.keymap.set("n", "<leader>x", require('configs.functions').cycleCheckbox,
         { buffer = args.buf, desc = "Cycle checkbox state" })
+      vim.keymap.set("x", "<leader>x", require('configs.functions').cycleCheckboxRange,
+        { buffer = args.buf, desc = "Cycle checkbox state of the selected tasks" })
     end
   end
 })
