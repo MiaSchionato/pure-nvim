@@ -451,6 +451,8 @@ local function create(root, link, from)
     end
     return
   end
+  local outside_dir = M.outsidePath(folder)
+  if outside_dir and not require('pure.crypt').ensure(outside_dir, function() create(root, link, from) end) then return end
   local own = folderTemplate(folder)
   local choice = vim.fn.confirm(('Create the note "%s"%s?'):format(title,
     own and (' (template ' .. own:gsub('%.md$', '') .. ')') or ''),
@@ -458,7 +460,6 @@ local function create(root, link, from)
 
   local function make(rel)
     local dir = M.outsidePath(rel) or (root .. (rel ~= '' and ('/' .. rel) or ''))
-    if not require('pure.crypt').guard(dir) then return false end
     vim.fn.mkdir(dir, 'p')
     local path = dir .. '/' .. zet().noteId(title, dir) .. '.md'
     vim.fn.writefile({}, path)
@@ -525,7 +526,7 @@ function M.follow(urls_only)
   local outside = M.outsidePath(parts.target)
   if outside then
     -- An encrypted folder that is locked: unlock it first (pure/crypt.lua).
-    if not require('pure.crypt').guard(outside) then return true end
+    if not require('pure.crypt').ensure(outside, function() M.follow() end) then return true end
     for _, c in ipairs({ outside, outside .. '.md' }) do
       if vim.fn.filereadable(c) == 1 then
         vim.cmd("normal! m'")
@@ -1225,7 +1226,7 @@ function M.sendOut()
   for step in input:gmatch('[^/]+') do
     if step == '.' or step == '..' then return vim.notify('Not a folder: ' .. input, vim.log.levels.WARN) end
   end
-  if not require('pure.crypt').guard(dir) then return end
+  if not require('pure.crypt').ensure(dir, M.sendOut) then return end
   local new_path = dir .. '/' .. vim.fs.basename(here)
   if vim.uv.fs_stat(new_path) then
     return vim.notify(new_path .. ' already exists', vim.log.levels.ERROR)

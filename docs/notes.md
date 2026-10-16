@@ -104,9 +104,10 @@ of a password. Linux (WSL) only; elsewhere the folder is treated as a plain one.
 
 Unmounted, `dir` is an empty folder, and a write there would leave a note on
 the disk in the clear. So opening a link into it, making a note there and
-`<leader>vo` ask "The private folder is locked. Unlock it?" first, and a `:w`
-of a note whose folder locked itself in the meantime is refused ("not
-written"; `:PrivateUnlock`, then `:w` again). `:PrivateUnlock` mounts it,
+`<leader>vo` ask "The private folder is locked. Unlock it?" first (it mounts
+in the background, Neovim keeps working while the key waits for its touch, then
+the action runs again), and a `:w` of a note whose folder locked itself in the
+meantime is refused ("not written"; `:PrivateUnlock`, then `:w` again). `:PrivateUnlock` mounts it,
 `:PrivateLock` unmounts it at once (not while a file is open). Optionally
 `sudo chattr +i ~/Private` while it is unmounted makes the disk itself refuse
 writes to the empty mount point.

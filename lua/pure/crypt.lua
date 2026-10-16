@@ -59,78 +59,88 @@ function M.folderOf(path)
   end
 end
 
---- The first FIDO2 device `fido2-token -L` lists, or nil. When the key is not
---- attached to WSL (no /dev/hidraw*), attach it first with usbipd, which sits on
---- Windows' side: vim.g.pure_fido2_id ('1ea8:fe29', the key's USB vendor:product,
---- from `usbipd list`; stable, unlike the port) names it. The second result is
---- true when this call attached it, so unlock() can give it back to Windows: the
---- key is only needed to mount, not while it is mounted.
-local function fidoDevice()
-  local function listed()
-    if vim.fn.executable('fido2-token') ~= 1 then return nil end
-    local res = vim.system({ 'fido2-token', '-L' }, { text = true }):wait(5000)
-    return (res.stdout or ''):match('^(/dev/[^:%s]+)')
-  end
-  local dev = listed()
-  if dev then return dev, false end
-  local id = vim.g.pure_fido2_id
-  if id and vim.fn.executable('powershell.exe') == 1 then
-    vim.system({ 'powershell.exe', '-NoProfile', '-Command', 'usbipd attach --wsl --hardware-id ' .. id }):wait(15000)
-    vim.wait(2500)
-    return listed(), true
+--- The first FIDO2 device `fido2-token -L` lists, or nil.
+local function listedDevice()
+  if vim.fn.executable('fido2-token') ~= 1 then return nil end
+  local res = vim.system({ 'fido2-token', '-L' }, { text = true }):wait(5000)
+  return (res.stdout or ''):match('^(/dev/[^:%s]+)')
+end
+
+--- Give the key back to Windows (see unlock).
+local function detach()
+  if vim.g.pure_fido2_id and vim.fn.executable('powershell.exe') == 1 then
+    vim.system({ 'powershell.exe', '-NoProfile', '-Command', 'usbipd detach --hardware-id ' .. vim.g.pure_fido2_id })
   end
 end
 
---- Mount the folder (asks for the FIDO2 touch, or a password). True when it is
---- mounted afterwards.
+--- Mount the folder in the background (Neovim keeps working while the key
+--- waits for its touch). `done(true|false)` is called when it is over.
+---
+--- With fido2 the key is found with `fido2-token -L`; when it is not attached to
+--- WSL (no /dev/hidraw*), usbipd attaches it first (it sits on Windows' side):
+--- vim.g.pure_fido2_id ('1ea8:fe29', the key's USB vendor:product, from
+--- `usbipd list`; stable, unlike the port) names it. It is given back to Windows
+--- right after, since the key is only needed to mount, not while mounted.
+---
+--- gocryptfs runs through `sh` with its output in a file: it forks into the
+--- background, and a pipe it inherited would keep this call waiting for good.
 --- @param cfg table  from config()
-function M.unlock(cfg)
-  if M.mounted(cfg.dir) then return true end
-  if vim.fn.executable('gocryptfs') ~= 1 then
-    vim.notify('gocryptfs is not installed', vim.log.levels.ERROR)
-    return false
+--- @param done function|nil
+function M.unlock(cfg, done)
+  done = done or function() end
+  if M.mounted(cfg.dir) then return done(true) end
+  local function fail(msg)
+    vim.notify(msg, vim.log.levels.ERROR)
+    done(false)
   end
+  if vim.fn.executable('gocryptfs') ~= 1 then return fail('gocryptfs is not installed') end
   if vim.fn.isdirectory(cfg.cipher) ~= 1 then
-    vim.notify('No encrypted folder at ' .. cfg.cipher .. ' (gocryptfs -init)', vim.log.levels.ERROR)
-    return false
+    return fail('No encrypted folder at ' .. cfg.cipher .. ' (gocryptfs -init)')
   end
   vim.fn.mkdir(cfg.dir, 'p')
 
-  local cmd = { 'gocryptfs', '-idle', cfg.idle, '-nosyslog' }
-  local stdin
-  local attachedHere = false
-  -- Back to Windows once the mount is done (or failed), if this call took it.
-  local function giveBack()
-    if attachedHere and vim.g.pure_fido2_id then
-      vim.system({ 'powershell.exe', '-NoProfile', '-Command', 'usbipd detach --hardware-id ' .. vim.g.pure_fido2_id }):wait(15000)
+  local function mount(dev, attached)
+    local args = { '-idle', cfg.idle, '-nosyslog' }
+    local stdin
+    if cfg.fido2 then
+      if not dev then
+        return fail('No FIDO2 key found: plug it in (or set vim.g.pure_fido2_id, see docs/notes.md)')
+      end
+      vim.list_extend(args, { '-fido2', dev })
+      vim.notify('Touch the FIDO2 key…')
+    else
+      local ok, pw = pcall(vim.fn.inputsecret, 'Private password: ')
+      if not ok or pw == '' then return done(false) end
+      stdin = pw .. '\n'
     end
-  end
-  if cfg.fido2 then
-    local dev, attached = fidoDevice()
-    attachedHere = attached
-    if not dev then
-      giveBack()
-      vim.notify('No FIDO2 key found: plug it in (or set vim.g.pure_fido2_id, see docs/notes.md)', vim.log.levels.ERROR)
-      return false
-    end
-    vim.list_extend(cmd, { '-fido2', dev })
-    vim.notify('Touch the FIDO2 key…')
-    vim.cmd('redraw')
-  else
-    local ok, pw = pcall(vim.fn.inputsecret, 'Private password: ')
-    if not ok or pw == '' then return false end
-    stdin = pw .. '\n'
-  end
-  vim.list_extend(cmd, { cfg.cipher, cfg.dir })
+    vim.list_extend(args, { cfg.cipher, cfg.dir })
 
-  local res = vim.system(cmd, { text = true, stdin = stdin }):wait(60000)
-  giveBack()
-  if res.code ~= 0 or not M.mounted(cfg.dir) then
-    vim.notify('Could not unlock: ' .. vim.trim((res.stderr or '') .. (res.stdout or '')), vim.log.levels.ERROR)
-    return false
+    local errfile = vim.fn.tempname()
+    local cmd = { 'sh', '-c', 'exec gocryptfs "$@" >/dev/null 2>"$0"', errfile }
+    vim.list_extend(cmd, args)
+    vim.system(cmd, { stdin = stdin, timeout = 60000 }, function(res)
+      vim.schedule(function()
+        if attached then detach() end
+        local ok2, lines = pcall(vim.fn.readfile, errfile)
+        pcall(vim.fn.delete, errfile)
+        if res.code ~= 0 or not M.mounted(cfg.dir) then
+          return fail('Could not unlock: ' .. vim.trim(ok2 and table.concat(lines, '\n') or ('exit ' .. res.code)))
+        end
+        vim.notify('Unlocked ' .. cfg.dir .. ' (locks itself after ' .. cfg.idle .. ' idle)')
+        done(true)
+      end)
+    end)
   end
-  vim.notify('Unlocked ' .. cfg.dir .. ' (locks itself after ' .. cfg.idle .. ' idle)')
-  return true
+
+  if not cfg.fido2 then return mount() end
+  local dev = listedDevice()
+  if dev then return mount(dev, false) end
+  local id = vim.g.pure_fido2_id
+  if not (id and vim.fn.executable('powershell.exe') == 1) then return mount(nil) end
+  vim.notify('Attaching the FIDO2 key to WSL…')
+  vim.system({ 'powershell.exe', '-NoProfile', '-Command', 'usbipd attach --wsl --hardware-id ' .. id }, {}, function()
+    vim.defer_fn(function() mount(listedDevice(), true) end, 2500)
+  end)
 end
 
 --- Unmount now.
@@ -147,14 +157,21 @@ function M.lock(cfg)
   return true
 end
 
---- Make sure `path` can be used: true when it is not in an encrypted folder or
---- that folder is mounted; else offers to unlock it and returns the result.
+--- Whether `path` can be used now: true when it is not in an encrypted folder
+--- or that folder is mounted. Otherwise false, after offering to unlock it in
+--- the background; `retry` is called once it is mounted, to do again what was
+--- asked.
 --- @param path string
-function M.guard(path)
+--- @param retry function|nil
+function M.ensure(path, retry)
   local cfg = M.folderOf(path)
   if not cfg or M.mounted(cfg.dir) then return true end
-  if vim.fn.confirm('The private folder is locked. Unlock it?', '&Yes\n&No', 1) ~= 1 then return false end
-  return M.unlock(cfg)
+  if vim.fn.confirm('The private folder is locked. Unlock it?', '&Yes\n&No', 1) == 1 then
+    M.unlock(cfg, function(ok)
+      if ok and retry then retry() end
+    end)
+  end
+  return false
 end
 
 -- A write into the folder after it locked itself would land in the clear under
@@ -162,8 +179,9 @@ end
 vim.api.nvim_create_autocmd('BufWritePre', {
   group = vim.api.nvim_create_augroup('PureCrypt', { clear = true }),
   callback = function(args)
-    local cfg = M.folderOf(vim.api.nvim_buf_get_name(args.buf))
-    if cfg and not M.mounted(cfg.dir) and not M.guard(vim.api.nvim_buf_get_name(args.buf)) then
+    local name = vim.api.nvim_buf_get_name(args.buf)
+    local cfg = M.folderOf(name)
+    if cfg and not M.mounted(cfg.dir) then
       error('The private folder is locked: not written (:PrivateUnlock, then :w)', 0)
     end
   end,
