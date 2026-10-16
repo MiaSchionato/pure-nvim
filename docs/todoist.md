@@ -62,6 +62,7 @@ Keys in that buffer:
 |---|---|
 | `<CR>` / `x` | tick / untick the checkbox (`x` does not delete here) |
 | `<leader>x` | cycle Obsidian states `[ ] [~] [!] [>] [-] [x]`; only `[x]` reaches Todoist, the others are remembered locally (`todoist_states.json`) |
+| `<leader>x` (visual) | same, for every selected task at once |
 | `r` | reload from Todoist (asks if there are unsaved edits) |
 | `q` / `<Esc>` | close (same) |
 | `zc` / `zo` / `za` (or `zz`) | fold a `##` project, or a task with its subtasks (it opens with every task's subtasks folded) |

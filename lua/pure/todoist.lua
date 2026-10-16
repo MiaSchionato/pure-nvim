@@ -1081,6 +1081,8 @@ function M.open(filter, float)
     -- Obsidian's states, as in notes; only [x] reaches Todoist, the others
     -- are kept locally (see states_file).
     map('<leader>x', require('configs.functions').cycleCheckbox, 'Cycle checkbox state')
+    vim.keymap.set('x', '<leader>x', require('configs.functions').cycleCheckboxRange,
+      { buffer = buf, desc = 'Cycle checkbox state of the selected tasks' })
     map('r', unlessModified('reload', M.reload), 'Reload tasks')
     map('q', close, 'Close Todoist')
     map('<Esc>', close, 'Close Todoist')

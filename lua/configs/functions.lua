@@ -319,6 +319,43 @@ function M.cycleCheckbox()
   vim.api.nvim_set_current_line(new_line)
 end
 
+--- The selected lines (visual mode) all take the state that follows the one of
+--- the first task in the selection, so five tasks end up the same whatever
+--- their states were before. Plain '- item' lines get an empty box, lines
+--- that are not list items are left alone.
+function M.cycleCheckboxRange()
+  local order = { ' ', '~', '!', '>', '-', 'x' }
+  local first, last = vim.fn.line('v'), vim.fn.line('.')
+  if first > last then first, last = last, first end
+  local lines = vim.api.nvim_buf_get_lines(0, first - 1, last, false)
+
+  local target
+  for _, line in ipairs(lines) do
+    local state = line:match('^%s*[-*+]%s+%[(.?)%]')
+    if state then
+      state = state == '' and ' ' or state:lower()
+      target = ' '
+      for i, s in ipairs(order) do
+        if s == state then target = order[i % #order + 1] end
+      end
+      break
+    end
+  end
+  target = target or ' '
+
+  for i, line in ipairs(lines) do
+    local prefix, rest = line:match('^(%s*[-*+]%s+)%[.?%](.*)$')
+    if prefix then
+      lines[i] = prefix .. '[' .. target .. ']' .. rest
+    else
+      local bullet, text = line:match('^(%s*[-*+]%s+)(.*)$')
+      if bullet then lines[i] = bullet .. '[' .. target .. '] ' .. text end
+    end
+  end
+  vim.api.nvim_buf_set_lines(0, first - 1, last, false, lines)
+  vim.api.nvim_feedkeys(vim.keycode('<Esc>'), 'nx', false)
+end
+
 function M.toggleExplore()
   if vim.bo.filetype == "netrw" then
     vim.cmd("Rexplore")
