@@ -83,6 +83,7 @@ end
 --- 3-Projects/Personal and 3-Projects/Clients, and a new one landed beside
 --- those two folders). A template missing here leaves the note where it is.
 local default_destinations = {
+  Decupagem  = '2-Permanent',
   Delete     = '0-Inbox/Trash',
   Literature = '1-Literature',
   MOC        = '4-Maps',

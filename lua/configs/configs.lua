@@ -231,6 +231,7 @@ vim.g.pure_quotes = '6-Archive/Periodic/Quotes.md'
 -- note's resurfaced notes come from, so those two always keep a folder.
 -- Default:
 -- vim.g.pure_template_destinations = {
+--   Decupagem  = '2-Permanent',
 --   Delete     = '0-Inbox/Trash',
 --   Literature = '1-Literature',
 --   MOC        = '4-Maps',

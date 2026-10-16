@@ -84,6 +84,7 @@ by template name (`false` leaves that template's note where it is). Delete
 
 | Template | Default folder |
 |---|---|
+| Decupagem | `2-Permanent` |
 | Delete | `0-Inbox/Trash` |
 | Literature | `1-Literature` |
 | MOC | `4-Maps` |
