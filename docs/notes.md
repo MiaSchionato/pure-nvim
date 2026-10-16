@@ -52,7 +52,7 @@ the link (`[[Projects/New]]`) puts it there.
 
 **With a template**, a template is picked (the periodic ones are left out)
 and applied as `<leader>vt` applies it, moves included: the Project template
-sends the note to `1-Projects/<title>/`. The note is made only once a template
+sends the note to `3-Projects/<title>/`. The note is made only once a template
 is picked, so cancelling leaves nothing behind. **In another folder** asks
 for a folder of the vault, with completion, starting from the current
 note's own, and makes it if it does not exist.
@@ -123,7 +123,7 @@ Typing `[[` lists, as you type and matched loosely (`[[pxt` finds
 "Projeto X texto"):
 
 - the vault's **notes** (and canvases) first;
-- then its **folders** (`3-Zettelkasten/`, accepted without `]]` so you keep
+- then its **folders** (`2-Permanent/`, accepted without `]]` so you keep
   typing into it);
 - then **attachments** (images, PDFs…), with their extension, as Obsidian
   links them (`![[photo.png]]`).
@@ -135,7 +135,7 @@ recent one goes up among matches about as good, never above a clearly
 better match. The current note is never offered.
 
 Each item says what it is in the menu (`note`, `folder`, `file`). With a
-path, `[[3-Zettelkasten/`, it lists what is directly in that folder (case
+path, `[[2-Permanent/`, it lists what is directly in that folder (case
 does not matter), matched by what follows the last `/`. After `[[Note#` it
 lists that note's headings. Accepting one writes the link whole, without a
 second `]]` (`pure/pairs.lua` already closed the `[[`).

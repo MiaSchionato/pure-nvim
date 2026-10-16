@@ -65,7 +65,7 @@ folder) and expands it:
 | `{{worklogs}}` | each day's `Work log` section embedded, as the lines of a callout (`> …`) |
 | `{{weeks}}` | a list of links to the weekly note of each ISO week that touches the period |
 | `{{prev}}` / `{{next}}` | in a periodic note: the name of the previous / next day, week or month (for navigation links) |
-| `{{quote}}` | a line of `9-Archive/Periodic/Quotes.md` (`vim.g.pure_quotes`; lines starting with `- `), a different one each day |
+| `{{quote}}` | a line of `6-Archive/Periodic/Quotes.md` (`vim.g.pure_quotes`; lines starting with `- `), a different one each day |
 | `{{idea}}` | a `[[link]]` to one of your permanent notes, a different one each day |
 | `{{diary}}` | `2026-09-25, sex` (the diary file name format) |
 
@@ -85,12 +85,12 @@ by template name (`false` leaves that template's note where it is). Delete
 | Template | Default folder |
 |---|---|
 | Delete | `0-Inbox/Trash` |
-| Literature | `3-Zettelkasten/Literature` |
+| Literature | `1-Literature` |
 | MOC | `4-Maps` |
-| Permanent | `3-Zettelkasten/Permanent` |
-| Project | `1-Projects/{{choose:Personal|Clients}}/{{title}}` (asks which) |
-| Seed | `3-Zettelkasten/Seeds` |
-| VideoIdeas | `2-Areas/Audiovisual/Ideas` |
+| Permanent | `2-Permanent` |
+| Project | `3-Projects/{{choose:Personal|Clients}}/{{title}}` (asks which) |
+| Seed | `2-Permanent/Seeds` |
+| VideoIdeas | `4-Maps/Audiovisual/Ideas` |
 
 **Only a note whose place is not decided is moved**: one in the inbox (or
 below it) or loose in the vault's root. A note anywhere else was put there
@@ -105,9 +105,9 @@ never moved over an existing note.
 
 | Template | Default folder | File name |
 |---|---|---|
-| `Daily.md` | `9-Archive/Periodic/Daily` | `2026-09-25.md` |
-| `Weekly.md` | `9-Archive/Periodic/Weekly` | `2026-W39.md` |
-| `Monthly.md` | `9-Archive/Periodic/Monthly` | `2026-09.md` |
+| `Daily.md` | `6-Archive/Periodic/Daily` | `2026-09-25.md` |
+| `Weekly.md` | `6-Archive/Periodic/Weekly` | `2026-W39.md` |
+| `Monthly.md` | `6-Archive/Periodic/Monthly` | `2026-09.md` |
 
 `vim.g.pure_periodic_folders` changes the folders, e.g.
 `{ Daily = 'Periodic/Daily' }` (periods left out keep their default).

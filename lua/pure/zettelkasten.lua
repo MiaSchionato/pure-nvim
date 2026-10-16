@@ -49,9 +49,9 @@ local no_prompt_file = vim.fn.stdpath('data') .. '/obsidian_vault_no_prompt'
 --- read on every use, not once at load: configs.lua may run after this file,
 --- and a change made with :let takes effect without restarting.
 local default_periodic = {
-  Daily   = { folder = '9-Archive/Periodic/Daily',   name = '%Y-%m-%d', step = 86400,  unit = 'day' },
-  Weekly  = { folder = '9-Archive/Periodic/Weekly',  name = '%G-W%V',   step = 604800, unit = 'week' },
-  Monthly = { folder = '9-Archive/Periodic/Monthly', name = '%Y-%m',    step = nil,    unit = 'month' },
+  Daily   = { folder = '6-Archive/Periodic/Daily',   name = '%Y-%m-%d', step = 86400,  unit = 'day' },
+  Weekly  = { folder = '6-Archive/Periodic/Weekly',  name = '%G-W%V',   step = 604800, unit = 'week' },
+  Monthly = { folder = '6-Archive/Periodic/Monthly', name = '%Y-%m',    step = nil,    unit = 'month' },
 }
 
 --- A vault-relative folder from an option, without slashes at either end.
@@ -74,22 +74,22 @@ local periodic = setmetatable({}, {
 --- notes come from destinations.Permanent.
 local function quotesFile()
   local path = vim.g.pure_quotes
-  return (path and path ~= '') and relFolder(path) or '9-Archive/Periodic/Quotes.md'
+  return (path and path ~= '') and relFolder(path) or '6-Archive/Periodic/Quotes.md'
 end
 
 --- Folder each template sends its note to, relative to the vault root.
 --- "{{title}}" is expanded, which is what puts a project in its own folder.
 --- "{{choose:A|B}}" asks which of them (Project: her projects live in
---- 1-Projects/Personal and 1-Projects/Clients, and a new one landed beside
+--- 3-Projects/Personal and 3-Projects/Clients, and a new one landed beside
 --- those two folders). A template missing here leaves the note where it is.
 local default_destinations = {
   Delete     = '0-Inbox/Trash',
-  Literature = '3-Zettelkasten/Literature',
+  Literature = '1-Literature',
   MOC        = '4-Maps',
-  Permanent  = '3-Zettelkasten/Permanent',
-  Project    = '1-Projects/{{choose:Personal|Clients}}/{{title}}',
-  Seed       = '3-Zettelkasten/Seeds',
-  VideoIdeas = '2-Areas/Audiovisual/Ideas',
+  Permanent  = '2-Permanent',
+  Project    = '3-Projects/{{choose:Personal|Clients}}/{{title}}',
+  Seed       = '2-Permanent/Seeds',
+  VideoIdeas = '4-Maps/Audiovisual/Ideas',
 }
 
 --- `destinations[name]`: vim.g.pure_template_destinations first, then the
@@ -618,7 +618,7 @@ end
 --- folder as something Obsidian does not treat as a note.
 ---
 --- A note already somewhere under the template's folder (anywhere in
---- 1-Projects for '1-Projects/{{title}}') was put there on purpose, before
+--- 3-Projects for '3-Projects/{{title}}') was put there on purpose, before
 --- the template: it stays in its folder, only named after the title.
 --- @param folder string
 --- @param title string|nil  defaults to the current file name
@@ -671,7 +671,7 @@ local function moveCurrentFile(folder, title)
   else
     -- Never saved: written straight to its new place. Saving it at its own
     -- path first failed with E13 when that path had just been made a folder:
-    -- a note named "Idea", no .md, becoming 1-Projects/Idea/Idea.md.
+    -- a note named "Idea", no .md, becoming 3-Projects/Idea/Idea.md.
     local ok, err = pcall(vim.cmd, 'silent write ' .. vim.fn.fnameescape(target))
     if not ok then
       return vim.notify('Could not save the note: ' .. tostring(err), vim.log.levels.ERROR)
