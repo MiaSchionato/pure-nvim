@@ -88,7 +88,7 @@ local default_destinations = {
   MOC        = '4-Maps',
   Permanent  = '2-Permanent',
   Project    = '3-Projects/{{choose:Personal|Clients}}/{{title}}',
-  Seed       = '2-Permanent/Seeds',
+  Seed       = '2-Permanent',
   VideoIdeas = '4-Maps/Audiovisual/Ideas',
 }
 

@@ -89,7 +89,7 @@ by template name (`false` leaves that template's note where it is). Delete
 | MOC | `4-Maps` |
 | Permanent | `2-Permanent` |
 | Project | `3-Projects/{{choose:Personal|Clients}}/{{title}}` (asks which) |
-| Seed | `2-Permanent/Seeds` |
+| Seed | `2-Permanent` |
 | VideoIdeas | `4-Maps/Audiovisual/Ideas` |
 
 **Only a note whose place is not decided is moved**: one in the inbox (or
