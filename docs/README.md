@@ -94,7 +94,7 @@ where to change them.
 | `vim.g.pure_templates` | `'Templates'` | [zettelkasten](zettelkasten.md) |
 | `vim.g.pure_folder_templates` | `{}` | [notes](notes.md) |
 | `vim.g.pure_outside_folders` | `{}` (name = folder outside the vault, or `{ dir, cipher, idle, fido2 }` for an encrypted one) | [notes](notes.md) |
-| `vim.g.pure_fido2_busid` | none (usbipd port of the FIDO2 key) | [notes](notes.md) |
+| `vim.g.pure_fido2_id` | none (the FIDO2 key's USB `vendor:product`, attached to WSL only while mounting) | [notes](notes.md) |
 | `vim.g.pure_templates_locale` | `'en'` | [zettelkasten](zettelkasten.md) |
 | `vim.g.pure_trash_cleanup` | off (`true` in configs.lua) | [zettelkasten](zettelkasten.md) |
 | `vim.g.pure_periodic_on_start` | off (`{ 'Daily', 'Weekly', 'Monthly' }` in configs.lua) | [zettelkasten](zettelkasten.md) |

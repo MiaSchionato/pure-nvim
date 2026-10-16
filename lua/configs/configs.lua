@@ -194,7 +194,14 @@ vim.g.pure_folder_templates = { ['6-Private/Diary'] = 'Diary' }
 -- the daily note keeps its diary link though the notes are not in the vault.
 -- <leader>vo sends the current note out to one of them. Default: {}.
 -- Changed: the private folder (the name is the old folder's, so old links work).
-vim.g.pure_outside_folders = { ['6-Private'] = '~/Private' }
+-- The private folder is encrypted (gocryptfs, pure/crypt.lua): `cipher` holds
+-- the files, `dir` shows them in the clear once mounted with the FIDO2 key (a
+-- touch), and it unmounts itself after `idle` without use. pure_fido2_id is the
+-- key's USB vendor:product: attached to WSL only while mounting.
+vim.g.pure_outside_folders = {
+  ['6-Private'] = { dir = '~/Private', cipher = '~/Private.enc', idle = '5m', fido2 = true },
+}
+vim.g.pure_fido2_id = '1ea8:fe29'
 
 -- Language of day and month names in template dates: 'en' (default) or 'pt'.
 vim.g.pure_templates_locale = 'en'

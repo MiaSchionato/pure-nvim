@@ -61,7 +61,10 @@ end
 
 --- The first FIDO2 device `fido2-token -L` lists, or nil. When the key is not
 --- attached to WSL (no /dev/hidraw*), attach it first with usbipd, which sits on
---- Windows' side: vim.g.pure_fido2_busid (e.g. '4-9') names its USB port.
+--- Windows' side: vim.g.pure_fido2_id ('1ea8:fe29', the key's USB vendor:product,
+--- from `usbipd list`; stable, unlike the port) names it. The second result is
+--- true when this call attached it, so unlock() can give it back to Windows: the
+--- key is only needed to mount, not while it is mounted.
 local function fidoDevice()
   local function listed()
     if vim.fn.executable('fido2-token') ~= 1 then return nil end
@@ -69,12 +72,12 @@ local function fidoDevice()
     return (res.stdout or ''):match('^(/dev/[^:%s]+)')
   end
   local dev = listed()
-  if dev then return dev end
-  local busid = vim.g.pure_fido2_busid
-  if busid and vim.fn.executable('powershell.exe') == 1 then
-    vim.system({ 'powershell.exe', '-NoProfile', '-Command', 'usbipd attach --wsl --busid ' .. busid }):wait(15000)
+  if dev then return dev, false end
+  local id = vim.g.pure_fido2_id
+  if id and vim.fn.executable('powershell.exe') == 1 then
+    vim.system({ 'powershell.exe', '-NoProfile', '-Command', 'usbipd attach --wsl --hardware-id ' .. id }):wait(15000)
     vim.wait(2500)
-    return listed()
+    return listed(), true
   end
 end
 
@@ -95,10 +98,19 @@ function M.unlock(cfg)
 
   local cmd = { 'gocryptfs', '-idle', cfg.idle, '-nosyslog' }
   local stdin
+  local attachedHere = false
+  -- Back to Windows once the mount is done (or failed), if this call took it.
+  local function giveBack()
+    if attachedHere and vim.g.pure_fido2_id then
+      vim.system({ 'powershell.exe', '-NoProfile', '-Command', 'usbipd detach --hardware-id ' .. vim.g.pure_fido2_id }):wait(15000)
+    end
+  end
   if cfg.fido2 then
-    local dev = fidoDevice()
+    local dev, attached = fidoDevice()
+    attachedHere = attached
     if not dev then
-      vim.notify('No FIDO2 key found: plug it in (or attach it to WSL with usbipd)', vim.log.levels.ERROR)
+      giveBack()
+      vim.notify('No FIDO2 key found: plug it in (or set vim.g.pure_fido2_id, see docs/notes.md)', vim.log.levels.ERROR)
       return false
     end
     vim.list_extend(cmd, { '-fido2', dev })
@@ -112,6 +124,7 @@ function M.unlock(cfg)
   vim.list_extend(cmd, { cfg.cipher, cfg.dir })
 
   local res = vim.system(cmd, { text = true, stdin = stdin }):wait(60000)
+  giveBack()
   if res.code ~= 0 or not M.mounted(cfg.dir) then
     vim.notify('Could not unlock: ' .. vim.trim((res.stderr or '') .. (res.stdout or '')), vim.log.levels.ERROR)
     return false

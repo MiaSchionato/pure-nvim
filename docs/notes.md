@@ -93,7 +93,7 @@ An outside folder can be a table instead of a path:
 vim.g.pure_outside_folders = {
   ['6-Private'] = { dir = '~/Private', cipher = '~/.Private.enc', idle = '5m', fido2 = true },
 }
-vim.g.pure_fido2_busid = '4-9'   -- usbipd port of the key, attached to WSL on demand
+vim.g.pure_fido2_id = '1ea8:fe29'   -- the key's USB vendor:product (`usbipd list`): attached to WSL to mount, given back to Windows right after
 ```
 
 `cipher` holds the encrypted files (`gocryptfs -init -fido2 <device> ~/.Private.enc`),
