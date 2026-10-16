@@ -122,6 +122,13 @@ o.autochdir = true
 o.updatetime = 250          -- ms without typing before CursorHold (not completion)
 o.timeoutlen = 500          -- ms to wait for the rest of a mapping (<leader>...)
 o.ttimeoutlen = 0           -- no wait after <Esc> for a key code
+-- Not at startup, though: Neovim asks the terminal questions then (device
+-- attributes, background colour) and the answers, "<Esc>[?61;6;...c", reached it
+-- split in two. With no wait the <Esc> was a key of its own and the rest was typed
+-- on the dashboard: "c" there is E21 ("'modifiable' is off") and a Press-ENTER
+-- screen to dismiss at every start. The wait goes back to 0 once they are answered.
+o.ttimeoutlen = 100
+vim.defer_fn(function() vim.o.ttimeoutlen = 0 end, 1500)
 
 -- -----------------------------------------------------------------------------
 --  Windows
