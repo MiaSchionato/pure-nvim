@@ -87,6 +87,7 @@ local default_destinations = {
   Delete     = '0-Inbox/Trash',
   Literature = '1-Literature',
   MOC        = '4-Maps',
+  Media      = '1-Literature/Audiovisual',
   Permanent  = '2-Permanent',
   Project    = '3-Projects/{{choose:Personal|Clients}}/{{title}}',
   Seed       = '2-Permanent',

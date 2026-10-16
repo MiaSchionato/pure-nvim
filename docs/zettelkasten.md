@@ -88,6 +88,7 @@ by template name (`false` leaves that template's note where it is). Delete
 | Delete | `0-Inbox/Trash` |
 | Literature | `1-Literature` |
 | MOC | `4-Maps` |
+| Media | `1-Literature/Audiovisual` |
 | Permanent | `2-Permanent` |
 | Project | `3-Projects/{{choose:Personal|Clients}}/{{title}}` (asks which) |
 | Seed | `2-Permanent` |
