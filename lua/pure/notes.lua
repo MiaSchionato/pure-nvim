@@ -336,6 +336,7 @@ function M.outsidePath(target)
   target = target:gsub('\\', '/'):gsub('^/+', '')
   local low = target:lower()
   for name, dir in pairs(vim.g.pure_outside_folders or {}) do
+    if type(dir) == 'table' then dir = dir.dir end
     local n = (name:gsub('\\', '/'):gsub('^/+', ''):gsub('/+$', ''))
     local rest
     if low == n:lower() then
@@ -457,15 +458,17 @@ local function create(root, link, from)
 
   local function make(rel)
     local dir = M.outsidePath(rel) or (root .. (rel ~= '' and ('/' .. rel) or ''))
+    if not require('pure.crypt').guard(dir) then return false end
     vim.fn.mkdir(dir, 'p')
     local path = dir .. '/' .. zet().noteId(title, dir) .. '.md'
     vim.fn.writefile({}, path)
     invalidate()
     vim.cmd('edit ' .. vim.fn.fnameescape(path))
+    return true
   end
   --- make(), then the folder's own template, if it has one.
   local function makeFilled(rel)
-    make(rel)
+    if not make(rel) then return end
     local tpl = folderTemplate(rel)
     if tpl then zet().applyTemplate(tpl) end
   end
@@ -475,7 +478,7 @@ local function create(root, link, from)
   elseif choice == 2 then
     zet().pickTemplate(function(selected)
       if not selected then return end
-      make(folder)
+      if not make(folder) then return end
       zet().applyTemplate(selected)
       invalidate() -- the template may have moved it
     end)
@@ -521,6 +524,8 @@ function M.follow(urls_only)
   -- A folder that lives outside the vault (M.outsidePath).
   local outside = M.outsidePath(parts.target)
   if outside then
+    -- An encrypted folder that is locked: unlock it first (pure/crypt.lua).
+    if not require('pure.crypt').guard(outside) then return true end
     for _, c in ipairs({ outside, outside .. '.md' }) do
       if vim.fn.filereadable(c) == 1 then
         vim.cmd("normal! m'")
@@ -1220,6 +1225,7 @@ function M.sendOut()
   for step in input:gmatch('[^/]+') do
     if step == '.' or step == '..' then return vim.notify('Not a folder: ' .. input, vim.log.levels.WARN) end
   end
+  if not require('pure.crypt').guard(dir) then return end
   local new_path = dir .. '/' .. vim.fs.basename(here)
   if vim.uv.fs_stat(new_path) then
     return vim.notify(new_path .. ' already exists', vim.log.levels.ERROR)
@@ -1256,5 +1262,7 @@ vim.api.nvim_create_user_command('NoteSendOut', M.sendOut,
 vim.api.nvim_create_user_command('NoteRename', function(o) M.rename(o.args ~= '' and o.args or nil) end,
   { nargs = '?', desc = 'Rename the note and fix the links to it' })
 vim.api.nvim_create_user_command('NoteBacklinks', M.backlinks, { desc = 'The notes that link to this one' })
+
+require('pure.crypt') -- the guard on writes and :PrivateUnlock / :PrivateLock
 
 return M

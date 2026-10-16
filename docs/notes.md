@@ -85,6 +85,32 @@ working. Backlinks, searches and the vault pickers do not see these folders
 `vim.g.pure_llm_private` (see [llm](llm.md)) keeps cloud models out of them
 too.
 
+### Encrypted (gocryptfs, `pure/crypt.lua`)
+
+An outside folder can be a table instead of a path:
+
+```lua
+vim.g.pure_outside_folders = {
+  ['6-Private'] = { dir = '~/Private', cipher = '~/.Private.enc', idle = '5m', fido2 = true },
+}
+vim.g.pure_fido2_busid = '4-9'   -- usbipd port of the key, attached to WSL on demand
+```
+
+`cipher` holds the encrypted files (`gocryptfs -init -fido2 <device> ~/.Private.enc`),
+`dir` is where they show up in the clear once mounted. `idle` makes gocryptfs
+unmount it after that long without use, so the notes exist in the clear only
+while in use. `fido2 = true` unlocks it with the FIDO2 key (a touch) instead
+of a password. Linux (WSL) only; elsewhere the folder is treated as a plain one.
+
+Unmounted, `dir` is an empty folder, and a write there would leave a note on
+the disk in the clear. So opening a link into it, making a note there and
+`<leader>vo` ask "The private folder is locked. Unlock it?" first, and a `:w`
+of a note whose folder locked itself in the meantime is refused ("not
+written"; `:PrivateUnlock`, then `:w` again). `:PrivateUnlock` mounts it,
+`:PrivateLock` unmounts it at once (not while a file is open). Optionally
+`sudo chattr +i ~/Private` while it is unmounted makes the disk itself refuse
+writes to the empty mount point.
+
 A link to a periodic note that does not exist yet, in its folder and named as
 its period names it (`[[…/Weekly/2026-W42]]`, the daily's "Next week →"), only
 asks **Yes** or **Cancel**: its name is its date, so it is made from its own
