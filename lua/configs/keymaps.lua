@@ -376,6 +376,7 @@ map('n', '<leader>vN', zet.newNoteFromTemplate, func.getOpts(opts, "New note fro
 map('n', '<leader>vt', zet.insertTemplate, func.getOpts(opts, "Apply a template"))
 map('n', '<leader>vd', zet.trashNote, func.getOpts(opts, "Delete note (to the vault's trash)"))
 map('n', '<leader>vr', notes('rename'), func.getOpts(opts, "Rename note, fix links to it"))
+map('n', '<leader>vo', notes('sendOut'), func.getOpts(opts, "Send the note out of the vault (outside folders)"))
 map('n', '<leader>vb', notes('backlinks'), func.getOpts(opts, "Backlinks (notes linking here)"))
 map('n', '<leader>ve', explore(dirs.v), func.getOpts(opts, "Explore the vault"))
 map('n', '<leader>vf', inDir(fzf.fuzzySearch, dirs.v), func.getOpts(opts, "Find a note"))

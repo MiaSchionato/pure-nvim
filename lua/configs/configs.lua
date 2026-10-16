@@ -188,6 +188,14 @@ vim.g.pure_templates = 'Templates'
 -- skipped. Default: {}. Changed: the diary, linked from the daily note.
 vim.g.pure_folder_templates = { ['6-Private/Diary'] = 'Diary' }
 
+-- Folders that live OUTSIDE the vault, under a name links can use: name = real
+-- folder. [[6-Private/Diary/2026-10-16]] opens ~/Private/Diary/2026-10-16.md (and
+-- is created there, with the folder's template above, when it is missing), so
+-- the daily note keeps its diary link though the notes are not in the vault.
+-- <leader>vo sends the current note out to one of them. Default: {}.
+-- Changed: the private folder (the name is the old folder's, so old links work).
+vim.g.pure_outside_folders = { ['6-Private'] = '~/Private' }
+
 -- Language of day and month names in template dates: 'en' (default) or 'pt'.
 vim.g.pure_templates_locale = 'en'
 
@@ -386,8 +394,9 @@ vim.g.pure_llm_actions = 'AI'
 -- see; local models (Ollama) may. A request holding a note from one, or whose
 -- folders reach one, is not sent to a cloud model. Claude still works in the
 -- vault's root when the vault's .claude/settings.json denies Read(<folder>/**).
--- Default: none. Changed: the private folder.
-vim.g.pure_llm_private = { '6-Private' }
+-- Default: none. Changed: the private folder, outside the vault (see
+-- pure_outside_folders).
+vim.g.pure_llm_private = { '~/Private' }
 
 -- Folder of the personas (/name), inside the actions folder. Default: 'Personas'.
 -- vim.g.pure_llm_personas = 'Personas'

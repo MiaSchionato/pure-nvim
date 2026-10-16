@@ -203,6 +203,7 @@ See [manim.md](manim.md).
 |---|---|---|
 | `<leader>vb` | n | Backlinks (notes linking here) |
 | `<leader>vd` | n | Delete note (to the vault's trash) |
+| `<leader>vo` | n | Send the note out of the vault (`pure_outside_folders`) |
 | `<leader>ve` | n | Explore the vault |
 | `<leader>vf` | n | Find a note |
 | `<leader>vg` | n | Grep the vault |

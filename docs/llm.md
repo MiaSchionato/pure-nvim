@@ -458,7 +458,7 @@ Folders no cloud model (Claude, agy) may see; local models (Ollama) may,
 since nothing leaves the machine. Inside the vault or absolute:
 
 ```lua
-vim.g.pure_llm_private = { '6-Private' }
+vim.g.pure_llm_private = { '~/Private' }   -- a folder outside the vault
 ```
 
 A request to a cloud model is not sent ("…not sent. A local model may do

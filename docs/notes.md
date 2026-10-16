@@ -61,8 +61,29 @@ A folder can have a template of its own (`vim.g.pure_folder_templates`,
 folder inside the vault = template name): a note made there by **Yes** or
 **In another folder** is filled with it at once, and the question says so
 (`Create the note "2026-10-08, qui" (template Diary)?`). Here the diary,
-`6-Private/Diary`, linked from the daily note. A template missing from the
-templates folder is skipped.
+`6-Private/Diary` (outside the vault, see below), linked from the daily
+note. A template missing from the templates folder is skipped.
+
+## Folders outside the vault: `vim.g.pure_outside_folders`
+
+`{ ['6-Private'] = '~/Private' }` gives a folder that lives outside the
+vault a name links can use. `[[6-Private/Diary/2026-10-16, qui|📓 Diary]]`
+opens `~/Private/Diary/2026-10-16, qui.md`; if it does not exist, the same
+question as above is asked (with the folder's template from
+`pure_folder_templates`, keyed by the same name) and the note is made there.
+So the daily note keeps its diary link, and old links written when the folder
+was inside the vault keep working, though nothing in the vault holds the
+notes. The link preview (`<leader>vp`) works on them too.
+
+`<leader>vo` (`:NoteSendOut`) sends the current note out of the vault: it asks
+for the folder, with completion (`6-Private/` and what is inside it), moves
+the file and reopens it there. A link that names it only by its name
+(`[[Note]]`) stops finding it; they are counted and reported, not rewritten.
+Write the link with the folder (`[[6-Private/Notes/Note]]`) and it keeps
+working. Backlinks, searches and the vault pickers do not see these folders
+(they are not in the vault), nor does a model that reads the vault;
+`vim.g.pure_llm_private` (see [llm](llm.md)) keeps cloud models out of them
+too.
 
 A link to a periodic note that does not exist yet, in its folder and named as
 its period names it (`[[…/Weekly/2026-W42]]`, the daily's "Next week →"), only
