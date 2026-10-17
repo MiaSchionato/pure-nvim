@@ -79,15 +79,17 @@ end
 
 --- Folder each template sends its note to, relative to the vault root.
 --- "{{title}}" is expanded, which is what puts a project in its own folder.
+--- "{{browse}}" at the end lists the sub-folders of the folder before it, one
+--- level at a time, until she picks "Here" (Literature: Books, People, ...).
 --- "{{choose:A|B}}" asks which of them (Project: her projects live in
 --- 3-Projects/Personal and 3-Projects/Clients, and a new one landed beside
 --- those two folders). A template missing here leaves the note where it is.
 local default_destinations = {
   Decupagem  = '2-Permanent',
   Delete     = '0-Inbox/Trash',
-  Literature = '1-Literature',
+  Literature = '1-Literature/{{browse}}',
   MOC        = '4-Maps',
-  Media      = '1-Literature/Audiovisual',
+  Media      = '1-Literature/Audiovisual/{{browse}}',
   Permanent  = '2-Permanent',
   Project    = '3-Projects/{{choose:Personal|Clients}}/{{title}}',
   Seed       = '2-Permanent',
@@ -912,26 +914,85 @@ local function inboxFolder()
   return (tostring(folder):gsub('^[/\\]+', ''):gsub('[/\\]+$', ''))
 end
 
---- Whether `path` is a note whose place is not decided yet: in the inbox
---- (or below it) or directly in the vault's root.
---- @param root string
---- @param path string
---- @return boolean
-local function undecided(root, path)
+--- Folders whose notes a template only fills and never moves: she put the note
+--- there on purpose (a project, a map) or it is not a note to sort (the
+--- archive, the templates, the assistant's files). Anywhere else a template
+--- moves the note, which also lets her fix a wrong choice. Delete always moves.
+--- `vim.g.pure_template_keep` changes the list.
+local function keepsPlace(root, path)
   root, path = vim.fs.normalize(root), vim.fs.normalize(path)
-  return isInside(path, root .. '/' .. inboxFolder()) or pathKey(vim.fs.dirname(path)) == pathKey(root)
+  local keep = vim.g.pure_template_keep
+  if type(keep) ~= 'table' then
+    keep = { '3-Projects', '4-Maps', '6-Archive', '7-Templates', '8-AI' }
+  end
+  for _, folder in ipairs(keep) do
+    if isInside(path, root .. '/' .. folder) then return true end
+  end
+  return false
 end
 
---- `folder` with its "{{choose:A|B}}" asked for; `callback(folder)`, or
---- `callback(nil)` when the pick is cancelled.
+--- The sub-folders of `rel` (relative to the vault), sorted, without hidden
+--- ones and without Obsidian's attachments.
+--- @param root string
+--- @param rel string
+--- @return string[]
+local function subfolders(root, rel)
+  local names = {}
+  local dir = root .. '/' .. rel
+  local stat = vim.uv.fs_stat(dir)
+  if not (stat and stat.type == 'directory') then return names end
+  for name, kind in vim.fs.dir(dir) do
+    if kind == 'directory' and name:sub(1, 1) ~= '.' and name ~= 'attachments' then
+      names[#names + 1] = name
+    end
+  end
+  table.sort(names, function(a, b) return a:lower() < b:lower() end)
+  return names
+end
+
+--- Pick a folder under `rel`, one level at a time, until "Here" is chosen.
+--- A folder without sub-folders is the answer at once. `callback(nil)` when
+--- the pick is cancelled.
+--- @param rel string
+--- @param callback fun(folder: string|nil)
+local function browseFolder(rel, callback)
+  local root = vaultPath()
+  local names = root and subfolders(root, rel) or {}
+  if #names == 0 then return callback(rel) end
+  local here = 'Here  (' .. rel .. ')'
+  local new = 'New folder...'
+  local items = { here }
+  vim.list_extend(items, names)
+  items[#items + 1] = new
+  vim.ui.select(items, { prompt = 'Folder in ' .. rel }, function(pick)
+    if not pick then return callback(nil) end
+    if pick == here then return callback(rel) end
+    if pick == new then
+      return vim.ui.input({ prompt = 'New folder in ' .. rel .. ': ' }, function(input)
+        local name = input and safeName(input) or ''
+        if name == '' then return callback(nil) end
+        callback(rel .. '/' .. name)
+      end)
+    end
+    browseFolder(rel .. '/' .. pick, callback)
+  end)
+end
+
+--- `folder` with its "{{choose:A|B}}" asked for and its "{{browse}}" walked;
+--- `callback(folder)`, or `callback(nil)` when a pick is cancelled.
 --- @param folder string
 --- @param callback fun(folder: string|nil)
 local function chooseIn(folder, callback)
+  local function browse(resolved)
+    local base = resolved:match('^(.-)/*{{browse}}$')
+    if not base then return callback(resolved) end
+    browseFolder(base, callback)
+  end
   local options = folder:match('{{choose:([^}]*)}}')
-  if not options then return callback(folder) end
+  if not options then return browse(folder) end
   vim.ui.select(vim.split(options, '|', { plain = true }), { prompt = 'Where' }, function(pick)
     if not pick then return callback(nil) end
-    callback((folder:gsub('{{choose:[^}]*}}', function() return pick end, 1)))
+    browse((folder:gsub('{{choose:[^}]*}}', function() return pick end, 1)))
   end)
 end
 
@@ -973,12 +1034,12 @@ function M.applyTemplate(selected)
 
     local folder = destinations[name]
     if not folder then return end
-    -- Only a note still in the inbox (or loose in the vault's root) is
-    -- moved: anywhere else she already chose its place, so the template
-    -- just fills it and it stays, named after the title. Agreed with her in
-    -- Improvment.md (2026-10-06). Delete is the exception: it is the trash.
+    -- A note in a folder she keeps (projects, maps, see keepsPlace) is only
+    -- filled and stays, named after the title; anywhere else the template
+    -- moves it (Improvment.md, 2026-10-06, changed on 2026-10-17: the pipeline
+    -- folders now move a note on to its next stage). Delete is the trash.
     local root, path = vaultPath(), vim.api.nvim_buf_get_name(0)
-    if root and path ~= '' and name ~= 'Delete' and not undecided(root, path) then
+    if root and path ~= '' and name ~= 'Delete' and keepsPlace(root, path) then
       local here = vim.fs.dirname(vim.fs.normalize(path)):sub(#vim.fs.normalize(root) + 2)
       return moveCurrentFile(here, title)
     end

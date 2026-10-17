@@ -86,19 +86,31 @@ by template name (`false` leaves that template's note where it is). Delete
 |---|---|
 | Decupagem | `2-Permanent` |
 | Delete | `0-Inbox/Trash` |
-| Literature | `1-Literature` |
+| Literature | `1-Literature/{{browse}}` (asks which sub-folder) |
 | MOC | `4-Maps` |
-| Media | `1-Literature/Audiovisual` |
+| Media | `1-Literature/Audiovisual/{{browse}}` |
 | Permanent | `2-Permanent` |
 | Project | `3-Projects/{{choose:Personal|Clients}}/{{title}}` (asks which) |
 | Seed | `2-Permanent` |
 | VideoIdeas | `4-Maps/Audiovisual/Ideas` |
 
-**Only a note whose place is not decided is moved**: one in the inbox (or
-below it) or loose in the vault's root. A note anywhere else was put there
-on purpose, so the template only fills it and it **stays where it is**,
-named after the title, with `.md`. The Delete template always moves (it is
-the trash). `{{choose:A|B}}` in a folder asks which one when the note moves.
+`{{browse}}` at the end of a destination lists the sub-folders of the folder
+before it, one level at a time (`Here (...)` first, so Enter confirms, then the
+folders, then `New folder...`), and goes down until you pick `Here`. A folder
+without sub-folders is taken at once, without asking. Hidden folders and
+`attachments` are not listed. Literature starts at `1-Literature` (Books,
+People, Audiovisual...); Media starts inside `Audiovisual`, so it is Enter to
+confirm. `{{choose:A|B}}` in a folder asks which one when the note moves.
+Cancelling any of these leaves the note where it is.
+
+**A template moves the note from anywhere except the folders it keeps**: a
+note in `3-Projects`, `4-Maps`, `6-Archive`, `7-Templates` or `8-AI` is only
+filled and **stays where it is**, named after the title, with `.md`; a note
+anywhere else is moved (so a Literature note in `2-Permanent`, or a
+wrong choice, can be fixed by applying the right template).
+`vim.g.pure_template_keep` changes that list. The Delete template always
+moves (it is the trash). Until 2026-10-17 only notes in the inbox or the
+vault's root were moved.
 
 The note must have a name to be moved (it need not be saved yet); it is
 never moved over an existing note.
