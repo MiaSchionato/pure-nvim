@@ -404,7 +404,12 @@ end
 
 local function setLines(lines)
   local buf = state.buf
+  -- A redraw is not an edit: with undo history, `u` would step back to the
+  -- "Loading…" text (or an empty buffer), and :w would then send that.
+  local levels = vim.bo[buf].undolevels
+  vim.bo[buf].undolevels = -1
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  vim.bo[buf].undolevels = levels
   vim.bo[buf].modified = false
   decorate(buf)
 end
