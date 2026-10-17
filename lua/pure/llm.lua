@@ -2700,6 +2700,31 @@ function M.chatWith(name)
     { ctx = context(buf, selection()), persona = p, buf = buf, slot = p.command })
 end
 
+--- Pick a persona from the Personas folder and open its chat (chatWith).
+function M.pickPersona()
+  local seen, items = {}, {}
+  for _, p in pairs(persona.all()) do
+    if not seen[p.command] then
+      seen[p.command] = true
+      table.insert(items, p)
+    end
+  end
+  if #items == 0 then
+    return vim.notify(('%s: no personas in %s'):format(modelLabel(), persona.dir() or 'the actions folder'),
+      vim.log.levels.WARN)
+  end
+  table.sort(items, function(a, b) return a.command < b.command end)
+  vim.ui.select(items, {
+    prompt = 'Persona',
+    format_item = function(p)
+      local about = type(p.description) == 'string' and p.description ~= '' and ('  ' .. p.description) or ''
+      return '/' .. p.command .. about
+    end,
+  }, function(p)
+    if p then vim.schedule(function() M.chatWith(p.command) end) end
+  end)
+end
+
 local REVIEW = 'Review this code. Point out bugs, risky cases and clear simplifications, each with its line '
   .. 'number, most important first. Skip style nits. If it is fine, say so in one line.'
 

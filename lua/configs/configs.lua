@@ -180,7 +180,7 @@ o.maxmempattern = 20000     -- memory (KB) a search pattern may use
 -- vim.g.pure_vault = '~/Atlas'
 
 -- Folder of the templates, inside the vault. Default: 'Templates'.
-vim.g.pure_templates = 'Templates'
+vim.g.pure_templates = '7-Templates'
 
 -- Folders whose new notes are born with a template: a link to a note that
 -- does not exist yet, created there (Yes), gets it at once. Folder inside
@@ -212,17 +212,17 @@ vim.g.pure_inbox = '0-Inbox'
 
 -- Folders of the periodic notes (Daily, Weekly, Monthly templates), inside
 -- the vault. Only the periods listed change; the others keep their default.
--- Default: 9-Archive/Periodic/Daily, .../Weekly, .../Monthly.
--- Changed: 7-Archive (the vault's 9-Archive was renamed on 2026-10-01).
+-- Default: 6-Archive/Periodic/Daily, .../Weekly, .../Monthly.
+-- Changed: nothing now (the vault was reorganised on 2026-10-16, the defaults follow it).
 vim.g.pure_periodic_folders = {
-  Daily   = '7-Archive/Periodic/Daily',
-  Weekly  = '7-Archive/Periodic/Weekly',
-  Monthly = '7-Archive/Periodic/Monthly',
+  Daily   = '6-Archive/Periodic/Daily',
+  Weekly  = '6-Archive/Periodic/Weekly',
+  Monthly = '6-Archive/Periodic/Monthly',
 }
 
 -- The list the daily note's quote of the day comes from ({{quote}}).
--- Default: '9-Archive/Periodic/Quotes.md'. Changed: 7-Archive, as above.
-vim.g.pure_quotes = '7-Archive/Periodic/Quotes.md'
+-- Default: '6-Archive/Periodic/Quotes.md'.
+vim.g.pure_quotes = '6-Archive/Periodic/Quotes.md'
 
 -- Folder each template moves its note to (<leader>vt), by template name.
 -- {{title}} becomes the note's title. Only the names listed change; false
@@ -231,13 +231,15 @@ vim.g.pure_quotes = '7-Archive/Periodic/Quotes.md'
 -- note's resurfaced notes come from, so those two always keep a folder.
 -- Default:
 -- vim.g.pure_template_destinations = {
+--   Decupagem  = '2-Permanent',
 --   Delete     = '0-Inbox/Trash',
---   Literature = '3-Zettelkasten/Literature',
+--   Literature = '1-Literature/{{browse}}',
 --   MOC        = '4-Maps',
---   Permanent  = '3-Zettelkasten/Permanent',
---   Project    = '1-Projects/{{choose:Personal|Clients}}/{{title}}',
---   Seed       = '3-Zettelkasten/Seeds',
---   VideoIdeas = '2-Areas/Audiovisual/Ideas',
+--   Media      = '1-Literature/Audiovisual/{{browse}}',
+--   Permanent  = '2-Permanent',
+--   Project    = '3-Projects/{{choose:Personal|Clients}}/{{title}}',
+--   Seed       = '2-Permanent',
+--   VideoIdeas = '4-Maps/Audiovisual/Ideas',
 -- }
 
 -- Empty the vault's trash (0-Inbox/Trash, where <leader>vd and the Delete
@@ -319,9 +321,9 @@ vim.g.pure_todoist_confirm = 'never'
 
 -- Folder where the task list and a timestamped history of every change are
 -- kept (tasks.md, history.md, tasks.json), relative to the vault so it moves
--- with it. Unset or '' (default): no archive. Changed: set (7-Archive since
--- the vault's 9-Archive was renamed on 2026-10-01).
-vim.g.pure_todoist_archive = '7-Archive/Todoist/'
+-- with it. Unset or '' (default): no archive. Changed: set (6-Archive since
+-- the vault was reorganised on 2026-10-16).
+vim.g.pure_todoist_archive = '6-Archive/Todoist/'
 
 -- Write the tasks of each ```todoist block into its note as text, refreshed
 -- every `interval` minutes. false (default): drawn, not written.
@@ -394,8 +396,8 @@ vim.g.pure_claude_cmd = 'claude'
 vim.g.pure_llm_blocks = true
 
 -- Folder of the actions (<leader>ax), inside the vault. Default: 'claude'.
--- Changed: 'AI' (the vault's Claude/ folder was renamed on 2026-10-01).
-vim.g.pure_llm_actions = 'AI'
+-- Changed: '8-AI' (the vault's Claude/ folder became AI/ on 2026-10-01, 8-AI on 2026-10-16).
+vim.g.pure_llm_actions = '8-AI'
 
 -- Folders (inside the vault, or absolute) no cloud model (Claude, agy) may
 -- see; local models (Ollama) may. A request holding a note from one, or whose

@@ -402,9 +402,18 @@ local function decorate(buf)
   end
 end
 
-local function setLines(lines)
+--- Replace the buffer. `real` = it is the task list itself: once one is shown, each
+--- redraw is an undo step, so `u` goes back to an older version of the list (and to
+--- unsaved edits a reload threw away). The "Loading…" / error placeholders and the
+--- first list after them are not (undo would land on them, and :w would send them).
+local function setLines(lines, real)
   local buf = state.buf
+  local levels = vim.bo[buf].undolevels
+  local record = real and state.real
+  if not record then vim.bo[buf].undolevels = -1 end
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  if not record then vim.bo[buf].undolevels = levels end
+  if real then state.real = true end
   vim.bo[buf].modified = false
   decorate(buf)
 end
@@ -658,7 +667,7 @@ local function render(tasks, projects)
     end
   end
 
-  setLines(lines)
+  setLines(lines, true)
   if not state.filter then archive.snapshot(tasks, projects) end
   vim.api.nvim_buf_clear_namespace(state.buf, hint_ns, 0, -1)
   vim.api.nvim_buf_set_extmark(state.buf, hint_ns, 0, 0, {
@@ -687,14 +696,15 @@ local prefetched = {}
 --- `on_done(tasks)` runs after a successful redraw.
 function M.reload(on_done)
   if not (state.buf and vim.api.nvim_buf_is_valid(state.buf)) then return end
-  setLines({ '# Todoist', '', 'Loading…' })
+  -- With a list already shown it stays (and stays undoable) until the new one is in.
+  if not state.real then setLines({ '# Todoist', '', 'Loading…' }) end
   local key = state.filter or ''
 
   fetch(state.filter, function(err, tasks, projects)
     if not vim.api.nvim_buf_is_valid(state.buf) then return end
     if err then
       state.loaded = nil
-      setLines({ '# Todoist', '', 'Error: ' .. err })
+      if not state.real then setLines({ '# Todoist', '', 'Error: ' .. err }) end
       return vim.notify(err, vim.log.levels.ERROR)
     end
     render(tasks, projects)
@@ -1118,6 +1128,8 @@ function M.open(filter, float)
   vim.wo.conceallevel = 2
   vim.wo.concealcursor = 'nc'
 
+  -- Another filter: that list is not an older version of this one.
+  if state.loaded ~= key then state.real = false end
   -- Same filter as what the buffer holds: just show it, no network.
   if state.loaded == key then return end
   local ready = prefetched[key]

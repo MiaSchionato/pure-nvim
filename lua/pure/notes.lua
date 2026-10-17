@@ -428,7 +428,7 @@ end
 ---                      diary's) fills the note with it
 ---   With a template    the same, then the template is applied as <leader>nt
 ---                      applies it, moves included: the Project template
----                      sends the note to 1-Projects/<title>/
+---                      sends the note to 3-Projects/<title>/
 ---   In another folder  asks which (made if missing)
 ---   Cancel             nothing
 ---
@@ -673,7 +673,7 @@ function M.omnifunc(findstart, base)
   -- completion"). It only offered notes by name, so:
   --   [[3-Zett/         a path: the folders and files inside that folder,
   --                     matched by what follows the last '/'
-  --   [[zett            folders match too ("3-Zettelkasten/", no ]]: you
+  --   [[zett            folders match too ("2-Permanent/", no ]]: you
   --                     keep typing into it)
   --   ![[photo  [[doc   attachments (images, PDFs...) as well, after the
   --                     notes, with their extension, as Obsidian links them

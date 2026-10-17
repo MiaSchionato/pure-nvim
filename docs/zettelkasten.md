@@ -65,7 +65,7 @@ folder) and expands it:
 | `{{worklogs}}` | each day's `Work log` section embedded, as the lines of a callout (`> …`) |
 | `{{weeks}}` | a list of links to the weekly note of each ISO week that touches the period |
 | `{{prev}}` / `{{next}}` | in a periodic note: the name of the previous / next day, week or month (for navigation links) |
-| `{{quote}}` | a line of `9-Archive/Periodic/Quotes.md` (`vim.g.pure_quotes`; lines starting with `- `), a different one each day |
+| `{{quote}}` | a line of `6-Archive/Periodic/Quotes.md` (`vim.g.pure_quotes`; lines starting with `- `), a different one each day |
 | `{{idea}}` | a `[[link]]` to one of your permanent notes, a different one each day |
 | `{{diary}}` | `2026-09-25, sex` (the diary file name format) |
 
@@ -84,19 +84,33 @@ by template name (`false` leaves that template's note where it is). Delete
 
 | Template | Default folder |
 |---|---|
+| Decupagem | `2-Permanent` |
 | Delete | `0-Inbox/Trash` |
-| Literature | `3-Zettelkasten/Literature` |
+| Literature | `1-Literature/{{browse}}` (asks which sub-folder) |
 | MOC | `4-Maps` |
-| Permanent | `3-Zettelkasten/Permanent` |
-| Project | `1-Projects/{{choose:Personal|Clients}}/{{title}}` (asks which) |
-| Seed | `3-Zettelkasten/Seeds` |
-| VideoIdeas | `2-Areas/Audiovisual/Ideas` |
+| Media | `1-Literature/Audiovisual/{{browse}}` |
+| Permanent | `2-Permanent` |
+| Project | `3-Projects/{{choose:Personal|Clients}}/{{title}}` (asks which) |
+| Seed | `2-Permanent` |
+| VideoIdeas | `4-Maps/Audiovisual/Ideas` |
 
-**Only a note whose place is not decided is moved**: one in the inbox (or
-below it) or loose in the vault's root. A note anywhere else was put there
-on purpose, so the template only fills it and it **stays where it is**,
-named after the title, with `.md`. The Delete template always moves (it is
-the trash). `{{choose:A|B}}` in a folder asks which one when the note moves.
+`{{browse}}` at the end of a destination lists the sub-folders of the folder
+before it, one level at a time (`Here (...)` first, so Enter confirms, then the
+folders, then `New folder...`), and goes down until you pick `Here`. A folder
+without sub-folders is taken at once, without asking. Hidden folders and
+`attachments` are not listed. Literature starts at `1-Literature` (Books,
+People, Audiovisual...); Media starts inside `Audiovisual`, so it is Enter to
+confirm. `{{choose:A|B}}` in a folder asks which one when the note moves.
+Cancelling any of these leaves the note where it is.
+
+**A template moves the note from anywhere except the folders it keeps**: a
+note in `3-Projects`, `4-Maps`, `6-Archive`, `7-Templates` or `8-AI` is only
+filled and **stays where it is**, named after the title, with `.md`; a note
+anywhere else is moved (so a Literature note in `2-Permanent`, or a
+wrong choice, can be fixed by applying the right template).
+`vim.g.pure_template_keep` changes that list. The Delete template always
+moves (it is the trash). Until 2026-10-17 only notes in the inbox or the
+vault's root were moved.
 
 The note must have a name to be moved (it need not be saved yet); it is
 never moved over an existing note.
@@ -105,9 +119,9 @@ never moved over an existing note.
 
 | Template | Default folder | File name |
 |---|---|---|
-| `Daily.md` | `9-Archive/Periodic/Daily` | `2026-09-25.md` |
-| `Weekly.md` | `9-Archive/Periodic/Weekly` | `2026-W39.md` |
-| `Monthly.md` | `9-Archive/Periodic/Monthly` | `2026-09.md` |
+| `Daily.md` | `6-Archive/Periodic/Daily` | `2026-09-25.md` |
+| `Weekly.md` | `6-Archive/Periodic/Weekly` | `2026-W39.md` |
+| `Monthly.md` | `6-Archive/Periodic/Monthly` | `2026-09.md` |
 
 `vim.g.pure_periodic_folders` changes the folders, e.g.
 `{ Daily = 'Periodic/Daily' }` (periods left out keep their default).

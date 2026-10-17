@@ -187,6 +187,21 @@ vim.api.nvim_create_autocmd('BufWritePre', {
   end,
 })
 
+-- What Neovim writes on the side would leave the note in the clear on the plain
+-- disk while the folder is mounted: the swap file, the undo history and the
+-- backups. None of them for a note of an encrypted folder.
+vim.api.nvim_create_autocmd({ 'BufReadPre', 'BufNewFile' }, {
+  group = vim.api.nvim_create_augroup('PureCryptNoTraces', { clear = true }),
+  callback = function(args)
+    if M.folderOf(vim.api.nvim_buf_get_name(args.buf)) then
+      vim.opt_local.swapfile = false
+      vim.opt_local.undofile = false
+      vim.opt_local.backup = false
+      vim.opt_local.writebackup = false
+    end
+  end,
+})
+
 --- The settings for the commands: the first encrypted folder.
 local function first()
   local names = vim.tbl_keys(vim.g.pure_outside_folders or {})
