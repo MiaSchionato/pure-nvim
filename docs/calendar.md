@@ -100,7 +100,12 @@ calendars takes OAuth. One time, about 10 minutes:
    ask), or `:CalendarAuth` any time. Paste the client ID and secret; the
    browser opens, you allow access, done.
 
-Kept in `stdpath('data')`, never in the repository: `google_calendar.json`
+Proton Pass first: a Secure Note titled `nvim-google-calendar` whose body is
+the JSON `{"client_id","client_secret","refresh_token"}` (read with
+`pass-cli`; `:CalendarAuth` updates it when it exists). Vault: `Personal`, or
+`vim.g.pure_protonpass_vault`; `vim.g.pure_protonpass = false` turns it off.
+It is read in the background at startup, so `pass-cli` does not delay opening Neovim.
+Without it, kept in `stdpath('data')`, never in the repository: `google_calendar.json`
 (client ID, secret and the refresh token), `google_calendar_no_prompt`
 ("never ask"), `calendar_sync.json` (what the last sync wrote). Secrets reach
 curl on stdin, never on its command line.

@@ -64,6 +64,7 @@ flash back to their raw marks for one key while typing.
 |---|---|
 | `<leader>tx` | tick / untick the checkbox on the line |
 | `<leader>x` | cycle `[ ] [~] [!] [>] [-] [x]` (notes only, not the Todoist list) |
+| `<leader>x` (visual) | the selected tasks all take the state that follows the first task's (plain `- item` lines get a box, other lines are left alone) |
 | `<leader>ft` | format the table around the cursor (`column -t`) |
 | `<C-l>` (insert) | fix the last misspelled word before the cursor, on this line, with the first suggestion; the cursor stays; `u` undoes just the fix |
 | `<leader>ds` | spelling suggestions (`z=`) |

@@ -18,6 +18,7 @@ When a module changes, update its page here in the same commit.
 | [llm.md](llm.md) | LLMs (Claude, Ollama, agy) from keys: write into the buffer, the chat, actions, requests in notes |
 | [manim.md](manim.md) | Manim: the scene you are writing plays in a window, again on every save |
 | [notes.md](notes.md) | Links between notes: follow, complete `[[`, rename without breaking links, backlinks |
+| [linkview.md](linkview.md) | Preview and quick edit of the note a link points to, in a floating window |
 | [zettelkasten.md](zettelkasten.md) | Obsidian vault, note templates, daily / weekly / monthly notes |
 | [markdown.md](markdown.md) | How markdown is drawn: headings, tasks, tables, wikilinks, frontmatter, footnotes |
 | [keyhint.md](keyhint.md) | The window that lists the keys after `<leader>` |
@@ -40,7 +41,7 @@ When a module changes, update its page here in the same commit.
   treesitter, oil, copilot.
 - `lua/pure/` – the home-made modules documented here.
 - `lua/themes/` – colorschemes; the chosen one is remembered across restarts
-  (`vim.g.MY_THEME`, saved by Neovim in the ShaDa file).
+  (a file in `stdpath('data')`, see `ui.md`), or "omarchy" to follow the Omarchy theme.
 
 The `windows` branch is `main` plus a Windows-only block in `init.lua` that
 makes Neovim run shell commands through Git bash (the pickers need POSIX
@@ -92,6 +93,8 @@ where to change them.
 | `vim.g.pure_vault` | asked on first start | [zettelkasten](zettelkasten.md) |
 | `vim.g.pure_templates` | `'Templates'` | [zettelkasten](zettelkasten.md) |
 | `vim.g.pure_folder_templates` | `{}` | [notes](notes.md) |
+| `vim.g.pure_outside_folders` | `{}` (name = folder outside the vault, or `{ dir, cipher, idle, fido2 }` for an encrypted one) | [notes](notes.md) |
+| `vim.g.pure_fido2_id` | none (the FIDO2 key's USB `vendor:product`, attached to WSL only while mounting) | [notes](notes.md) |
 | `vim.g.pure_templates_locale` | `'en'` | [zettelkasten](zettelkasten.md) |
 | `vim.g.pure_trash_cleanup` | off (`true` in configs.lua) | [zettelkasten](zettelkasten.md) |
 | `vim.g.pure_periodic_on_start` | off (`{ 'Daily', 'Weekly', 'Monthly' }` in configs.lua) | [zettelkasten](zettelkasten.md) |
@@ -121,8 +124,8 @@ where to change them.
 | `vim.g.pure_terminal_shell` | nu, pwsh or powershell on Windows; `'shell'` elsewhere | [ui](ui.md) |
 | `vim.b.pure_indentscope_disable` | off | [editing](editing.md) |
 | `vim.g.pure_inbox` | `'0-Inbox'` | [zettelkasten](zettelkasten.md) |
-| `vim.g.pure_periodic_folders` | `9-Archive/Periodic/{Daily,Weekly,Monthly}` | [zettelkasten](zettelkasten.md) |
-| `vim.g.pure_quotes` | `'9-Archive/Periodic/Quotes.md'` | [zettelkasten](zettelkasten.md) |
+| `vim.g.pure_periodic_folders` | `6-Archive/Periodic/{Daily,Weekly,Monthly}` | [zettelkasten](zettelkasten.md) |
+| `vim.g.pure_quotes` | `'6-Archive/Periodic/Quotes.md'` | [zettelkasten](zettelkasten.md) |
 | `vim.g.pure_template_destinations` | see the Destinations table | [zettelkasten](zettelkasten.md) |
 | `vim.g.pure_new_file_ask_name` | on | [fuzzy](fuzzy.md) |
 | `vim.g.pure_spelllang` | `{ 'pt_br', 'en', 'it' }` | [markdown](markdown.md) |

@@ -12,6 +12,29 @@ function M.ConfigHighlightByColorscheme(colorscheme, highlightGroups)
   })
 end
 
+--- Give floating windows (fuzzy finder, pickers, popups, notifications) the
+--- same background as the editor: whatever `Normal` has under the current
+--- colorscheme, so every theme gets matching floats instead of its own panel
+--- colour or a transparent one.
+local floatBgGroups = {
+  "NormalFloat", "FloatBorder", "FloatTitle", "FloatFooter",
+  "Pmenu", "PmenuSbar", "PmenuBorder",
+}
+local themeBg
+--- `fresh`: a colorscheme was just applied, so forget the previous theme's
+--- background. Later calls (after Normal was made transparent) keep using the
+--- theme's own colour rather than going transparent too.
+function M.syncFloatBg(fresh)
+  if fresh then themeBg = nil end
+  local normal = vim.api.nvim_get_hl(0, { name = "Normal", link = false })
+  themeBg = normal.bg or themeBg
+  for _, group in ipairs(floatBgGroups) do
+    local hl = vim.api.nvim_get_hl(0, { name = group, link = false })
+    hl.bg, hl.ctermbg = themeBg, nil
+    vim.api.nvim_set_hl(0, group, hl)
+  end
+end
+
 function M.MyTabline()
   local line = ""
   local tabs = vim.api.nvim_list_tabpages()
@@ -132,15 +155,18 @@ function M.getOpts(base_opts, desc)
   return vim.tbl_extend("force", base_opts, {desc = desc})
 end
 
-function M.createWindow(title, ratio)
-  local buf = vim.api.nvim_create_buf(false, true)
+--- A centred floating window. `opts`: enter (default true) false leaves the
+--- focus where it was; buf shows an existing buffer instead of a new scratch one.
+function M.createWindow(title, ratio, opts)
+  opts = opts or {}
+  local buf = opts.buf or vim.api.nvim_create_buf(false, true)
   local height = math.ceil(vim.o.lines * ratio)
   local width = math.ceil(vim.o.columns * ratio)
   if title == " " then
     title = nil
   end
 
-  local win = vim.api.nvim_open_win(buf, true,{
+  local win = vim.api.nvim_open_win(buf, opts.enter ~= false, {
     relative = "editor",
     width = width,
     height = height,
@@ -291,6 +317,43 @@ function M.cycleCheckbox()
     new_line = bullet .. '[ ] ' .. text
   end
   vim.api.nvim_set_current_line(new_line)
+end
+
+--- The selected lines (visual mode) all take the state that follows the one of
+--- the first task in the selection, so five tasks end up the same whatever
+--- their states were before. Plain '- item' lines get an empty box, lines
+--- that are not list items are left alone.
+function M.cycleCheckboxRange()
+  local order = { ' ', '~', '!', '>', '-', 'x' }
+  local first, last = vim.fn.line('v'), vim.fn.line('.')
+  if first > last then first, last = last, first end
+  local lines = vim.api.nvim_buf_get_lines(0, first - 1, last, false)
+
+  local target
+  for _, line in ipairs(lines) do
+    local state = line:match('^%s*[-*+]%s+%[(.?)%]')
+    if state then
+      state = state == '' and ' ' or state:lower()
+      target = ' '
+      for i, s in ipairs(order) do
+        if s == state then target = order[i % #order + 1] end
+      end
+      break
+    end
+  end
+  target = target or ' '
+
+  for i, line in ipairs(lines) do
+    local prefix, rest = line:match('^(%s*[-*+]%s+)%[.?%](.*)$')
+    if prefix then
+      lines[i] = prefix .. '[' .. target .. ']' .. rest
+    else
+      local bullet, text = line:match('^(%s*[-*+]%s+)(.*)$')
+      if bullet then lines[i] = bullet .. '[' .. target .. '] ' .. text end
+    end
+  end
+  vim.api.nvim_buf_set_lines(0, first - 1, last, false, lines)
+  vim.api.nvim_feedkeys(vim.keycode('<Esc>'), 'nx', false)
 end
 
 function M.toggleExplore()

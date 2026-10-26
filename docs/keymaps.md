@@ -39,6 +39,7 @@ See [llm.md](llm.md).
 | `<leader>ad` | n | Daily note: next step and the measured day (the vault action `Nota do dia`) |
 | `<leader>ah` | n | Past answers |
 | `<leader>ai` | n, x | Write here (visual: rewrite) |
+| `<leader>ap` | n | Personas: pick one from the list, open its chat (`/name`, see [llm.md](llm.md#personas)) |
 | `<leader>aj` | n | Job assistant: the chat with the `/job` persona, waiting for your question (see [llm.md](llm.md#personas-name)) |
 | `<leader>am` | n | Select model (Ollama / Claude / agy) |
 | `<leader>ar` | n, x | Repeat the last request |
@@ -98,6 +99,7 @@ See [llm.md](llm.md).
 | `<leader>fg` | n | Grep |
 | `<leader>fh` | n | Help tags |
 | `<leader>fj` | n | Jump list |
+| `<leader>f"` | n | Registers (Enter: make it the register p pastes) |
 | `<leader>fl` | n | Notes linking here (backlinks, also <leader>vb) |
 | `<leader>fn` | n | Find in nvim config |
 | `<leader>fv` | n | Find in Atlas, the Obsidian vault |
@@ -202,11 +204,14 @@ See [manim.md](manim.md).
 |---|---|---|
 | `<leader>vb` | n | Backlinks (notes linking here) |
 | `<leader>vd` | n | Delete note (to the vault's trash) |
+| `<leader>vo` | n | Send the note out of the vault (`pure_outside_folders`) |
 | `<leader>ve` | n | Explore the vault |
 | `<leader>vf` | n | Find a note |
 | `<leader>vg` | n | Grep the vault |
 | `<leader>vn` | n | New note (inbox, asks the name only) |
 | `<leader>vr` | n | Rename note, fix links to it |
+| `<leader>vp` | n | Preview the linked note |
+| `<leader>vq` | n | Quick edit the linked note |
 | `<leader>vs` | n | Sync the vault (git) |
 | `<leader>vN` | n | New note from a template (born in its folder) |
 | `<leader>vt` | n | Apply a template |
@@ -296,6 +301,7 @@ See [manim.md](manim.md).
 | `ac` | Outer curly brackets |
 | `ai` | Outer indent scope |
 | `an` | Select parent (outer) node |
+| `ap` | Outer parentheses |
 | `aq` | Smart outer quotes |
 | `as` | Outer square brackets |
 | `gc` | Toggle comment |
@@ -305,6 +311,7 @@ See [manim.md](manim.md).
 | `ic` | Inner curly brackets |
 | `ii` | Inner indent scope |
 | `in` | Select child (inner) node |
+| `ip` | Inner parentheses (not paragraph; the paragraph is `i}`) |
 | `iq` | Smart inner quotes |
 | `is` | Inner square brackets |
 | `s` | Surround selection |
@@ -323,7 +330,8 @@ See [manim.md](manim.md).
 
 | Key | What |
 |---|---|
-| `<Esc><Esc>` | Close terminal |
+| `<Esc>` then `<Esc>` again (250 ms) | Leave terminal mode, then close the floating terminal (not the one in a tab); `<A-Esc>` sends a real `<Esc>`. See [ui.md](ui.md) |
+| `<Esc><Esc>` | Close a floating terminal that runs a command |
 | `<S-Esc>` | Leave terminal mode |
 
 Text objects (`is`, `ic`, `iq`, `ii`, `in` …): see [editing.md](editing.md).

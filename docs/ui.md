@@ -78,18 +78,51 @@ theme's `DiagnosticWarn` / `DiagnosticError`.
 |---|---|
 | `<leader>tt` | floating terminal (toggle; it keeps running when hidden) |
 | `<leader>tg` | floating terminal running `gemini` |
-| `<Esc><Esc>` | close the terminal |
-| `<S-Esc>` | leave terminal mode (to scroll / copy) |
+| `<Esc>` | leave terminal mode at once (to scroll / copy) |
+| `<Esc>` again, within 250 ms | close (hide) the terminal; it keeps running |
+| `<A-Esc>` | send a real `<Esc>` to the shell |
+| `<Esc><Esc>` | close the terminal, for the ones running a command (`<leader>tc`, `<leader>tg`) |
+| `<S-Esc>` | leave terminal mode |
+
+`vim.g.terminal_esc_ms` (default 250) is the time for the second `<Esc>`;
+`0` / `false` goes back to `<Esc><Esc>` only, with `<Esc>` reaching the
+shell. The terminal in a tab (`<leader>tm`) is not touched. The fuzzy pickers
+are never left with `<Esc>`: it always closes them (see [fuzzy.md](fuzzy.md)).
 
 The shell: `vim.g.pure_terminal_shell` if set; on Windows the first of `nu`,
 `pwsh`, `powershell` found (separate from the Git bash the pickers use);
 elsewhere `'shell'`.
 
+## Remote (`lua/pure/remote.lua`)
+
+The first Neovim started listens at a fixed address, `/tmp/nvim-atlas.sock`
+(`vim.g.remote_socket`; `''` turns it off), so a program outside can open a
+file in it instead of starting another one:
+
+```
+nvim --server /tmp/nvim-atlas.sock --remote 'Atlas/0-Inbox/Note.md'
+```
+
+The Flow Launcher plugin `nv` does this. A Neovim started while another owns
+the address does not listen there; a socket left by a Neovim that died is
+replaced. Not on Windows (named pipes) and not in headless runs.
+
 ## Themes (`lua/themes/colorschemes.lua`, `colors/`)
 
-`<leader>fc` picks a colorscheme; it is remembered across restarts. The
-default is `NeoSolarized`; when a theme is not installed, `myghtfly` (the
-local one in `colors/`) is used instead. `<leader>ox` makes the background
+`<leader>fc` picks a colorscheme; it is remembered across restarts, in
+`stdpath('data')/colorscheme` (ShaDa carried it before, but only on a clean exit,
+and the last instance to exit overwrote the others). The default is
+`NeoSolarized`; when a theme is not installed, `myghtfly` (the local one in
+`colors/`) is used instead.
+
+The first entry of the list, **omarchy**, follows the Omarchy theme: it uses the
+colorscheme that goes with the current theme (`omarchy theme current`), now, on
+every start, and when the theme changes while Neovim is open (checked when the
+terminal gets focus back). The colorscheme is read from the theme's own
+`neovim.lua` (`colorscheme = "…"`), or matched by name when the theme has none
+(`lua/pure/omarchy-theme.lua`). A theme plugin that is not installed is added
+with `vim.pack`, which asks first. A theme with no matching colorscheme (e.g.
+`vantablack`) gives a warning and `NeoSolarized`. `<leader>ox` makes the background
 transparent. In Neovide the transparency is off (`configs/neovide.lua`).
 
 On startup, once the colorscheme has been applied, the `Normal` background is

@@ -15,7 +15,11 @@ Todoist → Settings → Integrations → Developer → API token. Then either:
 
 - `:TodoistToken` – hidden input; saved to `stdpath('data')/todoist_token`,
   outside the repository; or
-- the `TODOIST_API_TOKEN` environment variable (wins over the file).
+- the `TODOIST_API_TOKEN` environment variable (wins over everything); or
+- Proton Pass: a Secure Note titled `nvim-todoist` whose body is the token
+  (read with `pass-cli`, see `lua/pure/protonpass.lua`; wins over the file).
+  Both Proton Pass secrets are read in the background at startup (in parallel),
+  so `pass-cli`'s half second never blocks the first screen.
 
 Without a token Neovim asks on startup (Yes / Later / Never ask).
 **Never type the token in a shell**: shell history files can end up in git.
@@ -58,6 +62,7 @@ Keys in that buffer:
 |---|---|
 | `<CR>` / `x` | tick / untick the checkbox (`x` does not delete here) |
 | `<leader>x` | cycle Obsidian states `[ ] [~] [!] [>] [-] [x]`; only `[x]` reaches Todoist, the others are remembered locally (`todoist_states.json`) |
+| `<leader>x` (visual) | same, for every selected task at once |
 | `r` | reload from Todoist (asks if there are unsaved edits) |
 | `q` / `<Esc>` | close (same) |
 | `zc` / `zo` / `za` (or `zz`) | fold a `##` project, or a task with its subtasks (it opens with every task's subtasks folded) |
@@ -231,7 +236,7 @@ carries its link.
 ## 3. Archive
 
 ```lua
-vim.g.pure_todoist_archive = '7-Archive/Todoist/'
+vim.g.pure_todoist_archive = '6-Archive/Todoist/'
 ```
 
 A relative folder is inside the Obsidian vault (see [zettelkasten](zettelkasten.md)),

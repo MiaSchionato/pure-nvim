@@ -5,6 +5,20 @@ vim.api.nvim_create_autocmd("VimEnter", {
     -- themes/colorschemes.lua sets the default, but the one-file build skips
     -- that file in portable mode (it downloads themes).
     local theme = vim.g.MY_THEME or 'NeoSolarized'
+    -- The pick of <leader>fc is saved in a file (pure/omarchy-theme.lua): ShaDa
+    -- is only written on a clean exit and the last instance to exit won. "omarchy"
+    -- stands for the colorscheme of the current Omarchy theme.
+    local okOm, omarchy = pcall(require, 'pure.omarchy-theme')
+    if okOm then
+      theme = omarchy.saved() or theme
+      if theme == omarchy.NAME then
+        local scheme, why = omarchy.resolved()
+        if not scheme then
+          vim.notify('Omarchy theme: ' .. tostring(why), vim.log.levels.WARN)
+        end
+        theme = scheme or 'NeoSolarized'
+      end
+    end
 
     -- solarized-osaka applies itself over in themes/solarized-osaka.lua.
     if theme and theme ~= 'solarized-osaka' then
@@ -33,8 +47,24 @@ vim.api.nvim_create_autocmd("VimEnter", {
     vim.api.nvim_set_hl(0,"DiagnosticUnnecessary", {})
 
     -- Apply background color from nightfly
-    vim.api.nvim_set_hl(0,"Normal", {bg='#011627'})
+    -- vim.api.nvim_set_hl(0,"Normal", {bg='#011627'})
+    
+    -- Floats take the theme's background before Normal is made transparent.
+    require('configs.functions').syncFloatBg(true)
+
+    -- Transparent background
+    vim.api.nvim_set_hl(0,"Normal", {bg='NONE'})
   end
+})
+
+-- Floats follow the theme's Normal background (see syncFloatBg); the scheduled
+-- call runs again after any Normal override (neovide.lua).
+vim.api.nvim_create_autocmd("ColorScheme", {
+  callback = function()
+    local func = require('configs.functions')
+    func.syncFloatBg(true)
+    vim.schedule(func.syncFloatBg)
+  end,
 })
 
 -- Dashboard
@@ -150,3 +180,14 @@ vim.api.nvim_create_autocmd("LspAttach", {
 })
 
 
+
+-- Tell WezTerm that this pane runs nvim (user var IN_NVIM): its Win+C / Win+V keys
+-- (F20 / F21) are handed to nvim here and used for the terminal clipboard elsewhere.
+do
+  local function setNvimFlag(value)
+    local b64 = value == "" and "" or vim.base64.encode(value)
+    io.stdout:write("\027]1337;SetUserVar=IN_NVIM=" .. b64 .. "\007")
+  end
+  vim.api.nvim_create_autocmd({ "VimEnter", "VimResume" }, { callback = function() setNvimFlag("1") end })
+  vim.api.nvim_create_autocmd({ "VimLeave", "VimSuspend" }, { callback = function() setNvimFlag("") end })
+end

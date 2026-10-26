@@ -103,14 +103,33 @@ function M.toggleTerminal(cmd, ratio)
 
   -- Keys that close the floating terminal.
   --
-  -- This buffer only had a normal-mode <Esc>, but startinsert above leaves you
-  -- in terminal-insert mode, so <Esc> went straight to the shell and there was
-  -- no configured way out at all. <Esc> alone cannot be taken over in terminal
-  -- mode -- the shell and any TUI inside it need it -- so the terminal-mode
-  -- binding is <Esc><Esc>.
-  for mode, lhs in pairs({ t = '<Esc><Esc>', n = '<Esc>' }) do
-    vim.keymap.set(mode, lhs, function() hideTerminal(cmd) end,
-      { silent = true, buffer = term_buf, desc = "Hide floating terminal" })
+  -- <Esc> alone cannot be taken over in terminal mode for a TUI (the shell and
+  -- anything inside it need it), so a terminal running an explicit command
+  -- (`claude`, `gemini`...) keeps <Esc><Esc> as the way out.
+  --
+  -- The bare shell is different: there <Esc> leaves terminal mode at once (no
+  -- waiting to see whether a second one follows) and a second <Esc> within
+  -- vim.g.terminal_esc_ms closes the terminal. <A-Esc> sends a real <Esc> to
+  -- the shell. terminal_esc_ms = 0 / false: the <Esc><Esc> way above.
+  local esc_ms = vim.g.terminal_esc_ms
+  if esc_ms == nil then esc_ms = 250 end
+  if cmd == "default" and esc_ms and esc_ms > 0 then
+    local last = 0
+    vim.keymap.set('t', '<Esc>', function()
+      last = vim.uv.hrtime() / 1e6
+      return [[<C-\><C-n>]]
+    end, { expr = true, silent = true, nowait = true, buffer = term_buf, desc = "Leave terminal mode" })
+    vim.keymap.set('n', '<Esc>', function()
+      if vim.uv.hrtime() / 1e6 - last <= esc_ms then hideTerminal(cmd) end
+    end, { silent = true, nowait = true, buffer = term_buf, desc = "Hide floating terminal (second <Esc>)" })
+    vim.keymap.set('t', '<A-Esc>', function()
+      pcall(vim.fn.chansend, vim.b[term_buf].terminal_job_id, '\27')
+    end, { silent = true, buffer = term_buf, desc = "Send a real <Esc> to the shell" })
+  else
+    for mode, lhs in pairs({ t = '<Esc><Esc>', n = '<Esc>' }) do
+      vim.keymap.set(mode, lhs, function() hideTerminal(cmd) end,
+        { silent = true, buffer = term_buf, desc = "Hide floating terminal" })
+    end
   end
 end
 

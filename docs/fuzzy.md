@@ -6,7 +6,7 @@ terminal; the choice comes back to Neovim when fzf exits. Needs `fzf`, `fd`,
 `windows` branch sets that up).
 
 In any picker: type to filter, arrows or `Ctrl-j` / `Ctrl-k` to move, `Enter`
-to pick, `Esc` to cancel. (Arrows are turned into `Ctrl-k` / `Ctrl-j`
+to pick, `Esc` to cancel (a single `Esc` always closes the picker, even with a global terminal-mode `Esc` that leaves terminal mode). (Arrows are turned into `Ctrl-k` / `Ctrl-j`
 before they reach fzf: on Windows an arrow's escape sequence could arrive
 split and make fzf quit.)
 
@@ -20,8 +20,9 @@ split and make fzf quit.)
 | `<leader>fb` | buffers | open buffers |
 | `<leader>f/` | recent files | `:oldfiles` |
 | `<leader>fj` | jump list | with a preview of the spot |
+| `<leader>f"` | registers | every register with text; `Enter` makes it the unnamed register (the one `p` pastes) |
 | `<leader>fh` | help | Neovim's help files and every section of these docs (`pure todoist › …`) |
-| `<leader>fc` | colorschemes | the choice is remembered across restarts |
+| `<leader>fc` | colorschemes | the choice is remembered across restarts; **omarchy** (first) follows the Omarchy theme |
 | `<leader>fe` | explorer | walk folders; type a new name to create a file, or `name/` for a folder |
 | `<leader>gl` | git log | shows the picked commit in a split (`q` closes) |
 | `<leader>n…` | new file | straight into its folder, asking only the name (`nh` home, `n.` ~/.config, `nn` nvim, `ne` here; `vim.g.pure_new_file_ask_name = false`: an unnamed buffer there instead). `nf` picks the folder first; `nv` is a note in the vault's inbox; `nd` a new folder here |

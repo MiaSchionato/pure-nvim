@@ -324,6 +324,32 @@ local function newNoteFolder(root, from)
   return ''
 end
 
+--- Folders that live outside the vault: vim.g.pure_outside_folders maps a
+--- name used in links to a real folder ({ ['6-Private'] = '~/Private' }).
+--- A link such as [[6-Private/Diary/2026-10-16]] then leads to
+--- ~/Private/Diary/2026-10-16.md, so the vault keeps its links (and the daily
+--- note its diary link) without holding the notes. Returns the absolute path
+--- and the name, or nil when `target` is not under one of them.
+--- @param target string
+--- @return string|nil, string|nil
+function M.outsidePath(target)
+  target = target:gsub('\\', '/'):gsub('^/+', '')
+  local low = target:lower()
+  for name, dir in pairs(vim.g.pure_outside_folders or {}) do
+    if type(dir) == 'table' then dir = dir.dir end
+    local n = (name:gsub('\\', '/'):gsub('^/+', ''):gsub('/+$', ''))
+    local rest
+    if low == n:lower() then
+      rest = ''
+    elseif low:sub(1, #n + 1) == n:lower() .. '/' then
+      rest = target:sub(#n + 2)
+    end
+    if rest then
+      return (vim.fs.normalize(dir):gsub('/+$', '')) .. (rest ~= '' and ('/' .. rest) or ''), name
+    end
+  end
+end
+
 local function openFile(path)
   if path:match('%.md$') or not path:match('[^/]%.%w+$') then
     vim.cmd('edit ' .. vim.fn.fnameescape(path))
@@ -402,7 +428,7 @@ end
 ---                      diary's) fills the note with it
 ---   With a template    the same, then the template is applied as <leader>nt
 ---                      applies it, moves included: the Project template
----                      sends the note to 1-Projects/<title>/
+---                      sends the note to 3-Projects/<title>/
 ---   In another folder  asks which (made if missing)
 ---   Cancel             nothing
 ---
@@ -425,22 +451,25 @@ local function create(root, link, from)
     end
     return
   end
+  local outside_dir = M.outsidePath(folder)
+  if outside_dir and not require('pure.crypt').ensure(outside_dir, function() create(root, link, from) end) then return end
   local own = folderTemplate(folder)
   local choice = vim.fn.confirm(('Create the note "%s"%s?'):format(title,
     own and (' (template ' .. own:gsub('%.md$', '') .. ')') or ''),
     '&Yes\nWith a &template\nIn another &folder\n&Cancel', 1)
 
   local function make(rel)
-    local dir = root .. (rel ~= '' and ('/' .. rel) or '')
+    local dir = M.outsidePath(rel) or (root .. (rel ~= '' and ('/' .. rel) or ''))
     vim.fn.mkdir(dir, 'p')
     local path = dir .. '/' .. zet().noteId(title, dir) .. '.md'
     vim.fn.writefile({}, path)
     invalidate()
     vim.cmd('edit ' .. vim.fn.fnameescape(path))
+    return true
   end
   --- make(), then the folder's own template, if it has one.
   local function makeFilled(rel)
-    make(rel)
+    if not make(rel) then return end
     local tpl = folderTemplate(rel)
     if tpl then zet().applyTemplate(tpl) end
   end
@@ -450,7 +479,7 @@ local function create(root, link, from)
   elseif choice == 2 then
     zet().pickTemplate(function(selected)
       if not selected then return end
-      make(folder)
+      if not make(folder) then return end
       zet().applyTemplate(selected)
       invalidate() -- the template may have moved it
     end)
@@ -493,6 +522,23 @@ function M.follow(urls_only)
     end
   end
 
+  -- A folder that lives outside the vault (M.outsidePath).
+  local outside = M.outsidePath(parts.target)
+  if outside then
+    -- An encrypted folder that is locked: unlock it first (pure/crypt.lua).
+    if not require('pure.crypt').ensure(outside, function() M.follow() end) then return true end
+    for _, c in ipairs({ outside, outside .. '.md' }) do
+      if vim.fn.filereadable(c) == 1 then
+        vim.cmd("normal! m'")
+        openFile(c)
+        if c:match('%.md$') then jumpTo(parts.sub) end
+        return true
+      end
+    end
+    create(root, parts, from)
+    return true
+  end
+
   if not root then
     vim.notify('No vault set: run :ZettelVault', vim.log.levels.WARN)
     return true
@@ -507,6 +553,44 @@ function M.follow(urls_only)
   if rel:match('%.md$') then jumpTo(parts.sub) end
   return true
 end
+
+--- Where the link under the cursor leads, without following it (for
+--- pure/linkview.lua): { path, sub, name }, or { missing = 'Name' } when no such
+--- note exists, or nil when the cursor is not on a note link.
+function M.target()
+  local link = linkAtCursor()
+  if not link or link.kind == 'url' then return nil end
+  local parts = link.kind == 'wiki' and splitInner(link.inner) or splitInner(urldecode(link.inner))
+  local idx, root = M.index()
+  local here = vim.api.nvim_buf_get_name(0)
+  local from = root and here ~= '' and relTo(root, here) or nil
+
+  if parts.target == '' then
+    return here ~= '' and { path = here, sub = parts.sub, name = vim.fn.fnamemodify(here, ':t:r') } or nil
+  end
+  if link.kind == 'md' and not from and here ~= '' then
+    local p = vim.fs.normalize(vim.fs.dirname(here) .. '/' .. parts.target)
+    for _, c in ipairs({ p, p .. '.md' }) do
+      if vim.uv.fs_stat(c) then return { path = c, sub = parts.sub, name = vim.fn.fnamemodify(c, ':t:r') } end
+    end
+  end
+  local outside = M.outsidePath(parts.target)
+  if outside then
+    for _, c in ipairs({ outside, outside .. '.md' }) do
+      if vim.fn.filereadable(c) == 1 then
+        return { path = c, sub = parts.sub, name = vim.fn.fnamemodify(c, ':t:r') }
+      end
+    end
+    return { missing = parts.target }
+  end
+  if not root then return nil end
+  local rel = resolve(idx, parts.target, from) or resolve(M.index(true), parts.target, from)
+  if not rel then return { missing = parts.target } end
+  return { path = root .. '/' .. rel, sub = parts.sub, name = stemOf(rel) }
+end
+
+--- The same heading / ^block lookup the links use, for pure/linkview.lua.
+M.jump, M.slug = jumpTo, slug
 
 --- <CR> in markdown: follow a link, open a ```todoist block, toggle a
 --- checkbox, fold a heading; else a plain <CR>.
@@ -589,7 +673,7 @@ function M.omnifunc(findstart, base)
   -- completion"). It only offered notes by name, so:
   --   [[3-Zett/         a path: the folders and files inside that folder,
   --                     matched by what follows the last '/'
-  --   [[zett            folders match too ("3-Zettelkasten/", no ]]: you
+  --   [[zett            folders match too ("2-Permanent/", no ]]: you
   --                     keep typing into it)
   --   ![[photo  [[doc   attachments (images, PDFs...) as well, after the
   --                     notes, with their extension, as Obsidian links them
@@ -1084,8 +1168,102 @@ vim.api.nvim_create_autocmd({ 'BufWritePost', 'BufNewFile' }, {
   callback = invalidate,
 })
 
+-- -----------------------------------------------------------------------------
+--  Sending a note out of the vault
+-- -----------------------------------------------------------------------------
+
+--- Completion for the "Send out to" prompt: the outside folders' names, then
+--- the folders inside them ("6-Private/Diary/").
+function M._outsideFolders(arglead)
+  arglead = (arglead or ''):gsub('\\', '/')
+  local names, out = vim.tbl_keys(vim.g.pure_outside_folders or {}), {}
+  table.sort(names)
+  if not arglead:find('/', 1, true) then
+    for _, n in ipairs(names) do
+      if n:lower():sub(1, #arglead) == arglead:lower() then table.insert(out, n .. '/') end
+    end
+    return out
+  end
+  local base = M.outsidePath(arglead:match('^(.*)/')) or ''
+  local typed = arglead:match('([^/]*)$'):lower()
+  for name, kind in vim.fs.dir(base) do
+    if kind == 'directory' and not name:match('^%.') and name:lower():sub(1, #typed) == typed then
+      table.insert(out, arglead:match('^(.*/)') .. name .. '/')
+    end
+  end
+  table.sort(out)
+  return out
+end
+
+--- Move the current note out of the vault, into one of
+--- vim.g.pure_outside_folders (asked, with completion). The vault no longer
+--- holds the file, so nothing in it (search, backlinks, a model reading the
+--- vault) reaches it; a link to it written as [[6-Private/Folder/Note]] still
+--- opens it. Links that name it by its bare name stop finding it: they are
+--- counted, not rewritten.
+function M.sendOut()
+  local _, root = M.index()
+  local here = vim.api.nvim_buf_get_name(0)
+  local rel = root and here ~= '' and relTo(root, here) or nil
+  if not rel then return vim.notify('Not a note of the vault', vim.log.levels.WARN) end
+  local names = vim.tbl_keys(vim.g.pure_outside_folders or {})
+  table.sort(names)
+  if #names == 0 then
+    return vim.notify('No outside folder set (vim.g.pure_outside_folders)', vim.log.levels.WARN)
+  end
+
+  local ok, input = pcall(vim.fn.input, {
+    prompt = 'Send out to: ',
+    default = names[1] .. '/',
+    completion = "customlist,v:lua.require'pure.notes'._outsideFolders",
+  })
+  input = ok and vim.trim((input or ''):gsub('\\', '/')):gsub('/+$', '') or ''
+  if input == '' then return end
+  local dir = M.outsidePath(input)
+  if not dir then
+    return vim.notify('Not an outside folder: ' .. input, vim.log.levels.WARN)
+  end
+  for step in input:gmatch('[^/]+') do
+    if step == '.' or step == '..' then return vim.notify('Not a folder: ' .. input, vim.log.levels.WARN) end
+  end
+  if not require('pure.crypt').ensure(dir, M.sendOut) then return end
+  local new_path = dir .. '/' .. vim.fs.basename(here)
+  if vim.uv.fs_stat(new_path) then
+    return vim.notify(new_path .. ' already exists', vim.log.levels.ERROR)
+  end
+
+  if vim.bo.modified then vim.cmd('silent write') end
+  -- Links that name it, counted before it leaves.
+  local stem = stemOf(rel)
+  local linked = 0
+  if vim.fn.executable('rg') == 1 then
+    local res = vim.system({ 'rg', '--files-with-matches', '--no-ignore-vcs', '--ignore-case', '--fixed-strings',
+      '--path-separator', '/', '-g', '*.md', '-g', '*.canvas', '-e', '[[' .. stem, '-e', urlencodeSpaces(stem),
+      }, { cwd = root, text = true }):wait()
+    for f in (res.stdout or ''):gmatch('[^\n]+') do
+      if f ~= rel then linked = linked + 1 end
+    end
+  end
+
+  vim.fn.mkdir(dir, 'p')
+  if vim.fn.rename(here, new_path) ~= 0 then
+    return vim.notify('Could not move the note to ' .. new_path, vim.log.levels.ERROR)
+  end
+  vim.cmd('silent! edit ' .. vim.fn.fnameescape(new_path))
+  local old = vim.fn.bufnr(here)
+  if old > 0 and old ~= vim.api.nvim_get_current_buf() then pcall(vim.cmd, 'silent! bwipeout ' .. old) end
+  invalidate()
+  vim.notify(('Sent out to %s%s'):format(input, linked > 0 and
+    ('\n%d note%s of the vault still link%s to it by name'):format(linked, linked == 1 and '' or 's', linked == 1 and 's' or '') or ''))
+end
+
+vim.api.nvim_create_user_command('NoteSendOut', M.sendOut,
+  { desc = 'Move the note out of the vault (vim.g.pure_outside_folders)' })
+
 vim.api.nvim_create_user_command('NoteRename', function(o) M.rename(o.args ~= '' and o.args or nil) end,
   { nargs = '?', desc = 'Rename the note and fix the links to it' })
 vim.api.nvim_create_user_command('NoteBacklinks', M.backlinks, { desc = 'The notes that link to this one' })
+
+require('pure.crypt') -- the guard on writes and :PrivateUnlock / :PrivateLock
 
 return M
