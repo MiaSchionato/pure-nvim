@@ -463,7 +463,6 @@ function M.toggleTransparency()
       vim.g.pure_reapplying_theme = false
     end
   end
-  vim.notify(M.transparent and "Transparent background" or "Theme background")
 end
 
 return M
