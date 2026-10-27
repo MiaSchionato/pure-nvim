@@ -605,9 +605,6 @@ function M.fuzzyColorscheme()
       vim.g.MY_THEME = theme
       if okOm then omarchy.save(theme) end
     end
-    if vim.g.neovide then
-      vim.api.nvim_set_hl(0, 'Normal', { bg = "#060b1e" })
-    end
   end)
 end
 
