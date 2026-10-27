@@ -10,7 +10,7 @@
 --    2. Plugins        the settings of this configuration's modules (lua/pure/,
 --                      all vim.g.pure_*), one section per plugin
 --                        Vault · New files · Markdown · Todoist · Calendar
---                        · LLMs · Dashboard · Key hints · Indent guide
+--                        · Proton Pass · LLMs · Dashboard · Key hints · Indent guide
 --                        · Terminal · Neovide · Advanced
 --
 --  Every line says what it does. For a plugin setting the comment also gives
@@ -122,6 +122,13 @@ o.autochdir = true
 o.updatetime = 250          -- ms without typing before CursorHold (not completion)
 o.timeoutlen = 500          -- ms to wait for the rest of a mapping (<leader>...)
 o.ttimeoutlen = 0           -- no wait after <Esc> for a key code
+-- Not at startup, though: Neovim asks the terminal questions then (device
+-- attributes, background colour) and the answers, "<Esc>[?61;6;...c", reached it
+-- split in two. With no wait the <Esc> was a key of its own and the rest was typed
+-- on the dashboard: "c" there is E21 ("'modifiable' is off") and a Press-ENTER
+-- screen to dismiss at every start. The wait goes back to 0 once they are answered.
+o.ttimeoutlen = 100
+vim.defer_fn(function() vim.o.ttimeoutlen = 0 end, 1500)
 
 -- -----------------------------------------------------------------------------
 --  Windows
@@ -173,13 +180,28 @@ o.maxmempattern = 20000     -- memory (KB) a search pattern may use
 -- vim.g.pure_vault = '~/Atlas'
 
 -- Folder of the templates, inside the vault. Default: 'Templates'.
-vim.g.pure_templates = 'Templates'
+vim.g.pure_templates = '7-Templates'
 
 -- Folders whose new notes are born with a template: a link to a note that
 -- does not exist yet, created there (Yes), gets it at once. Folder inside
 -- the vault = template name; a template not in the templates folder yet is
 -- skipped. Default: {}. Changed: the diary, linked from the daily note.
 vim.g.pure_folder_templates = { ['6-Private/Diary'] = 'Diary' }
+
+-- Folders that live OUTSIDE the vault, under a name links can use: name = real
+-- folder. [[6-Private/Diary/2026-10-16]] opens ~/Private/Diary/2026-10-16.md (and
+-- is created there, with the folder's template above, when it is missing), so
+-- the daily note keeps its diary link though the notes are not in the vault.
+-- <leader>vo sends the current note out to one of them. Default: {}.
+-- Changed: the private folder (the name is the old folder's, so old links work).
+-- The private folder is encrypted (gocryptfs, pure/crypt.lua): `cipher` holds
+-- the files, `dir` shows them in the clear once mounted with the FIDO2 key (a
+-- touch), and it unmounts itself after `idle` without use. pure_fido2_id is the
+-- key's USB vendor:product: attached to WSL only while mounting.
+vim.g.pure_outside_folders = {
+  ['6-Private'] = { dir = '~/Private', cipher = '~/Private.enc', idle = '5m', fido2 = true },
+}
+vim.g.pure_fido2_id = '1ea8:fe29'
 
 -- Language of day and month names in template dates: 'en' (default) or 'pt'.
 vim.g.pure_templates_locale = 'en'
@@ -190,17 +212,17 @@ vim.g.pure_inbox = '0-Inbox'
 
 -- Folders of the periodic notes (Daily, Weekly, Monthly templates), inside
 -- the vault. Only the periods listed change; the others keep their default.
--- Default: 9-Archive/Periodic/Daily, .../Weekly, .../Monthly.
--- Changed: 7-Archive (the vault's 9-Archive was renamed on 2026-10-01).
+-- Default: 6-Archive/Periodic/Daily, .../Weekly, .../Monthly.
+-- Changed: nothing now (the vault was reorganised on 2026-10-16, the defaults follow it).
 vim.g.pure_periodic_folders = {
-  Daily   = '7-Archive/Periodic/Daily',
-  Weekly  = '7-Archive/Periodic/Weekly',
-  Monthly = '7-Archive/Periodic/Monthly',
+  Daily   = '6-Archive/Periodic/Daily',
+  Weekly  = '6-Archive/Periodic/Weekly',
+  Monthly = '6-Archive/Periodic/Monthly',
 }
 
 -- The list the daily note's quote of the day comes from ({{quote}}).
--- Default: '9-Archive/Periodic/Quotes.md'. Changed: 7-Archive, as above.
-vim.g.pure_quotes = '7-Archive/Periodic/Quotes.md'
+-- Default: '6-Archive/Periodic/Quotes.md'.
+vim.g.pure_quotes = '6-Archive/Periodic/Quotes.md'
 
 -- Folder each template moves its note to (<leader>vt), by template name.
 -- {{title}} becomes the note's title. Only the names listed change; false
@@ -209,13 +231,15 @@ vim.g.pure_quotes = '7-Archive/Periodic/Quotes.md'
 -- note's resurfaced notes come from, so those two always keep a folder.
 -- Default:
 -- vim.g.pure_template_destinations = {
+--   Decupagem  = '2-Permanent',
 --   Delete     = '0-Inbox/Trash',
---   Literature = '3-Zettelkasten/Literature',
+--   Literature = '1-Literature/{{browse}}',
 --   MOC        = '4-Maps',
---   Permanent  = '3-Zettelkasten/Permanent',
---   Project    = '1-Projects/{{choose:Personal|Clients}}/{{title}}',
---   Seed       = '3-Zettelkasten/Seeds',
---   VideoIdeas = '2-Areas/Audiovisual/Ideas',
+--   Media      = '1-Literature/Audiovisual/{{browse}}',
+--   Permanent  = '2-Permanent',
+--   Project    = '3-Projects/{{choose:Personal|Clients}}/{{title}}',
+--   Seed       = '2-Permanent',
+--   VideoIdeas = '4-Maps/Audiovisual/Ideas',
 -- }
 
 -- Empty the vault's trash (0-Inbox/Trash, where <leader>vd and the Delete
@@ -262,6 +286,32 @@ vim.g.pure_md_bullets = { '•', '◦', '▪', '▫' }
 vim.g.pure_tasks_done = 'xX-'
 
 -- -----------------------------------------------------------------------------
+--  Remote  (pure/remote.lua)
+-- -----------------------------------------------------------------------------
+-- The first Neovim started listens at this address, so the Flow Launcher
+-- plugin (or `nvim --server ADDRESS --remote FILE`) opens a file in it.
+-- '' or false: do not listen. Default: '/tmp/nvim-atlas.sock'.
+vim.g.remote_socket = '/tmp/nvim-atlas.sock'
+
+-- -----------------------------------------------------------------------------
+--  Link view  (pure/linkview.lua, <leader>vp preview, <leader>vq quick edit)
+-- -----------------------------------------------------------------------------
+-- 'auto': the preview of the linked note shows when the cursor rests on a
+-- link, like the suggestion menu (and on its key). 'key': only on the key.
+-- 'off': no preview and no quick edit. Default: 'auto'.
+vim.g.linkview_preview = 'auto'
+
+-- With 'auto': milliseconds the cursor rests on a link before the preview
+-- shows. Default: 300.
+vim.g.linkview_delay = 300
+
+-- The most the preview takes: columns and rows. Default below.
+vim.g.linkview_size = { width = 64, rows = 12 }
+
+-- The keys (give only the one you change). Default below.
+vim.g.linkview_keys = { preview = '<leader>vp', edit = '<leader>vq' }
+
+-- -----------------------------------------------------------------------------
 --  Todoist  (pure/todoist.lua, <leader>td; the token: :TodoistToken)
 -- -----------------------------------------------------------------------------
 -- When :w in the task list asks before sending: 'all' (every save), 'delete'
@@ -271,9 +321,9 @@ vim.g.pure_todoist_confirm = 'never'
 
 -- Folder where the task list and a timestamped history of every change are
 -- kept (tasks.md, history.md, tasks.json), relative to the vault so it moves
--- with it. Unset or '' (default): no archive. Changed: set (7-Archive since
--- the vault's 9-Archive was renamed on 2026-10-01).
-vim.g.pure_todoist_archive = '7-Archive/Todoist/'
+-- with it. Unset or '' (default): no archive. Changed: set (6-Archive since
+-- the vault was reorganised on 2026-10-16).
+vim.g.pure_todoist_archive = '6-Archive/Todoist/'
 
 -- Write the tasks of each ```todoist block into its note as text, refreshed
 -- every `interval` minutes. false (default): drawn, not written.
@@ -308,6 +358,29 @@ vim.g.pure_calendar_confirm = 'delete'
 vim.g.pure_calendar_sync = { interval = 15 }
 
 -- -----------------------------------------------------------------------------
+--  Proton Pass  (pure/protonpass.lua: reads the Todoist and Calendar secrets
+--  through pass-cli, so they need not be on disk; the local files are the
+--  fallback)
+-- -----------------------------------------------------------------------------
+-- false turns it off. Default true.
+vim.g.pure_protonpass = true
+
+-- Vault holding the items. Default 'Personal'. Changed.
+vim.g.pure_protonpass_vault = 'APIs'
+
+-- Item title and field of each secret (add `vault` to one to override the vault
+-- above). Defaults: title 'nvim-todoist' / 'nvim-google-calendar', field 'note'.
+-- The Calendar field holds {"client_id","client_secret","refresh_token"} as JSON.
+vim.g.pure_protonpass_items = {
+  todoist = { title = 'nvim-todoist', field = 'Chave API' },
+  calendar = { title = 'nvim-google-calendar', field = 'Chave API' },
+}
+
+-- Read both secrets in the background at startup, so pass-cli (about half a
+-- second per call) never blocks the first request.
+require('pure.protonpass').prefetch()
+
+-- -----------------------------------------------------------------------------
 --  LLMs: Claude, Ollama, agy  (pure/llm.lua, <leader>a)
 -- -----------------------------------------------------------------------------
 -- The model when none was picked with <leader>am (a pick is remembered and
@@ -323,15 +396,16 @@ vim.g.pure_claude_cmd = 'claude'
 vim.g.pure_llm_blocks = true
 
 -- Folder of the actions (<leader>ax), inside the vault. Default: 'claude'.
--- Changed: 'AI' (the vault's Claude/ folder was renamed on 2026-10-01).
-vim.g.pure_llm_actions = 'AI'
+-- Changed: '8-AI' (the vault's Claude/ folder became AI/ on 2026-10-01, 8-AI on 2026-10-16).
+vim.g.pure_llm_actions = '8-AI'
 
 -- Folders (inside the vault, or absolute) no cloud model (Claude, agy) may
 -- see; local models (Ollama) may. A request holding a note from one, or whose
 -- folders reach one, is not sent to a cloud model. Claude still works in the
 -- vault's root when the vault's .claude/settings.json denies Read(<folder>/**).
--- Default: none. Changed: the private folder.
-vim.g.pure_llm_private = { '6-Private' }
+-- Default: none. Changed: the private folder, outside the vault (see
+-- pure_outside_folders).
+vim.g.pure_llm_private = { '~/Private' }
 
 -- Folder of the personas (/name), inside the actions folder. Default: 'Personas'.
 -- vim.g.pure_llm_personas = 'Personas'
@@ -417,6 +491,13 @@ vim.g.pure_indentscope_disable = false
 -- The shell. Unset (default): on Windows the first of nu, pwsh, powershell
 -- found; elsewhere 'shell'.
 -- vim.g.pure_terminal_shell = 'cmd.exe'
+
+-- The bare floating terminal (<leader>tt): <Esc> leaves terminal mode at once,
+-- and a second <Esc> within this many milliseconds closes it. <A-Esc> sends a
+-- real <Esc> to the shell. 0 or false: only <Esc><Esc> closes (and <Esc>
+-- reaches the shell). Terminals running a command (<leader>tc) always use
+-- <Esc><Esc>. Default: 250.
+vim.g.terminal_esc_ms = 250
 
 -- -----------------------------------------------------------------------------
 --  Neovide (the GUI)

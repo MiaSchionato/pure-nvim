@@ -70,6 +70,8 @@ local no_prompt_file = vim.fn.stdpath('data') .. '/todoist_no_prompt'
 local function token()
   local env = vim.env.TODOIST_API_TOKEN
   if env and env ~= '' then return env end
+  local pp = require('pure.protonpass').get('todoist')
+  if pp then return pp end
   local f = io.open(token_file, 'r')
   if not f then return nil end
   local t = vim.trim(f:read('*l') or '')
@@ -400,9 +402,18 @@ local function decorate(buf)
   end
 end
 
-local function setLines(lines)
+--- Replace the buffer. `real` = it is the task list itself: once one is shown, each
+--- redraw is an undo step, so `u` goes back to an older version of the list (and to
+--- unsaved edits a reload threw away). The "Loading…" / error placeholders and the
+--- first list after them are not (undo would land on them, and :w would send them).
+local function setLines(lines, real)
   local buf = state.buf
+  local levels = vim.bo[buf].undolevels
+  local record = real and state.real
+  if not record then vim.bo[buf].undolevels = -1 end
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  if not record then vim.bo[buf].undolevels = levels end
+  if real then state.real = true end
   vim.bo[buf].modified = false
   decorate(buf)
 end
@@ -656,7 +667,7 @@ local function render(tasks, projects)
     end
   end
 
-  setLines(lines)
+  setLines(lines, true)
   if not state.filter then archive.snapshot(tasks, projects) end
   vim.api.nvim_buf_clear_namespace(state.buf, hint_ns, 0, -1)
   vim.api.nvim_buf_set_extmark(state.buf, hint_ns, 0, 0, {
@@ -685,14 +696,15 @@ local prefetched = {}
 --- `on_done(tasks)` runs after a successful redraw.
 function M.reload(on_done)
   if not (state.buf and vim.api.nvim_buf_is_valid(state.buf)) then return end
-  setLines({ '# Todoist', '', 'Loading…' })
+  -- With a list already shown it stays (and stays undoable) until the new one is in.
+  if not state.real then setLines({ '# Todoist', '', 'Loading…' }) end
   local key = state.filter or ''
 
   fetch(state.filter, function(err, tasks, projects)
     if not vim.api.nvim_buf_is_valid(state.buf) then return end
     if err then
       state.loaded = nil
-      setLines({ '# Todoist', '', 'Error: ' .. err })
+      if not state.real then setLines({ '# Todoist', '', 'Error: ' .. err }) end
       return vim.notify(err, vim.log.levels.ERROR)
     end
     render(tasks, projects)
@@ -1079,6 +1091,8 @@ function M.open(filter, float)
     -- Obsidian's states, as in notes; only [x] reaches Todoist, the others
     -- are kept locally (see states_file).
     map('<leader>x', require('configs.functions').cycleCheckbox, 'Cycle checkbox state')
+    vim.keymap.set('x', '<leader>x', require('configs.functions').cycleCheckboxRange,
+      { buffer = buf, desc = 'Cycle checkbox state of the selected tasks' })
     map('r', unlessModified('reload', M.reload), 'Reload tasks')
     map('q', close, 'Close Todoist')
     map('<Esc>', close, 'Close Todoist')
@@ -1114,6 +1128,8 @@ function M.open(filter, float)
   vim.wo.conceallevel = 2
   vim.wo.concealcursor = 'nc'
 
+  -- Another filter: that list is not an older version of this one.
+  if state.loaded ~= key then state.real = false end
   -- Same filter as what the buffer holds: just show it, no network.
   if state.loaded == key then return end
   local ready = prefetched[key]
@@ -2111,7 +2127,8 @@ vim.api.nvim_create_autocmd('VimEnter', {
   -- Scheduled so the dashboard and the first screen are drawn before the
   -- question takes the command line.
   callback = function()
-    vim.schedule(askOnStartup)
+    -- After the Proton Pass read, so token() does not block the first screen.
+    require('pure.protonpass').on_ready(askOnStartup)
     -- Warm the default list in the background, a moment after startup so it
     -- never competes with drawing the first screen.
     vim.defer_fn(function()
@@ -2230,6 +2247,16 @@ end
 function M.act(a, refs)
   refs = refs or {}
   local function blank(v) return not v or vim.trim(v) == '' end
+  -- An ID the model was not given (made up: "ID_XXX") is refused, when the
+  -- caller says which it was given (refs._known)
+  local function unknown(id)
+    return refs._known and not refs._known[id] and not vim.tbl_contains(vim.tbl_values(refs), id)
+  end
+  for _, key in ipairs({ 'update', 'complete' }) do
+    if not blank(a[key]) and unknown(a[key]) then
+      return ('Todoist: %s %s skipped, not an open task'):format(key, a[key])
+    end
+  end
   local body = {}
   if not blank(a.due) then body.due_string = a.due end
   local p = tonumber((a.priority or ''):match('[1-4]'))
@@ -2237,10 +2264,16 @@ function M.act(a, refs)
   if not blank(a.description) then body.description = a.description end
 
   local parent = not blank(a.parent) and (refs[a.parent] or a.parent) or nil
+  if parent and unknown(parent) then
+    return ('Todoist: parent %s is not an open task nor a ref, skipped "%s"'):format(a.parent, a.add or a.update or '')
+  end
   local path, what
   if not blank(a.add) then
     -- A content too means the text (a model may write add="task" content="…")
     path, what, body.content = '/tasks', 'added', blank(a.content) and a.add or a.content
+    if refs._skip and refs._skip[vim.trim(body.content):lower()] then
+      return ('Todoist: skipped "%s", done or a legend in the note'):format(body.content)
+    end
     -- A subtask is in its parent's project
     if parent then
       body.parent_id, what = parent, 'added subtask'
@@ -2271,6 +2304,37 @@ function M.act(a, refs)
   if err then return 'Todoist: ' .. err end
   if not blank(a.ref) and data and data.id then refs[a.ref] = data.id end
   return ('Todoist: %s "%s"'):format(what, (data and data.content) or a.add or a.content or a.complete or a.update)
+end
+
+--- The task lines of a note, for the Todoist tool (llm.lua): without the
+--- regions Neovim writes (<!-- name --> … <!-- /name -->: the Todoist lists,
+--- the calendar, answers), code blocks, and a status legend (a task named
+--- "legend"/"legenda" with the states under it), which a small model took
+--- for tasks to add. Also the texts never to add (lowercased): the legend's
+--- and the done ([x]) tasks', which a model added anyway, the whole note
+--- being in its context too (act refuses them, refs._skip).
+--- @return string, table<string, true>
+function M.noteTasks(lines)
+  local out, skip, region, fence, legend = {}, {}, nil, false, nil
+  for _, line in ipairs(lines) do
+    local indent = #line:match('^%s*')
+    local box, text = line:match('^%s*[-*+] %[(.)%]%s*(.-)%s*$')
+    if line:match('^%s*```') then
+      fence = not fence
+    elseif region then
+      if line:match('^%s*<!%-%- /' .. vim.pesc(region) .. ' %-%->') then region = nil end
+    elseif line:match('^%s*<!%-%- ([%w_-]+) %-%->%s*$') then
+      region = line:match('^%s*<!%-%- ([%w_-]+) %-%->')
+    elseif not fence and box then
+      if legend and indent <= legend then legend = nil end
+      if not legend and text:lower():match('legend') then legend = indent end
+      if legend or box:lower() == 'x' then skip[text:lower()] = true end
+      if not legend then table.insert(out, line) end
+    elseif line:match('%S') and legend and indent <= legend then
+      legend = nil
+    end
+  end
+  return #out > 0 and table.concat(out, '\n') or '(none)', skip
 end
 
 -- For tests.
