@@ -179,7 +179,7 @@ See [manim.md](manim.md).
 | `<leader>os` | n | Toggle statusline |
 | `<leader>ot` | n | Toggle tabline |
 | `<leader>ow` | n | Toggle wrap |
-| `<leader>ox` | n | Transparent mode |
+| `<leader>oxc` | n | Toggle transparency |
 | `<leader>oz` | n | Toggle zen mode |
 
 ## `<leader>s` – Split

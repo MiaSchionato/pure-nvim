@@ -1,60 +1,48 @@
--- better transparency mode on solarized Theme
+-- True while VimEnter applies the saved theme: that is a reading of the choice, not a new choice.
+local applyingSaved = false
+
 vim.api.nvim_create_autocmd("VimEnter", {
   nested = true,
   callback = function()
-    -- themes/colorschemes.lua sets the default, but the one-file build skips
-    -- that file in portable mode (it downloads themes).
-    local theme = vim.g.MY_THEME or 'NeoSolarized'
-    -- The pick of <leader>fc is saved in a file (pure/omarchy-theme.lua): ShaDa
-    -- is only written on a clean exit and the last instance to exit won. "omarchy"
-    -- stands for the colorscheme of the current Omarchy theme.
     local okOm, omarchy = pcall(require, 'pure.omarchy-theme')
-    if okOm then
-      theme = omarchy.saved() or theme
-      if theme == omarchy.NAME then
-        local scheme, why = omarchy.resolved()
-        if not scheme then
-          vim.notify('Omarchy theme: ' .. tostring(why), vim.log.levels.WARN)
-        end
-        theme = scheme or 'NeoSolarized'
+    local theme = okOm and omarchy.saved() or vim.g.MY_THEME
+
+    if theme == 'omarchy' and okOm then
+      local scheme, why = omarchy.resolved()
+      if not scheme then
+        vim.notify('Omarchy theme: ' .. tostring(why), vim.log.levels.WARN)
       end
+      theme = scheme
     end
 
-    -- solarized-osaka applies itself over in themes/solarized-osaka.lua.
-    if theme and theme ~= 'solarized-osaka' then
-      -- Plugin themes expose a lua module named after the colorscheme and want
-      -- setup() before being applied. The local ones (myghtfly) do not, so this
-      -- step is best-effort.
-      local ok, mod = pcall(require, theme)
-      if ok and type(mod) == 'table' and type(mod.setup) == 'function' then
-        pcall(mod.setup, { transparent = true })
-      end
+    -- Nothing saved yet: the local theme (colors/myghtfly.lua), which needs no download.
+    theme = theme or 'myghtfly'
 
-      -- Report rather than swallow: a bare pcall here is what hid the fact that
-      -- no colorscheme was ever being applied.
-      local applied, err = pcall(vim.cmd.colorscheme, theme)
-      -- A theme that is not installed (a plugin theme on a machine that
-      -- skipped plugins) falls back to the local one rather than no colours.
-      if not applied and theme ~= 'myghtfly' then
-        applied = pcall(vim.cmd.colorscheme, 'myghtfly')
-      end
-      if not applied then
-        vim.notify('Could not apply colorscheme "' .. tostring(theme) .. '": '
-          .. tostring(err), vim.log.levels.WARN)
-      end
+    -- Any saved theme is applied here, and only here: no theme applies itself.
+    applyingSaved = true
+    local applied = pcall(vim.cmd.colorscheme, theme)
+    if not applied and theme ~= 'myghtfly' then
+      pcall(vim.cmd.colorscheme, 'myghtfly')
     end
-    -- Disable annoying commenting while coding 
-    vim.api.nvim_set_hl(0,"DiagnosticUnnecessary", {})
+    applyingSaved = false
 
-    -- Apply background color from nightfly
-    -- vim.api.nvim_set_hl(0,"Normal", {bg='#011627'})
-    
-    -- Floats take the theme's background before Normal is made transparent.
-    require('configs.functions').syncFloatBg(true)
+    -- Disable annoying commenting while coding
+    vim.api.nvim_set_hl(0, "DiagnosticUnnecessary", {})
+  end,
+})
 
-    -- Transparent background
-    vim.api.nvim_set_hl(0,"Normal", {bg='NONE'})
-  end
+-- Persist whatever colorscheme is applied (via :colorscheme, <leader>fc, etc.)
+vim.api.nvim_create_autocmd("ColorScheme", {
+  callback = function(args)
+    local scheme = args.match
+    if applyingSaved or vim.g.pure_reapplying_theme or not scheme or scheme == "" then return end
+    vim.g.MY_THEME = scheme
+    local okOm, omarchy = pcall(require, 'pure.omarchy-theme')
+    -- In "omarchy" mode the saved choice is the mode, not the scheme it resolved to.
+    if okOm and omarchy.saved() ~= omarchy.NAME then
+      omarchy.save(scheme)
+    end
+  end,
 })
 
 -- Floats follow the theme's Normal background (see syncFloatBg); the scheduled
