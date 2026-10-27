@@ -255,44 +255,15 @@ local groups = {
   ["@variable.parameter"] = { fg = lavender },
 }
 
--- Clearing all highlitghs
--- Background / foreground, which differ between Neovide and a terminal.
---
--- Built *before* setup() runs. Previously the neovideSupport table captured
--- Normal/NormalNC while both were still nil (they were only assigned in the
--- if/else below it), so the apply-loop iterated over an empty table and Normal
--- kept Neovim's default background -- the theme never took the background over.
--- The notification colour (then MiniNotifyNormal) was declared `local` inside
--- each branch and discarded, so it never applied either.
-local neovideSupport
-if vim.g.neovide then
-  neovideSupport = {
+function M.setup()
+local defaultHighlights = {
     Normal           = { bg = "#011627", fg = white },
     -- NormalNC      = { bg = "#011627" },
     NormalFloat      = { bg = none, fg = blue },
     PureNotifyNormal = { bg = none, fg = malibu },
-  }
-else
-  neovideSupport = {
-    Normal           = { bg = none, fg = white },
-    NormalNC         = { bg = none },
-    NormalFloat      = { bg = none, fg = blue },
-    PureNotifyNormal = { bg = none, fg = malibu },
-  }
-end
+}
 
-function M.setup()
-  -- No 'highlight clear' here: colors/myghtfly.lua, the colorscheme entrypoint,
-  -- already clears highlights and resets syntax before setting g:colors_name.
-  -- Clearing a second time from inside setup() wiped g:colors_name back to nil.
-  --
-  -- (The old guard was `if vim.fn.exists("syntax_on")`, always true in Lua
-  -- because exists() returns 0 or 1 and 0 is truthy.)
   for key, value in pairs(groups) do
-    vim.api.nvim_set_hl(0, key, value)
-  end
-
-  for key, value in pairs(neovideSupport) do
     vim.api.nvim_set_hl(0, key, value)
   end
 end

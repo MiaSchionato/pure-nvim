@@ -411,4 +411,59 @@ function M.isBlank()
   return charBeforeLine == " " or charBeforeLine == "\t"
 end
 
+-- =============================================================================
+--  Transparency  (<leader>oxc)
+-- =============================================================================
+-- Every theme starts opaque, with its own background (themes/colorschemes.lua). One
+-- variable holds the state: false = the theme's own background, true = transparent.
+--   Neovide  the window opacity: 1.0 or vim.g.transparencyAmount.
+--   Terminal the backgrounds of themes.colorschemes.groups are cleared; going back
+--            applies the colorscheme again, which brings its own colours back.
+-- A colorscheme change keeps the state, so a transparent session stays transparent.
+M.transparent = false
+
+local groups = require('themes.colorschemes').groups
+
+local function applyTransparency()
+  if vim.g.neovide then
+    local opacity = M.transparent and (vim.g.transparencyAmount or 0.9) or 1.0
+    vim.g.neovide_opacity = opacity
+    vim.g.neovide_normal_opacity = opacity
+    return
+  end
+  for _, name in ipairs(groups) do
+    local hl = vim.api.nvim_get_hl(0, { name = name, link = false })
+    vim.api.nvim_set_hl(0, name, vim.tbl_extend("force", hl, { bg = "NONE", ctermbg = "NONE" }))
+  end
+end
+
+-- Some themes (night-owl) never set g:colors_name, so the last scheme is kept here.
+local lastScheme
+
+vim.api.nvim_create_autocmd("ColorScheme", {
+  desc = "Remember the colorscheme; keep the editor transparent after a change",
+  callback = function(args)
+    lastScheme = args.match
+    if M.transparent and not vim.g.neovide then
+      vim.schedule(applyTransparency)
+    end
+  end,
+})
+
+function M.toggleTransparency()
+  M.transparent = not M.transparent
+  if M.transparent or vim.g.neovide then
+    applyTransparency()
+  else
+    local scheme = vim.g.colors_name or lastScheme
+    if scheme and scheme ~= "" then
+      -- Not a new choice: configs/autocmds.lua must not save it.
+      vim.g.pure_reapplying_theme = true
+      pcall(vim.cmd.colorscheme, scheme)
+      vim.g.pure_reapplying_theme = false
+    end
+  end
+  vim.notify(M.transparent and "Transparent background" or "Theme background")
+end
+
 return M

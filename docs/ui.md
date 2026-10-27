@@ -111,9 +111,14 @@ replaced. Not on Windows (named pipes) and not in headless runs.
 
 `<leader>fc` picks a colorscheme; it is remembered across restarts, in
 `stdpath('data')/colorscheme` (ShaDa carried it before, but only on a clean exit,
-and the last instance to exit overwrote the others). The default is
-`NeoSolarized`; when a theme is not installed, `myghtfly` (the local one in
-`colors/`) is used instead.
+and the last instance to exit overwrote the others). Only `configs/autocmds.lua`
+applies the saved theme (on `VimEnter`); no theme applies itself. Nothing saved yet:
+`myghtfly` (the local one in `colors/`), which is also used when the saved theme is
+not installed. Reading the saved choice at startup never changes it, so a fallback
+does not overwrite it.
+
+Every theme starts **opaque**, with its own background: `themes/colorschemes.lua`
+turns off the transparency that `NeoSolarized` and `solarized-osaka` have by default.
 
 The first entry of the list, **omarchy**, follows the Omarchy theme: it uses the
 colorscheme that goes with the current theme (`omarchy theme current`), now, on
@@ -122,12 +127,21 @@ terminal gets focus back). The colorscheme is read from the theme's own
 `neovim.lua` (`colorscheme = "…"`), or matched by name when the theme has none
 (`lua/pure/omarchy-theme.lua`). A theme plugin that is not installed is added
 with `vim.pack`, which asks first. A theme with no matching colorscheme (e.g.
-`vantablack`) gives a warning and `NeoSolarized`. `<leader>ox` makes the background
-transparent. In Neovide the transparency is off (`configs/neovide.lua`).
+`vantablack`) gives a warning and the local theme.
 
-On startup, once the colorscheme has been applied, the `Normal` background is
-set to `#011627` (nightfly's background) in `configs/autocmds.lua`, whichever
-theme is in use.
+### Transparency (`<leader>oxc`)
+
+One variable, `require('configs.functions').transparent`, says whether the editor is
+transparent (`false` at startup). `<leader>oxc` flips it:
+
+- **Terminal**: transparent clears the background of the groups in
+  `themes.colorschemes.groups`; going back applies the colorscheme again, which
+  brings its own background back (nothing is saved or restored by hand).
+- **Neovide**: the window opacity goes between `1.0` (the start) and
+  `vim.g.transparencyAmount` (`configs/configs.lua`).
+
+Changing the colorscheme keeps the state, so a transparent session stays transparent.
+Going back to opaque does not change the saved theme.
 
 ## Toggles (`<leader>o…`)
 
@@ -142,7 +156,7 @@ theme is in use.
 | `op` | Copilot |
 | `os` / `ot` | statusline / tabline |
 | `ow` | wrap |
-| `ox` | transparent background |
+| `oxc` | transparent background |
 | `oz` | zen mode: no bars, numbers, sign column, inlay hints or inline diagnostics |
 
 ## Highlighted comments

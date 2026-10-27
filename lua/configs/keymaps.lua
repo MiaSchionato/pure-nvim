@@ -476,7 +476,9 @@ map('n', ']d', diag.get_next, func.getOpts(opts, "Next diagnostic"))
 -- =============================================================================
 --  Kept out of <leader>l so that group is LSP only; mixing them is what made
 --  <leader>lr (rename) wait for <leader>lrn (relativenumber).
---  <leader>ox (transparency) is defined in themes/colorschemes.lua.
+--  <leader>oxc (transparency): the state and the toggle are in configs/functions.lua.
+
+map('n', '<leader>oxc', func.toggleTransparency, func.getOpts(opts, "Toggle transparency"))
 map('n', '<leader>od', func.toggleDiagnostics, func.getOpts(opts, "Toggle diagnostics"))
 map('n', '<leader>oz', func.toggleZenMode, func.getOpts(opts, "Toggle zen mode"))
 map('n', '<leader>os', func.toggleStatusline, func.getOpts(opts, "Toggle statusline"))
