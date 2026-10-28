@@ -17,6 +17,23 @@ local servers = {
   'scls',
 }
 
+local isWindows = vim.fn.has('win32') == 1
+local isWsl = vim.fn.has('wsl') == 1
+
+-- WSL: its PATH carries the Windows directories (/mnt/c/...), and every lookup in them crosses into the Windows file system:
+-- on Mia's machine 58 of 67 PATH entries, and 18 exepath() calls took 1.4 s at every start. Servers installed in WSL are never
+-- in /mnt, so a lookup there skips those entries.
+local function exepathFast(bin)
+  if not isWsl then return vim.fn.exepath(bin) end
+  for _, dir in ipairs(vim.split(vim.env.PATH or '', ':', { plain = true })) do
+    if dir ~= '' and not dir:match('^/mnt/%a/') then
+      local full = dir .. '/' .. bin
+      if vim.fn.executable(full) == 1 then return full end
+    end
+  end
+  return ''
+end
+
 -- Windows: npm and winget install shims with no file extension next to the
 -- real .cmd/.exe. Neovim's executable() finds those via PATHEXT and reports 1,
 -- but libuv spawns the literal name and fails with ENOENT -- which is what
@@ -25,9 +42,9 @@ local servers = {
 local function resolveCommand(bin)
   if type(bin) ~= 'string' or bin == '' then return nil end
 
-  local path = vim.fn.exepath(bin)
+  local path = exepathFast(bin)
   if path == '' then return nil end
-  if vim.fn.has('win32') == 0 then return path end
+  if not isWindows then return path end
   if path:lower():match('%.%a+$') then return path end
 
   for _, ext in ipairs({ '.cmd', '.exe', '.bat' }) do
@@ -37,18 +54,43 @@ local function resolveCommand(bin)
   return nil
 end
 
-for _, server_name in ipairs(servers) do
-  -- Each language file is a module in 'lua/lsp/'. It returns either a function
-  -- taking the augroup and returning an LSP config table, or the table itself.
-  local server_config_loader = require('lsp.' .. server_name)
-  local lsp_config = server_config_loader
-  if type(server_config_loader) == 'function' then
-    lsp_config = server_config_loader(lang_settings_group)
-  end
+-- The resolved path of each server is kept in a small file in the state directory, so a start does not search PATH at all. A hit
+-- is only used while the file still exists; a server that was not found is not remembered (it is looked for again next time).
+local cacheFile = vim.fn.stdpath('state') .. '/lsp-command-cache.json'
+local cache
 
-  local cmd = type(lsp_config) == 'table' and lsp_config.cmd or nil
-  local bin = type(cmd) == 'table' and cmd[1] or nil
-  local resolved = bin and resolveCommand(bin) or nil
+local function loadCache()
+  if cache then return cache end
+  cache = {}
+  local fh = io.open(cacheFile, 'r')
+  if fh then
+    local ok, data = pcall(vim.json.decode, fh:read('*a'))
+    fh:close()
+    if ok and type(data) == 'table' then cache = data end
+  end
+  return cache
+end
+
+local function resolveCached(bin)
+  local known = loadCache()
+  local hit = known[bin]
+  if hit and vim.uv.fs_stat(hit) then return hit end
+
+  local path = resolveCommand(bin)
+  if path then
+    known[bin] = path
+    vim.fn.mkdir(vim.fn.stdpath('state'), 'p')
+    local fh = io.open(cacheFile, 'w')
+    if fh then
+      fh:write(vim.json.encode(known))
+      fh:close()
+    end
+  end
+  return path
+end
+
+local function configureServer(server_name, lsp_config, bin, cmd)
+  local resolved = bin and resolveCached(bin) or nil
 
   if resolved and resolved ~= bin then
     lsp_config = vim.tbl_extend('force', lsp_config, {
@@ -64,5 +106,32 @@ for _, server_name in ipairs(servers) do
   -- missing one just yields a warning popup every time you open a file.
   if resolved or bin == nil then
     vim.lsp.enable(server_name)
+  end
+end
+
+for _, server_name in ipairs(servers) do
+  -- Each language file is a module in 'lua/lsp/'. It returns either a function
+  -- taking the augroup and returning an LSP config table, or the table itself.
+  local server_config_loader = require('lsp.' .. server_name)
+  local lsp_config = server_config_loader
+  if type(server_config_loader) == 'function' then
+    lsp_config = server_config_loader(lang_settings_group)
+  end
+
+  local cmd = type(lsp_config) == 'table' and lsp_config.cmd or nil
+  local bin = type(cmd) == 'table' and cmd[1] or nil
+  local filetypes = type(lsp_config) == 'table' and lsp_config.filetypes or nil
+
+  if bin and type(filetypes) == 'table' and #filetypes > 0 then
+    -- Looking for the server and registering it waits for the first file of one of its filetypes: a start that opens no such
+    -- file pays nothing. enable() also attaches to the buffers that are already open, so that first file gets its server too.
+    vim.api.nvim_create_autocmd('FileType', {
+      group = lang_settings_group,
+      pattern = filetypes,
+      once = true,
+      callback = function() configureServer(server_name, lsp_config, bin, cmd) end,
+    })
+  else
+    configureServer(server_name, lsp_config, bin, cmd)
   end
 end

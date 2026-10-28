@@ -170,7 +170,7 @@ vim.api.nvim_create_autocmd("LspAttach", {
 
 
 -- Tell WezTerm that this pane runs nvim (user var IN_NVIM): its Win+C / Win+V keys
--- (F20 / F21) are handed to nvim here and used for the terminal clipboard elsewhere.
+-- (F16 / F15) are handed to nvim here and used for the terminal clipboard elsewhere.
 do
   local function setNvimFlag(value)
     local b64 = value == "" and "" or vim.base64.encode(value)
