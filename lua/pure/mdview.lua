@@ -169,6 +169,9 @@ function render.heading(buf, node, mark)
   local level = tonumber(marker:type():match('atx_h(%d)_marker'))
   if not level then return end
 
+  -- The levels the terminal can draw bigger (kitty, WezTerm; pure/mdheadings.lua) are not drawn here.
+  if require('pure.mdheadings').handles(level) then return end
+
   -- The #s plus the space after them; the icon is right-aligned in that width
   -- so the heading text does not move.
   local _, sc, _, ec = marker:range()
@@ -764,6 +767,7 @@ end
 
 function M.toggle()
   enabled = not enabled
+  require('pure.mdheadings').set_enabled(enabled)
   M.refresh()
   vim.notify('Markdown rendering ' .. (enabled and 'on' or 'off'))
 end
@@ -802,5 +806,8 @@ vim.api.nvim_create_autocmd('FileType', {
 })
 vim.api.nvim_create_autocmd('ColorScheme', { group = group, callback = setHighlights })
 setHighlights()
+
+-- Bigger headings where the terminal can do it (kitty: OSC 66, WezTerm: DECDHL); a no-op elsewhere.
+require('pure.mdheadings').setup()
 
 return M

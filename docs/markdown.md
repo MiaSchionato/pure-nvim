@@ -1,4 +1,4 @@
-# Markdown (`lua/pure/mdview.lua`, `lua/pure/render-md.lua`)
+# Markdown (`lua/pure/mdview.lua`, `lua/pure/render-md.lua`, `lua/pure/mdheadings.lua`)
 
 Markdown is drawn in place, like render-markdown.nvim: **the file is never
 changed**, marks are drawn over the text. Treesitter says what each piece is,
@@ -10,7 +10,7 @@ so a `-` inside a code block is never taken for a bullet.
 
 | In the file | On screen |
 |---|---|
-| `# Heading` | icon instead of the `#`s and a coloured band (colour from the theme) |
+| `# Heading` | icon instead of the `#`s and a coloured band; `#` and `##` bigger where the terminal can (see below) |
 | `- item` | bullet per level: • ◦ ▪ ▫ (`vim.g.pure_md_bullets`); a sub-item keeps its indentation |
 | `- [ ]` / `- [x]` | checkbox icons; done items dimmed |
 | `- [~]` `[!]` `[>]` `[-]` | Obsidian's extra states: in progress (blue), important (red), deferred (purple), cancelled (grey) – fixed colours in every theme |
@@ -71,6 +71,29 @@ flash back to their raw marks for one key while typing.
 | `<leader>dg` / `<leader>dw` | mark word good / wrong |
 | `<leader>dp` / `<leader>dn` | previous / next misspelled word |
 
+## Bigger headings (`mdheadings.lua`)
+
+`#` and `##` are drawn bigger when the terminal can do it; anywhere else nothing changes and `mdview` draws the headings as above.
+
+| Terminal | How | Size |
+|---|---|---|
+| kitty | the text sizing protocol (OSC 66) | `#` = 3 rows high, `##` = 2 |
+| WezTerm | VT100 double-height lines (DECDHL) | `#` and `##` both 2x |
+| others, tmux/screen, Neovide | nothing | – |
+
+The terminal is told by `KITTY_WINDOW_ID`, `WEZTERM_PANE` and `TERM_PROGRAM`. Neovim inside WSL does not get WezTerm's variables:
+set `vim.g.pure_md_headings = 'decdhl'` there. `vim.g.pure_md_headings` is `'auto'` (default), `'osc66'`, `'decdhl'` or `'off'`;
+`:PureMdHeadings [auto|osc66|decdhl|off]` changes it while Neovim runs, and `<leader>om` turns the big headings off with the rest.
+
+How it works: headings come from the treesitter tree (a `# comment` in a code block is not one). The raw text is covered with spaces
+(an overlay extmark) and the extra rows are reserved with blank `virt_lines`, so Neovim never repaints cells under a block; the blocks
+are written with `nvim_ui_send` and erased before Neovim repaints (a decoration provider). The heading under the cursor shows its
+raw text. A title that is wider than the window is cut.
+
+Limits of DECDHL: the double-height attribute belongs to the whole screen row, so the line number of a heading disappears, and it is
+only used when the window spans the whole terminal (in a split `mdview` draws the heading itself); there is one size (2x2). OSC 66
+has none of these limits but needs kitty (the kitty of WSLg works).
+
 ## Colours
 
 Groups link to what every theme has, so they follow the colorscheme; set them
@@ -78,6 +101,10 @@ yourself to override: `PureMdH1`…`PureMdH6` (heading text), `PureMdH1Bg`…
 (bands, computed), `PureMdCode`, `PureMdInlineCode`, `PureMdBullet`,
 `PureMdQuote`, `PureMdRule`, `PureMdTable`, `PureMdLink`, `PureMdFootnote`.
 The checkbox colours `PureMdTask*` are fixed on purpose.
+
+Heading colours, H1 to H6, are the Ethereal list of the Emacs look (`my/heading-colours` in `ethereal-look.el`): blue `#7d82d9`,
+purple `#c89dc1`, pink `#faaaa9`, cyan `#a3bfd1`, green `#92a593`, orange `#F99957`. `vim.g.pure_md_heading_colors` (a list of six
+colours) replaces them; `false` goes back to the colorscheme's own `@markup.heading.N.markdown` groups.
 
 A buffer that is not a file (a scratch buffer) is drawn only if it sets
 `vim.b.pure_mdview = true`, as the Todoist list does.
