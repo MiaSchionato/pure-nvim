@@ -245,11 +245,11 @@ map("n", "cs", sur.changeSurround, { desc = "Change surround" })
 map('n', "<leader>p", '"+p', func.getOpts(opts, "Paste from clipboard"))
 map("x", "<leader>p", [["_dP]], func.getOpts(opts, "Paste over without yanking"))
 map({ 'n', 'v' }, "<leader>y", '"+y', func.getOpts(opts, "Yank to clipboard"))
--- Win+C / Win+V reach nvim as F20 / F19 (kanata layer term + WezTerm), which leaves
+-- Win+C / Win+V reach nvim as F16 / F15 (kanata layer term + WezTerm), which leaves
 -- Ctrl+C (interrupt) and Ctrl+V (visual block) alone.
-map({ 'n', 'v' }, "<F20>", '"+y', func.getOpts(opts, "Yank to clipboard"))
-map({ 'n', 'v' }, "<F19>", '"+p', func.getOpts(opts, "Paste from clipboard"))
-map({ 'i', 'c' }, "<F19>", "<C-r>+", func.getOpts(opts, "Paste from clipboard"))
+map({ 'n', 'v' }, "<F16>", '"+y', func.getOpts(opts, "Yank to clipboard"))
+map({ 'n', 'v' }, "<F15>", '"+p', func.getOpts(opts, "Paste from clipboard"))
+map({ 'i', 'c' }, "<F15>", "<C-r>+", func.getOpts(opts, "Paste from clipboard"))
 
 map({ 'n', 'v' }, "<leader>D", '"_d', func.getOpts(opts, "Delete without yanking"))
 
