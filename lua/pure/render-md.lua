@@ -2,6 +2,36 @@ local M = {}
 
 local mdGroup = vim.api.nvim_create_augroup("PureMarkdown", { clear = true})
 
+-- The colour of each heading level, H1 to H6: the same list as the Emacs look (my/heading-colours in ethereal-look.el):
+-- blue, purple, pink, cyan, green, orange. vim.g.pure_md_heading_colors replaces the list; false keeps the colorscheme's own
+-- groups (Title, Directory, Type, Special for H1 to H4).
+local ethereal_headings = { "#7d82d9", "#c89dc1", "#faaaa9", "#a3bfd1", "#92a593", "#F99957" }
+
+local function headingColours()
+  local colours = vim.g.pure_md_heading_colors
+  if colours == nil then colours = ethereal_headings end
+  if colours then
+    for level = 1, 6 do
+      vim.api.nvim_set_hl(0, "@markup.heading." .. level .. ".markdown", { fg = colours[level] or colours[#colours], bold = true })
+    end
+  else
+    vim.api.nvim_set_hl(0, "@markup.heading.1.markdown", { link = "Title" })
+    vim.api.nvim_set_hl(0, "@markup.heading.2.markdown", { link = "Directory" })
+    vim.api.nvim_set_hl(0, "@markup.heading.3.markdown", { link = "Type" })
+    vim.api.nvim_set_hl(0, "@markup.heading.4.markdown", { link = "Special" })
+  end
+end
+
+-- A colorscheme change clears the groups: put the heading colours back (mdview's bands follow them).
+vim.api.nvim_create_autocmd("ColorScheme", {
+  group = mdGroup,
+  callback = function()
+    headingColours()
+    local ok, mdview = pcall(require, "pure.mdview")
+    if ok then vim.schedule(function() mdview.refresh(true) end) end
+  end,
+})
+
 -- While typing, **bold** and `code` flashed back to their raw marks for one
 -- key (Improvment.md). Since Neovim 0.11 treesitter parses asynchronously
 -- once a parse takes over 3 ms, which a note with its inline markdown does;
@@ -139,11 +169,8 @@ vim.api.nvim_create_autocmd("FileType", {
     vim.opt_local.conceallevel = 2
     vim.opt_local.concealcursor = "nc" -- Hide in normal and command modes
 
-    -- Style links
-    vim.api.nvim_set_hl(0, "@markup.heading.1.markdown", { link = "Title" })
-    vim.api.nvim_set_hl(0, "@markup.heading.2.markdown", { link = "Directory" })
-    vim.api.nvim_set_hl(0, "@markup.heading.3.markdown", { link = "Type" })
-    vim.api.nvim_set_hl(0, "@markup.heading.4.markdown", { link = "Special" })
+    -- Heading colours, one per level (see headingColours above)
+    headingColours()
     -- Checkbox colours are fixed in pure/mdview.lua (PureMdTask*), not here.
 
     -- Headings, bullets, checkboxes and the rest are drawn by pure/mdview.lua.
