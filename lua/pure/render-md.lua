@@ -362,6 +362,39 @@ local function blockOrigin(win, lnum, height)
   end
 end
 
+-- Floating windows (the key hint, notifications, a preview, a completion menu) paint over the cells of a block; a block drawn
+-- under one is cut in pieces, and the pieces stay when the window closes (seen in Kitsu: "Three" became "hree" with the
+-- text of the hint left on its row). So no block is drawn where a floating window is, the blocks go before one opens or
+-- moves (WinNew, and its position and size in on_win), and they come back when it closes.
+local floatKeys = {} -- window -> "row:col:width:height" as last seen
+
+local function floatRects()
+  local rects = {}
+  for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    local cfg = vim.api.nvim_win_get_config(w)
+    if cfg.relative ~= '' and not cfg.hide then
+      local pos = vim.api.nvim_win_get_position(w)
+      -- 1-based screen rows and columns, with a cell around the window for its border
+      rects[#rects + 1] = { top = pos[1], left = pos[2], bottom = pos[1] + vim.api.nvim_win_get_height(w) + 1,
+        right = pos[2] + vim.api.nvim_win_get_width(w) + 1 }
+    end
+  end
+  return rects
+end
+
+local function underFloat(floats, win, row, col, height)
+  if #floats == 0 then return false end
+  local left, right = 1, vim.o.columns
+  if state.mode ~= 'decdhl' then
+    left = col
+    right = col + vim.api.nvim_win_get_width(win) - (vim.fn.getwininfo(win)[1].textoff or 0)
+  end
+  for _, f in ipairs(floats) do
+    if row <= f.bottom and row + height - 1 >= f.top and left <= f.right and right >= f.left then return true end
+  end
+  return false
+end
+
 local function drawBlock(win, h, lnum, row, col)
   local height = HEIGHT[state.mode][h.level]
   local fg, bg = colours(h.level)
@@ -459,13 +492,14 @@ local function render()
     reserve(buf) -- the covers of the raw text come off (and back) with it
   end
   if not settled then return end
+  local floats = floatRects()
   local out = {}
   for _, h in ipairs(headingsOf(buf)) do
     local lnum = h.row + 1
     local height = heightOf(h.level)
     if height and lnum >= vim.fn.line('w0') and lnum <= vim.fn.line('w$') and lnum ~= state.cursor then
       local row, col = blockOrigin(win, lnum, height)
-      if row then out[#out + 1] = drawBlock(win, h, lnum, row, col) end
+      if row and not underFloat(floats, win, row, col, height) then out[#out + 1] = drawBlock(win, h, lnum, row, col) end
     end
   end
   local data = table.concat(out)
@@ -569,11 +603,41 @@ function M.setup(force)
   })
   vim.api.nvim_create_autocmd('ColorScheme', { group = group, callback = function() if state.mode then scheduleRender() end end })
   vim.api.nvim_create_autocmd('BufWipeout', { group = group, callback = function(args) cache[args.buf] = nil end })
+  -- A window opened (before it is painted) or closed: the blocks go, and are drawn again once the screen is settled.
+  vim.api.nvim_create_autocmd('WinNew', {
+    group = group,
+    callback = function()
+      if not state.mode then return end
+      eraseAll()
+      scheduleRender()
+    end,
+  })
+  vim.api.nvim_create_autocmd('WinClosed', {
+    group = group,
+    callback = function(args)
+      if not state.mode then return end
+      floatKeys[tonumber(args.match)] = nil
+      scheduleRender()
+    end,
+  })
 
   -- Before each redraw cycle: when the window scrolled, resized or the text changed, the old blocks go first.
   vim.api.nvim_set_decoration_provider(ns, {
     on_win = function(_, win, buf, topline)
-      if not state.mode or win ~= vim.api.nvim_get_current_win() then return end
+      if not state.mode then return end
+      local cfg = vim.api.nvim_win_get_config(win)
+      if cfg.relative ~= '' then
+        -- A floating window is being painted: when it appeared, moved or changed size, the blocks go first.
+        local pos = vim.api.nvim_win_get_position(win)
+        local fkey = table.concat({ pos[1], pos[2], vim.api.nvim_win_get_width(win), vim.api.nvim_win_get_height(win) }, ':')
+        if floatKeys[win] ~= fkey then
+          floatKeys[win] = fkey
+          eraseAll()
+          scheduleRender()
+        end
+        return
+      end
+      if win ~= vim.api.nvim_get_current_win() then return end
       -- topfill / skipcol: scrolling through the virtual lines a block reserves (or a wrapped line) moves the screen without
       -- changing `topline`; without them in the key the old blocks stayed where they were and new ones were drawn beside them.
       local view = vim.fn.winsaveview()
