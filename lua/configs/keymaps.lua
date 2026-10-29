@@ -372,7 +372,7 @@ map('n', '<leader>mi', function() require('pure.manim').interactive() end,
 --  pure/notes.lua, as commands only. <leader>ev, <leader>fv and <leader>gv
 --  follow, beside the other folders of their group.
 local flora = require('pure.flora')
-map('n', '<leader>vf', flora.find, func.getOpts(opts, "Find a node (a new title makes a note)"))
+map('n', '<leader>vf', flora.find, func.getOpts(opts, "Find a note, heading or alias (a title that matches nothing makes a seed)"))
 map('n', '<leader>vF', flora.findFile, func.getOpts(opts, "Find a file of the vault"))
 map('n', '<leader>vg', flora.grep, func.getOpts(opts, "Grep the vault"))
 map('n', '<leader>vn', flora.newSeed, func.getOpts(opts, "New seed (inbox)"))
