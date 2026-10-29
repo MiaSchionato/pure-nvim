@@ -64,6 +64,9 @@ require('org').setup({
   org_directory = vault,
   default_notes_file = vault .. '/inbox.org',
 
+  -- org.nvim's keys live under <leader>m (its default is <leader>o, the Toggles group); Manim is <leader>M.
+  mappings = { prefix = '<leader>m' },
+
   -- The agenda reads tasks, the inbox (it may hold dated things) and every
   -- file of projects/, like `my/garden-agenda-files` in Doom.
   agenda_files = { vault .. '/tasks.org', vault .. '/inbox.org', vault .. '/projects/**/*.org' },

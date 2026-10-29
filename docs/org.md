@@ -16,7 +16,7 @@ independent of the Markdown modules (`notes`, `zettelkasten`): those act on
 | Roam directory | the whole vault, except `journal/` |
 | Daily notes | `journal/<year>.org`, one entry per day in its date tree |
 
-## Capture (`<leader>oc`, then a key)
+## Capture (`<leader>mc`, then a key)
 
 The keys of the quick capture (Win+Q) of the Emacs side:
 
@@ -35,15 +35,16 @@ The `roam` extension of org.nvim, not a separate plugin. It indexes the vault
 into a JSON file (`stdpath('data')/org/roam-index.json`), not into SQLite, so
 Doom's `org-roam.db` is untouched; the note format is the same, so both
 editors can share the vault. A node is a file or a headline with an `:ID:`.
-Keys are under `<leader>om` (find `f`, insert link `i`, backlinks `l`,
-capture `c`, graph `g`) and `<leader>omd` for the daily notes (`t` today).
+Keys are under `<leader>mm` (find `f`, insert link `i`, backlinks `l`,
+capture `c`, graph `g`) and `<leader>mmd` for the daily notes (`t` today).
 
 ## Keys
 
-org.nvim's keys are under its default prefix `<leader>o`, which is also the
-Toggles group of `configs/keymaps.lua` (and `<leader>om` is the render toggle,
-which is also org.nvim's roam group). The prefix is still to be decided
-(`mappings = { prefix = ... }`).
+org.nvim's keys are under `<leader>m` (`mappings = { prefix = '<leader>m' }` in
+`lua/plugins/org.lua`; its default is `<leader>o`, the Toggles group). Manim moved to
+`<leader>M`. org-roam is `<leader>mm…` and its dailies `<leader>mmd…`; `<leader>mc` is
+capture and `<leader>ma` the agenda. Press `g?` in an org buffer, or `<Space>m` and wait,
+for the list.
 
 ## Rendering
 
@@ -54,9 +55,7 @@ Its syntax colours stay. The file is the org twin of `render-md.lua` (settings,
 view, bigger headlines) and uses the same colours (`pure/notecolors.lua`, which
 follow the colorscheme). The text is never changed; marks are drawn over it.
 
-`<leader>om` turns the drawing on and off, in markdown and in org notes. In an
-org note it also waits for `timeoutlen`, because org.nvim's own roam keys start
-with `<leader>om` (decision pending, see Keys).
+`<leader>om` (Toggles) turns the drawing on and off, in markdown and in org notes.
 
 | In the note | On screen |
 |---|---|
@@ -110,4 +109,4 @@ title that matches nothing makes a seed in `inbox.org`.
 The colours (`pure/notecolors.lua`) follow the colorscheme; in Ethereal they are Doom's
 exactly: note `#4f8a96`, alias `#c89dc1`, separators and path `#6d7db6`, headings the
 level colours. It lists every note and heading, not only the ones with an `:ID:`
-(org-roam's `roam_node_find` is still `<leader>omf`).
+(org-roam's `roam_node_find` is still `<leader>mmf`).

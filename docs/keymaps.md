@@ -140,17 +140,17 @@ See [llm.md](llm.md).
 | `<leader>lr` | n | LSP rename |
 | `<leader>ls` | n | LSP workspace symbols |
 
-## `<leader>m` – Manim
+## `<leader>M` – Manim
 
 See [manim.md](manim.md).
 
 | Key | Mode | What |
 |---|---|---|
-| `<leader>mm` | n | Preview the scene, again on every save (toggle) |
-| `<leader>ms` | n | Preview another scene |
-| `<leader>mp` | n, x | Preview only this part (selection, or the block under the cursor) |
-| `<leader>mf` | n | Picture of the scene at this line |
-| `<leader>mi` | n | Live window at this line: mouse camera, Python shell (toggle) |
+| `<leader>Mm` | n | Preview the scene, again on every save (toggle) |
+| `<leader>Ms` | n | Preview another scene |
+| `<leader>Mp` | n, x | Preview only this part (selection, or the block under the cursor) |
+| `<leader>Mf` | n | Picture of the scene at this line |
+| `<leader>Mi` | n | Live window at this line: mouse camera, Python shell (toggle) |
 
 ## `<leader>n` – New file / folder
 

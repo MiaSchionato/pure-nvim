@@ -7,7 +7,7 @@
 --    b  buffers        e  explore (pickers)   l  lsp             u  undotree
 --    c  code           f  find (pickers)      n  new file/folder v  vault (notes)
 --    d  diagnostics    g  git                 o  toggles         w  tabs, window view (wv_)
---    m  manim
+--    m  org notes      M  manim
 --    j  jumps          s  split               t  term, todoist   x  checkbox state (notes)
 --    z  folds
 --
@@ -46,7 +46,8 @@ vim.g.pure_keyhint_groups = {
   ['<leader>g'] = 'Git',
   ['<leader>j'] = 'Jumps',
   ['<leader>l'] = 'LSP',
-  ['<leader>m'] = 'Manim',
+  ['<leader>m'] = 'Org notes',
+  ['<leader>M'] = 'Manim',
   ['<leader>n'] = 'New file / folder',
   ['<leader>o'] = 'Toggles',
   ['<leader>s'] = 'Split',
@@ -352,15 +353,15 @@ map("n", "<leader>nd", function() fzf.NewFolder(here()) end, func.getOpts(opts, 
 -- <leader>vr: they act on a note, they do not make a new file.
 
 -- =============================================================================
---  Manim  (<leader>m, pure/manim.lua)
+--  Manim  (<leader>M, pure/manim.lua)
 -- =============================================================================
-map('n', '<leader>mm', function() require('pure.manim').toggle() end,
+map('n', '<leader>Mm', function() require('pure.manim').toggle() end,
   func.getOpts(opts, "Preview the scene, again on every save (toggle)"))
-map('n', '<leader>ms', function() require('pure.manim').pick() end, func.getOpts(opts, "Preview another scene"))
-map({ 'n', 'x' }, '<leader>mp', function() require('pure.manim').part() end,
+map('n', '<leader>Ms', function() require('pure.manim').pick() end, func.getOpts(opts, "Preview another scene"))
+map({ 'n', 'x' }, '<leader>Mp', function() require('pure.manim').part() end,
   func.getOpts(opts, "Preview only this part (selection, or the block under the cursor)"))
-map('n', '<leader>mf', function() require('pure.manim').frame() end, func.getOpts(opts, "Picture of the scene at this line"))
-map('n', '<leader>mi', function() require('pure.manim').interactive() end,
+map('n', '<leader>Mf', function() require('pure.manim').frame() end, func.getOpts(opts, "Picture of the scene at this line"))
+map('n', '<leader>Mi', function() require('pure.manim').interactive() end,
   func.getOpts(opts, "Live window at this line: mouse camera, Python shell (toggle)"))
 
 -- =============================================================================
