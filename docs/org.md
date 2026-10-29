@@ -72,6 +72,15 @@ follow the colorscheme). The text is never changed; marks are drawn over it.
 
 Blocks and drawers are read first, so a `*` or a link inside a src block is plain text.
 
+Links keep the buffer's own text: the brackets and the target are concealed and the text
+stays, coloured. Neovim sizes a wrapped line by its **raw** width, concealed text included, so
+hiding text that would make the line need fewer rows than Neovim reserves leaves a blank row
+under it. Such a line (a long `[[id:…][Title]]` in a narrow window) is left as written;
+`vim.g.pure_org_conceal_wrapped = true` hides it anyway and accepts the blank row.
+
+The headline text takes the colours of the Markdown headings (`OrgHeadlineLevelN` link to them),
+and the statusline shows the org glyph (Nerd Font `nf-custom-orgmode`) for org notes.
+
 ### Bigger headlines
 
 Where the terminal can: kitty draws `*` (3x) and `**` (2x) with OSC 66, WezTerm with the
@@ -81,8 +90,19 @@ draw the icon and band. Same checks as the markdown headings: `vim.g.pure_org_he
 `:PureOrgHeadings [auto|osc66|decdhl|off]` changes it while Neovim runs. In WSL set it to
 `decdhl` for WezTerm, as for markdown. The terminal code is a copy of `render-md.lua`'s.
 
-Not tested with a real terminal: the escape sequences were not drawn on a screen here,
-only the marks, the reserved lines and the choice of mode.
+Tested in Kitsu (kitty for Windows) on the right monitor, with the real config, on a copy of the
+Flora garden notes: scrolling by lines and pages, fast `Ctrl-D/U/E/Y`, folds, inserting, toggling.
+What that found and fixed (the same engine draws the Markdown headings):
+
+- **Scrolling through the rows a block reserves** (Neovim's `topfill`, or `skipcol` in a wrapped
+  line) moves the screen without changing `topline`; the old blocks stayed where they were and
+  new ones were drawn beside them (the same heading three times, a stray letter). Now both are part
+  of the key that clears the blocks, and while the scroll is not on a whole line nothing is drawn and
+  the raw headline shows (the big one comes back when it settles): Neovim's rows for the lines are
+  not the ones on the screen in that state.
+- A code block's label left a hole in the shading; a link line showed a blank row under it (an
+  inline virtual text is counted on top of the raw width); big headlines showed the `*bold*` marks
+  and the link syntax of their text.
 
 ## Flora keys (`<leader>v`, `lua/pure/flora.lua`)
 
