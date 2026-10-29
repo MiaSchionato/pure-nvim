@@ -4,13 +4,13 @@
 --  A window that plays the Manim scene you are writing, and plays it again
 --  each time the file is saved.
 --
---    <leader>mm   start (or stop) the preview of the scene under the cursor
+--    <leader>Mm   start (or stop) the preview of the scene under the cursor
 --                 (the class above it; asked when the cursor is on none)
---    <leader>ms   choose another scene of the file
---    <leader>mp   only a part: the selection, or the block the cursor is in
+--    <leader>Ms   choose another scene of the file
+--    <leader>Mp   only a part: the selection, or the block the cursor is in
 --                 (from the comment above it to the next one)
---    <leader>mf   a picture of the scene at the cursor line
---    <leader>mi   live: the scene at the cursor line in a window where the
+--    <leader>Mf   a picture of the scene at the cursor line
+--    <leader>Mi   live: the scene at the cursor line in a window where the
 --                 mouse moves the camera (3D), with a Python shell below
 --
 --  Each keeps going on every save: the same part, the same line.
@@ -358,7 +358,7 @@ end
 -- -----------------------------------------------------------------------------
 --  Live window (OpenGL renderer)
 -- -----------------------------------------------------------------------------
---  <leader>mi runs the scene up to the cursor line in Manim's OpenGL
+--  <leader>Mi runs the scene up to the cursor line in Manim's OpenGL
 --  renderer: a live window, where the mouse moves the camera (drag:
 --  orbit, middle drag: pan, wheel: zoom, r: reset), and an IPython shell
 --  in a terminal below, with the scene as it is at that line (`self`,
