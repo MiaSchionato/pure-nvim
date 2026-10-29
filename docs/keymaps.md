@@ -198,23 +198,28 @@ See [manim.md](manim.md).
 | `<leader>tg` | n | Toggle Gemini terminal |
 | `<leader>tt` | n | Toggle terminal |
 
-## `<leader>v` – Vault
+## `<leader>v` – Flora (the org vault, `pure/flora.lua`)
 
 | Key | Mode | What |
 |---|---|---|
-| `<leader>vb` | n | Backlinks (notes linking here) |
-| `<leader>vd` | n | Delete note (to the vault's trash) |
-| `<leader>vo` | n | Send the note out of the vault (`pure_outside_folders`) |
-| `<leader>ve` | n | Explore the vault |
-| `<leader>vf` | n | Find a note |
+| `<leader>vf` | n | Find a node (file, headline with an `:ID:`, alias); a new title makes a note |
+| `<leader>vF` | n | Find a file of the vault |
 | `<leader>vg` | n | Grep the vault |
-| `<leader>vn` | n | New note (inbox, asks the name only) |
-| `<leader>vr` | n | Rename note, fix links to it |
-| `<leader>vp` | n | Preview the linked note |
-| `<leader>vq` | n | Quick edit the linked note |
-| `<leader>vs` | n | Sync the vault (git) |
-| `<leader>vN` | n | New note from a template (born in its folder) |
-| `<leader>vt` | n | Apply a template |
+| `<leader>vn` | n | New seed (inbox) |
+| `<leader>vN` | n | New note in its own file |
+| `<leader>vt` | n | Capture: pick a template |
+| `<leader>vi` | n | Insert a link to a node |
+| `<leader>vb` | n | Backlinks (notes linking here) |
+| `<leader>vr` | n | Rename this note (title and file; links are by `:ID:`) |
+| `<leader>vd` | n | Delete this note (moved to `archive/trash/`) |
+| `<leader>vj` | n | Journal line (today) |
+| `<leader>vJ` | n | Today in the journal |
+| `<leader>ve` | n | Explore the vault |
+| `<leader>vs` | n | Save the notes and commit (pull and push when there is an upstream) |
+| `<leader>vp` | n | Preview the linked note (org notes; markdown keeps `linkview`) |
+| `<leader>vq` | n | Quick edit the linked note (org notes) |
+
+`<leader>ev`, `<leader>fv`, `<leader>nv` and `<leader>gv` follow Flora too.
 
 ## `<leader>w` – Tabs, window view
 

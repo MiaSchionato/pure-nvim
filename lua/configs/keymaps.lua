@@ -51,7 +51,7 @@ vim.g.pure_keyhint_groups = {
   ['<leader>o'] = 'Toggles',
   ['<leader>s'] = 'Split',
   ['<leader>t'] = 'Terminal, Todoist',
-  ['<leader>v'] = 'Vault',
+  ['<leader>v'] = 'Flora (vault)',
   ['<leader>w'] = 'Tabs, window view',
   ['<leader>wv'] = 'Window focus',
   ['<leader>x'] = 'Checkbox state',
@@ -70,11 +70,9 @@ local dirs = {
   ['~'] = home,
   ['.'] = home .. '.config/',
   n     = home .. '.config/nvim/',
-  -- The Obsidian vault, as set up in pure/zettelkasten.lua (asked for on a
-  -- fresh install, or vim.g.pure_vault). A function: it may be chosen only
-  -- after this file has run.
+  -- The Flora vault (org), vim.g.flora_dir or ~/Flora (pure/flora.lua).
   v     = function()
-    local vault = zet.vaultPath()
+    local vault = vim.fs.normalize(vim.fn.expand(vim.g.flora_dir or '~/Flora'))
     return vault and (vault .. '/') or nil
   end,
 }
@@ -308,7 +306,7 @@ map('n', '<leader>ee', explore(here), func.getOpts(opts, "Explore current direct
 map('n', '<leader>E', explore(dirs['~']), func.getOpts(opts, "Explore home"))
 map('n', '<leader>e.', explore(dirs['.']), func.getOpts(opts, "Explore ~/.config"))
 map('n', '<leader>en', explore(dirs.n), func.getOpts(opts, "Explore nvim config"))
-map('n', '<leader>ev', explore(dirs.v), func.getOpts(opts, "Explore Obsidian vault"))
+map('n', '<leader>ev', explore(dirs.v), func.getOpts(opts, "Explore Flora, the vault"))
 
 -- =============================================================================
 --  Find  (<leader>f)
@@ -320,7 +318,7 @@ map('n', '<leader><leader>', function() fzf.fuzzySearch(file.pp()) end,
 map('n', '<leader>f~', inDir(fzf.fuzzySearch, dirs['~']), func.getOpts(opts, "Find in home"))
 map('n', '<leader>f.', inDir(fzf.fuzzySearch, dirs['.']), func.getOpts(opts, "Find in ~/.config"))
 map('n', '<leader>fn', inDir(fzf.fuzzySearch, dirs.n), func.getOpts(opts, "Find in nvim config"))
-map('n', '<leader>fv', inDir(fzf.fuzzySearch, dirs.v), func.getOpts(opts, "Find in Atlas, the Obsidian vault"))
+map('n', '<leader>fv', inDir(fzf.fuzzySearch, dirs.v), func.getOpts(opts, "Find in Flora, the vault"))
 
 map('n', "<leader>fe", function() inDir(fzf.fuzzyExplorer, here())() end,
   func.getOpts(opts, "fzf explorer, current directory"))
@@ -348,7 +346,7 @@ map("n", "<leader>nh", inDir(fzf.NewFileIn, dirs['~']), func.getOpts(opts, "New 
 map("n", "<leader>n.", inDir(fzf.NewFileIn, dirs['.']), func.getOpts(opts, "New file in ~/.config"))
 map("n", "<leader>nn", inDir(fzf.NewFileIn, dirs.n), func.getOpts(opts, "New file in nvim config"))
 -- The same as <leader>vn: a note in the vault's inbox, asking only its name.
-map("n", "<leader>nv", zet.newNote, func.getOpts(opts, "New note in the vault's inbox"))
+map("n", "<leader>nv", function() require('pure.flora').newSeed() end, func.getOpts(opts, "New seed in Flora's inbox"))
 map("n", "<leader>nd", function() fzf.NewFolder(here()) end, func.getOpts(opts, "New folder here"))
 -- <leader>nt (template) and <leader>nr (rename note) moved to <leader>vt and
 -- <leader>vr: they act on a note, they do not make a new file.
@@ -366,25 +364,38 @@ map('n', '<leader>mi', function() require('pure.manim').interactive() end,
   func.getOpts(opts, "Live window at this line: mouse camera, Python shell (toggle)"))
 
 -- =============================================================================
---  Vault  (<leader>v, pure/zettelkasten.lua and pure/notes.lua)
+--  Flora  (<leader>v, pure/flora.lua)
 -- =============================================================================
---  Everything that works on the Obsidian vault, in one group. <leader>ev,
---  <leader>fv, <leader>fl and <leader>gv stay too, beside the other folders
---  of their group.
-local function notes(fn)
-  return function() require('pure.notes')[fn]() end
-end
-map('n', '<leader>vn', zet.newNote, func.getOpts(opts, "New note (inbox, asks the name only)"))
-map('n', '<leader>vN', zet.newNoteFromTemplate, func.getOpts(opts, "New note from a template (born in its folder)"))
-map('n', '<leader>vt', zet.insertTemplate, func.getOpts(opts, "Apply a template"))
-map('n', '<leader>vd', zet.trashNote, func.getOpts(opts, "Delete note (to the vault's trash)"))
-map('n', '<leader>vr', notes('rename'), func.getOpts(opts, "Rename note, fix links to it"))
-map('n', '<leader>vo', notes('sendOut'), func.getOpts(opts, "Send the note out of the vault (outside folders)"))
-map('n', '<leader>vb', notes('backlinks'), func.getOpts(opts, "Backlinks (notes linking here)"))
-map('n', '<leader>ve', explore(dirs.v), func.getOpts(opts, "Explore the vault"))
-map('n', '<leader>vf', inDir(fzf.fuzzySearch, dirs.v), func.getOpts(opts, "Find a note"))
-map('n', '<leader>vg', inDir(fzf.fuzzyGrep, dirs.v), func.getOpts(opts, "Grep the vault"))
-map('n', '<leader>vs', "<cmd>VaultSync<cr>", func.getOpts(opts, "Sync the vault (git)"))
+--  Everything that works on the Flora vault (org), in one group, as Doom's
+--  `SPC v`. It replaced the group of the Atlas vault (Markdown), which is no
+--  longer used: its functions are still in pure/zettelkasten.lua and
+--  pure/notes.lua, as commands only. <leader>ev, <leader>fv and <leader>gv
+--  follow, beside the other folders of their group.
+local flora = require('pure.flora')
+map('n', '<leader>vf', flora.find, func.getOpts(opts, "Find a node (a new title makes a note)"))
+map('n', '<leader>vF', flora.findFile, func.getOpts(opts, "Find a file of the vault"))
+map('n', '<leader>vg', flora.grep, func.getOpts(opts, "Grep the vault"))
+map('n', '<leader>vn', flora.newSeed, func.getOpts(opts, "New seed (inbox)"))
+map('n', '<leader>vN', flora.newNote, func.getOpts(opts, "New note in its own file"))
+map('n', '<leader>vt', flora.template, func.getOpts(opts, "Capture: pick a template"))
+map('n', '<leader>vi', flora.insertLink, func.getOpts(opts, "Insert a link to a node"))
+map('n', '<leader>vb', flora.backlinks, func.getOpts(opts, "Backlinks (notes linking here)"))
+map('n', '<leader>vr', flora.rename, func.getOpts(opts, "Rename this note (title and file)"))
+map('n', '<leader>vd', flora.delete, func.getOpts(opts, "Delete this note (to archive/trash/)"))
+map('n', '<leader>vj', flora.journalLine, func.getOpts(opts, "Journal line (today)"))
+map('n', '<leader>vJ', flora.journalToday, func.getOpts(opts, "Today in the journal"))
+map('n', '<leader>ve', flora.explore, func.getOpts(opts, "Explore the vault"))
+map('n', '<leader>vs', flora.sync, func.getOpts(opts, "Save the notes and commit (sync if there is an upstream)"))
+-- <leader>vp / <leader>vq: the linked note, preview and quick edit. Markdown
+-- notes keep pure/linkview.lua's global keys; in org notes these two win.
+vim.api.nvim_create_autocmd('FileType', {
+  pattern = 'org',
+  group = vim.api.nvim_create_augroup('FloraKeys', { clear = true }),
+  callback = function(args)
+    map('n', '<leader>vp', flora.preview, { buffer = args.buf, desc = 'Preview the linked note' })
+    map('n', '<leader>vq', flora.quickEdit, { buffer = args.buf, desc = 'Quick edit the linked note' })
+  end,
+})
 
 -- =============================================================================
 --  LLMs: Claude, Ollama, agy  (<leader>a, pure/llm.lua)
@@ -437,7 +448,7 @@ map('n', "<leader>gp", git('push'), func.getOpts(opts, "Git push"))
 map('n', "<leader>gP", git('pull'), func.getOpts(opts, "Git pull"))
 map('n', "<leader>gb", git('blameLine'), func.getOpts(opts, "Git blame current line"))
 map('n', "<leader>gB", git('switchBranch'), func.getOpts(opts, "Git switch branch"))
-map('n', "<leader>gv", "<cmd>VaultSync<cr>", func.getOpts(opts, "Git Vault Sync"))
+map('n', "<leader>gv", function() require('pure.flora').sync() end, func.getOpts(opts, "Flora: save the notes and commit"))
 
 -- =============================================================================
 --  LSP
@@ -596,7 +607,6 @@ map('n', '<leader>tD', '<cmd>Todoist today | overdue<cr>', func.getOpts(opts, "T
 --  Completion and snippets
 -- =============================================================================
 --  Deferred: the <CR> mapping needs copilot.vim's autoload on the runtimepath,
---  which vim.pack only guarantees after this file has run.
 vim.schedule(function()
   --  Tab in insert mode (as asked in the vault's Improvment.md, second
   --  round: Tab must not indent, and walks the suggestions). In order:

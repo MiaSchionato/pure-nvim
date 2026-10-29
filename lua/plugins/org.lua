@@ -69,7 +69,20 @@ require('org').setup({
   agenda_files = { vault .. '/tasks.org', vault .. '/inbox.org', vault .. '/projects/**/*.org' },
 
   todo_keywords = todo_keywords,
-  ui = { todo_keyword_faces = keyword_faces },
+  -- org.nvim draws nothing over the text (links, stars, checkboxes...): the
+  -- rendering is pure/render-org.lua's, so it can be toggled and follows the
+  -- terminal (<leader>om). Its syntax colours stay.
+  ui = {
+    todo_keyword_faces = keyword_faces,
+    conceal_links = false,
+    hide_emphasis_markers = false,
+    hide_leading_stars = false,
+    bullets = false,
+    checkboxes = false,
+    indent_mode = false,
+    pretty_entities = false,
+    num = false,
+  },
 
   capture = {
     templates = {

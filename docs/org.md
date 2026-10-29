@@ -40,6 +40,25 @@ capture `c`, graph `g`) and `<leader>omd` for the daily notes (`t` today).
 
 ## Keys
 
-Everything is under org.nvim's default prefix `<leader>o`, which is also the
-Toggles group of `configs/keymaps.lua`. The prefix is still to be decided
+org.nvim's keys are under its default prefix `<leader>o`, which is also the
+Toggles group of `configs/keymaps.lua` (and `<leader>om` is the render toggle,
+which is also org.nvim's roam group). The prefix is still to be decided
 (`mappings = { prefix = ... }`).
+
+## Rendering
+
+org.nvim's own drawing over the text (concealed links, star bullets,
+checkbox icons, indent) is off in `lua/plugins/org.lua`: the rendering is
+`lua/pure/render-org.lua`'s, so it can be toggled with `<leader>om` and follows
+the terminal. Its syntax colours stay.
+
+## Flora keys (`<leader>v`, `lua/pure/flora.lua`)
+
+The group of the old Atlas vault now works on Flora, like Doom's `SPC v`:
+find a node (`f`), a file (`F`), grep (`g`), new seed (`n`), new note (`N`),
+capture templates (`t`), insert a link (`i`), backlinks (`b`), rename (`r`),
+delete to `archive/trash/` (`d`), journal line (`j`), today (`J`), explore (`e`),
+save and commit (`s`), preview and quick edit the linked note (`p`, `q`, in org
+notes). The list is in [keymaps.md](keymaps.md). Links are by `:ID:`, so renaming
+or moving a note breaks none. The Atlas functions are left in
+`pure/zettelkasten.lua` and `pure/notes.lua` as commands, without keys.
