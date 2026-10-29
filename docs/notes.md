@@ -187,7 +187,7 @@ project's daily mentions are.
 
 ## Not included
 
-What obsidian.nvim had and this does not: its own drawing (pure/mdview.lua
+What obsidian.nvim had and this does not: its own drawing (pure/render-md.lua
 draws), rewriting the frontmatter, tags search, pasting images, daily notes
 and templates (pure/zettelkasten.lua does those), sync, slides, several
 vaults.

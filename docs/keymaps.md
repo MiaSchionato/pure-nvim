@@ -172,7 +172,7 @@ See [manim.md](manim.md).
 | `<leader>od` | n | Toggle diagnostics |
 | `<leader>oh` | n | Toggle word highlight |
 | `<leader>oi` | n | Toggle inlay hints |
-| `<leader>om` | n | Toggle markdown rendering |
+| `<leader>om` | n | Toggle note rendering (markdown or org, by the buffer) |
 | `<leader>on` | n, x | Toggle line numbers |
 | `<leader>op` | n | Toggle Copilot |
 | `<leader>or` | n, x | Toggle relativenumber |

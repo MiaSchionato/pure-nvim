@@ -1,4 +1,4 @@
-# Markdown (`lua/pure/mdview.lua`, `lua/pure/render-md.lua`, `lua/pure/mdheadings.lua`)
+# Markdown (`lua/pure/render-md.lua`)
 
 Markdown is drawn in place, like render-markdown.nvim: **the file is never
 changed**, marks are drawn over the text. Treesitter says what each piece is,
@@ -13,7 +13,7 @@ so a `-` inside a code block is never taken for a bullet.
 | `# Heading` | icon instead of the `#`s and a coloured band; `#` and `##` bigger where the terminal can (see below) |
 | `- item` | bullet per level: • ◦ ▪ ▫ (`vim.g.pure_md_bullets`); a sub-item keeps its indentation |
 | `- [ ]` / `- [x]` | checkbox icons; done items dimmed |
-| `- [~]` `[!]` `[>]` `[-]` | Obsidian's extra states: in progress (blue), important (red), deferred (purple), cancelled (grey) – fixed colours in every theme |
+| `- [~]` `[!]` `[>]` `[-]` | Obsidian's extra states: in progress (blue), important (red), deferred (purple), cancelled (grey) – colours of the theme (see below) |
 | `> quote` | a bar instead of `>` |
 | `---` | a full-width line |
 | tables | box-drawing borders; checkboxes inside cells too |
@@ -71,7 +71,7 @@ flash back to their raw marks for one key while typing.
 | `<leader>dg` / `<leader>dw` | mark word good / wrong |
 | `<leader>dp` / `<leader>dn` | previous / next misspelled word |
 
-## Bigger headings (`mdheadings.lua`)
+## Bigger headings (`render-md.lua`)
 
 `#` and `##` are drawn bigger when the terminal can do it; anywhere else nothing changes and `mdview` draws the headings as above.
 
@@ -100,11 +100,16 @@ Groups link to what every theme has, so they follow the colorscheme; set them
 yourself to override: `PureMdH1`…`PureMdH6` (heading text), `PureMdH1Bg`…
 (bands, computed), `PureMdCode`, `PureMdInlineCode`, `PureMdBullet`,
 `PureMdQuote`, `PureMdRule`, `PureMdTable`, `PureMdLink`, `PureMdFootnote`.
-The checkbox colours `PureMdTask*` are fixed on purpose.
+The heading and checkbox colours (`pure/notecolors.lua`) follow the colorscheme: the headings are the theme's own
+`@markup.heading.N.markdown` groups, the checkbox states link to `Comment`, `DiagnosticOk`, `DiagnosticInfo`,
+`DiagnosticError`, `Statement` and `NonText`. Only in **Ethereal** they are fixed, exactly the colours of the Emacs look
+(`my/heading-colours` in `ethereal-look.el`): headings blue `#7d82d9`, purple `#c89dc1`, pink `#faaaa9`, cyan `#a3bfd1`,
+green `#92a593`, orange `#F99957`; checkboxes grey `#8b949e`, green `#3fb950`, blue `#58a6ff`, red `#f85149`,
+purple `#a371f7`, dark grey `#6e7681`. `vim.g.pure_md_heading_colors` (a list of six colours) replaces the heading colours
+in any theme.
 
-Heading colours, H1 to H6, are the Ethereal list of the Emacs look (`my/heading-colours` in `ethereal-look.el`): blue `#7d82d9`,
-purple `#c89dc1`, pink `#faaaa9`, cyan `#a3bfd1`, green `#92a593`, orange `#F99957`. `vim.g.pure_md_heading_colors` (a list of six
-colours) replaces them; `false` goes back to the colorscheme's own `@markup.heading.N.markdown` groups.
+The fuzzy finders (`<leader>ff` and the others) take their background, selected line and text from the theme too (`Normal`,
+`CursorLine`), whatever `FZF_DEFAULT_OPTS` the shell exports.
 
 A buffer that is not a file (a scratch buffer) is drawn only if it sets
 `vim.b.pure_mdview = true`, as the Todoist list does.
