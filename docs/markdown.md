@@ -1,4 +1,4 @@
-# Markdown (`lua/pure/mdview.lua`, `lua/pure/render-md.lua`, `lua/pure/mdheadings.lua`)
+# Markdown (`lua/pure/render-md.lua`)
 
 Markdown is drawn in place, like render-markdown.nvim: **the file is never
 changed**, marks are drawn over the text. Treesitter says what each piece is,

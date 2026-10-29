@@ -1,7 +1,7 @@
 -- =============================================================================
 --  Note colours: the heading and task colours of the rendered notes
 -- =============================================================================
---  Shared by the Markdown view (pure/mdview.lua, render-md.lua) and the org
+--  Shared by the Markdown view (pure/render-md.lua) and the org
 --  view (pure/render-org.lua), so a note reads the same in both.
 --
 --  The colours follow the colorscheme: each group is a link to a group every
