@@ -83,7 +83,8 @@ flash back to their raw marks for one key while typing.
 
 The terminal is told by `KITTY_WINDOW_ID`, `WEZTERM_PANE` and `TERM_PROGRAM`. Neovim inside WSL does not get WezTerm's variables:
 set `vim.g.pure_md_headings = 'decdhl'` there. `vim.g.pure_md_headings` is `'auto'` (default), `'osc66'`, `'decdhl'` or `'off'`;
-`:PureMdHeadings [auto|osc66|decdhl|off]` changes it while Neovim runs, and `<leader>om` turns the big headings off with the rest.
+The blocks are cleared when the window scrolls through the rows a block reserves (`topfill`) and not drawn until the
+scroll settles on a whole line (stale blocks were left behind, found in Kitsu on org notes). `:PureMdHeadings [auto|osc66|decdhl|off]` changes it while Neovim runs, and `<leader>om` turns the big headings off with the rest.
 
 How it works: headings come from the treesitter tree (a `# comment` in a code block is not one). The raw text is covered with spaces
 (an overlay extmark) and the extra rows are reserved with blank `virt_lines`, so Neovim never repaints cells under a block; the blocks

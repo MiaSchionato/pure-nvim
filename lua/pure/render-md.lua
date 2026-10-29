@@ -434,7 +434,7 @@ local function reserve(buf)
       local virt = {}
       for _ = 1, height - 1 do virt[#virt + 1] = { { ' ', 'Normal' } } end
       vim.api.nvim_buf_set_extmark(buf, ns, h.row, 0, { virt_lines = virt })
-      if lnum ~= state.cursor then
+      if lnum ~= state.cursor and state.settled ~= false then
         vim.api.nvim_buf_set_extmark(buf, ns, h.row, 0, {
           virt_text = { { string.rep(' ', vim.fn.strdisplaywidth(lines[lnum] or '')), 'Normal' } },
           virt_text_pos = 'overlay',
@@ -449,6 +449,16 @@ local function render()
   local buf = vim.api.nvim_win_get_buf(win)
   if not eligible(buf) or not activeFor(win) then return end
   state.drawn = {}
+  -- Scrolled into the middle of a block's reserved rows (topfill) or of a wrapped line (skipcol): the rows Neovim reports
+  -- for the lines are not the ones it puts on the screen (seen in Kitsu: blocks one row too low, drawn over the next
+  -- line). Nothing is drawn until the scroll settles on a whole line; the raw text stays covered meanwhile.
+  local view = vim.fn.winsaveview()
+  local settled = view.topfill == 0 and view.skipcol == 0
+  if settled ~= state.settled then
+    state.settled = settled
+    reserve(buf) -- the covers of the raw text come off (and back) with it
+  end
+  if not settled then return end
   local out = {}
   for _, h in ipairs(headingsOf(buf)) do
     local lnum = h.row + 1
@@ -564,7 +574,10 @@ function M.setup(force)
   vim.api.nvim_set_decoration_provider(ns, {
     on_win = function(_, win, buf, topline)
       if not state.mode or win ~= vim.api.nvim_get_current_win() then return end
-      local key = table.concat({ topline, vim.api.nvim_buf_get_changedtick(buf), vim.api.nvim_win_get_height(win), vim.api.nvim_win_get_width(win) }, ':')
+      -- topfill / skipcol: scrolling through the virtual lines a block reserves (or a wrapped line) moves the screen without
+      -- changing `topline`; without them in the key the old blocks stayed where they were and new ones were drawn beside them.
+      local view = vim.fn.winsaveview()
+      local key = table.concat({ topline, view.topfill, view.skipcol, vim.api.nvim_buf_get_changedtick(buf), vim.api.nvim_win_get_height(win), vim.api.nvim_win_get_width(win) }, ':')
       if key ~= last.key then
         last.key = key
         eraseAll()
@@ -1417,8 +1430,7 @@ vim.api.nvim_create_autocmd('ColorScheme', {
   end,
 })
 setHighlights()
-
-
+M.setHighlights = setHighlights
 
 return M
 end)()
@@ -1428,6 +1440,7 @@ Headings.setup()
 
 M.refresh = View.refresh
 M.toggle = View.toggle
+M.setHighlights = View.setHighlights
 M.headings = Headings
 
 return M

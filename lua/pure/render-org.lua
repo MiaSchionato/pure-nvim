@@ -93,6 +93,7 @@ vim.api.nvim_create_autocmd('FileType', {
 --    blocks      { first, last, name, lang }
 --    drawers     { first, last }       only the ones that are hidden
 local scan_cache = {}
+local plainText -- defined with the links and the emphasis below
 
 local HIDDEN_DRAWERS = { PROPERTIES = true, LOGBOOK = true }
 
@@ -138,7 +139,7 @@ local function scan(buf)
         rows[row] = { kind = 'drawer' }
       elseif stars then
         stack = {}
-        local text = title:gsub('%s+:[%w_@#%%:]+:%s*$', '') -- without the tags
+        local text = plainText((title:gsub('%s+:[%w_@#%%:]+:%s*$', ''))) -- without the tags, links and emphasis marks
         rows[row] = { kind = 'headline', level = #stars, stars = #stars }
         info.headlines[#info.headlines + 1] = { row = row, level = #stars, text = text }
       elseif line:match('^%s*%-%-%-%-%-+%s*$') then
@@ -349,7 +350,7 @@ local function reserve(buf)
       local virt = {}
       for _ = 1, height - 1 do virt[#virt + 1] = { { ' ', 'Normal' } } end
       vim.api.nvim_buf_set_extmark(buf, ns, h.row, 0, { virt_lines = virt })
-      if lnum ~= state.cursor then
+      if lnum ~= state.cursor and state.settled ~= false then
         vim.api.nvim_buf_set_extmark(buf, ns, h.row, 0, {
           virt_text = { { string.rep(' ', vim.fn.strdisplaywidth(lines[lnum] or '')), 'Normal' } },
           virt_text_pos = 'overlay',
@@ -364,6 +365,16 @@ local function render()
   local buf = vim.api.nvim_win_get_buf(win)
   if not eligible(buf) or not activeFor(win) then return end
   state.drawn = {}
+  -- Scrolled into the middle of a block's reserved rows (topfill) or of a wrapped line (skipcol): the rows Neovim reports
+  -- for the lines are not the ones it puts on the screen (seen in Kitsu: blocks one row too low, drawn over the next
+  -- line). Nothing is drawn until the scroll settles on a whole line; the raw text stays covered meanwhile.
+  local view = vim.fn.winsaveview()
+  local settled = view.topfill == 0 and view.skipcol == 0
+  if settled ~= state.settled then
+    state.settled = settled
+    reserve(buf) -- the covers of the raw text come off (and back) with it
+  end
+  if not settled then return end
   local out = {}
   for _, h in ipairs(headingsOf(buf)) do
     local lnum = h.row + 1
@@ -479,7 +490,10 @@ function M.setup(force)
   vim.api.nvim_set_decoration_provider(ns, {
     on_win = function(_, win, buf, topline)
       if not state.mode or win ~= vim.api.nvim_get_current_win() then return end
-      local key = table.concat({ topline, vim.api.nvim_buf_get_changedtick(buf), vim.api.nvim_win_get_height(win), vim.api.nvim_win_get_width(win) }, ':')
+      -- topfill / skipcol: scrolling through the virtual lines a block reserves (or a wrapped line) moves the screen without
+      -- changing `topline`; without them in the key the old blocks stayed where they were and new ones were drawn beside them.
+      local view = vim.fn.winsaveview()
+      local key = table.concat({ topline, view.topfill, view.skipcol, vim.api.nvim_buf_get_changedtick(buf), vim.api.nvim_win_get_height(win), vim.api.nvim_win_get_width(win) }, ':')
       if key ~= last.key then
         last.key = key
         eraseAll()
@@ -532,14 +546,26 @@ end)()
 local heading_icons = { '󰲡 ', '󰲣 ', '󰲥 ', '󰲧 ', '󰲩 ', '󰲫 ' }
 local bullets = vim.g.pure_md_bullets or { '•', '◦', '▪', '▫' }
 local checkbox = { unchecked = '󰄱', checked = '󰄲', partial = '\u{F0856}' } -- md-checkbox_intermediate
-local embed_icon = '\u{F0219}'
 
 -- Colours: org uses the groups of the Markdown view, which link to the theme.
 local function setHighlights()
   notecolors.apply()
+  -- The bands (PureMdHnBg) and the base groups are computed from the colours above: again for this theme.
+  local md = package.loaded['pure.render-md']
+  if md and md.setHighlights then md.setHighlights() end
   for level = 1, 6 do
     vim.api.nvim_set_hl(0, 'PureOrgH' .. level, { link = '@markup.heading.' .. level .. '.markdown' })
   end
+  -- The headline text takes the colours of the Markdown headings (they follow the theme; Ethereal: Doom's list), not
+  -- org.nvim's own per-level colours, so a note reads the same in both.
+  for level = 1, 8 do
+    vim.api.nvim_set_hl(0, 'OrgHeadlineLevel' .. level, { link = 'PureOrgH' .. math.min(level, 6) })
+  end
+  -- The label and the covered end line of a block sit over the shaded line: they take its background, or the
+  -- shade had a hole as wide as the text (seen in Kitsu).
+  local label = vim.api.nvim_get_hl(0, { name = 'PureMdCodeLabel', link = false })
+  local code = vim.api.nvim_get_hl(0, { name = 'PureMdCode', link = false })
+  vim.api.nvim_set_hl(0, 'PureOrgCodeLabel', { fg = label.fg, bg = code.bg, italic = label.italic })
 end
 
 local function lineText(buf, row)
@@ -601,7 +627,7 @@ local function block(buf, b, mark)
       local label = row == b.first and (' ' .. (b.lang ~= '' and b.lang or b.name)) or ''
       local cover = vim.fn.strdisplaywidth(text) - indent
       mark(row, indent, {
-        virt_text = { { label .. string.rep(' ', math.max(cover - vim.fn.strdisplaywidth(label), 0)), 'PureMdCodeLabel' } },
+        virt_text = { { label .. string.rep(' ', math.max(cover - vim.fn.strdisplaywidth(label), 0)), 'PureOrgCodeLabel' } },
         virt_text_pos = 'overlay',
       })
     end
@@ -680,16 +706,24 @@ local function cursorLink()
 end
 
 --- [[target][text]] shows text; [[target]] shows target. The link under the cursor stays raw.
+--- The text stays the buffer's own text, only the brackets and the target are concealed: an inline virtual text instead
+--- is counted by Neovim on top of the raw width, so a line that fits needed one row more and showed a blank one under it.
 local function links(buf, row, text, from, raw_col, mark)
   for start, inner, stop in text:gmatch('()%[%[(.-)%]%]()') do
     if start >= from then
       local key = start .. ':' .. stop
       if inner ~= '' and key ~= raw_col then
         local target, desc = inner:match('^(.-)%]%[(.*)$')
-        local shown = desc or inner
-        local hl = 'PureMdLink'
-        if not desc and inner:match('^id:') then shown = embed_icon .. ' ' .. inner:sub(4); hl = 'PureMdLink' end
-        mark(row, start - 1, { end_col = stop - 1, conceal = '', virt_text = { { shown, hl } }, virt_text_pos = 'inline' })
+        local first = start + 1 -- 0-based column after '[['
+        if desc then
+          local shown = first + #target + 2 -- after '][', where the text starts
+          mark(row, start - 1, { end_col = shown, conceal = '' })
+          mark(row, shown, { end_col = stop - 3, hl_group = 'PureMdLink' })
+        else
+          mark(row, start - 1, { end_col = first, conceal = '' })
+          mark(row, first, { end_col = stop - 3, hl_group = 'PureMdLink' })
+        end
+        mark(row, stop - 3, { end_col = stop - 1, conceal = '' })
       end
     end
   end
@@ -733,6 +767,40 @@ local function emphasis(row, text, from, covered, mark)
       end
     end
   end
+end
+
+--- Links and emphasis marks of one line. Neovim sizes a wrapped line by its raw width, concealed text included, so hiding
+--- text that makes the line need fewer rows than Neovim reserves leaves blank rows under it (seen in Kitsu on
+--- "- Part of: [[id:...][Title]]" in a narrow window). Then the line is left as it is, unless
+--- vim.g.pure_org_conceal_wrapped = true asks for the hiding anyway.
+local function inline(buf, row, text, from, own_link, emph, mark)
+  local pending, saved = {}, 0
+  local function collect(row_, col, opts)
+    pending[#pending + 1] = { row_, col, opts }
+    if opts.conceal then
+      saved = saved + vim.fn.strdisplaywidth(text:sub(col + 1, opts.end_col))
+    end
+  end
+  links(buf, row, text, from, own_link, collect)
+  if emph then emphasis(row, text, from, {}, collect) end
+  if #pending == 0 then return end
+  if vim.g.pure_org_conceal_wrapped ~= true then
+    local width = vim.api.nvim_win_get_width(0) - vim.fn.getwininfo(vim.api.nvim_get_current_win())[1].textoff
+    local raw = vim.fn.strdisplaywidth(text)
+    if width > 0 and math.ceil(raw / width) > math.ceil(math.max(raw - saved, 1) / width) then return end
+  end
+  for _, m in ipairs(pending) do mark(m[1], m[2], m[3]) end
+end
+
+--- The text of a headline as the big drawing shows it: [[t][d]] is d, and the marks around emphasis are gone.
+plainText = function(text)
+  text = text:gsub('%[%[[^%]]*%]%[([^%]]*)%]%]', '%1')
+  text = text:gsub('%[%[([^%]]*)%]%]', '%1')
+  local cuts = {}
+  emphasis(0, text, 1, {}, function(_, col) cuts[#cuts + 1] = col end)
+  table.sort(cuts, function(a, b) return a > b end)
+  for _, col in ipairs(cuts) do text = text:sub(1, col) .. text:sub(col + 2) end
+  return text
 end
 
 -- ---- drawers and the title --------------------------------------------------------
@@ -868,17 +936,11 @@ function M.refresh(force)
         mark(row, #prefix, { end_col = #text, hl_group = 'PureOrgH1' })
       end
       if r.kind == 'headline' or r.kind == 'item' or r.kind == 'title' or r.kind == 'table' then
-        local covered = {}
-        local own = row == cursor_row and raw_link or ''
-        links(buf, row, text, from, own, mark)
-        if emph then emphasis(row, text, from, covered, mark) end
+        inline(buf, row, text, from, row == cursor_row and raw_link or '', emph, mark)
       end
     elseif row ~= raw_row and not r and text:match('%S') then
       -- Plain text: links and emphasis too.
-      local covered = {}
-      local own = row == cursor_row and raw_link or ''
-      links(buf, row, text, 1, own, mark)
-      if emph then emphasis(row, text, 1, covered, mark) end
+      inline(buf, row, text, 1, row == cursor_row and raw_link or '', emph, mark)
     end
   end
 
