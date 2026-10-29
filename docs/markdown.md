@@ -71,7 +71,7 @@ flash back to their raw marks for one key while typing.
 | `<leader>dg` / `<leader>dw` | mark word good / wrong |
 | `<leader>dp` / `<leader>dn` | previous / next misspelled word |
 
-## Bigger headings (`mdheadings.lua`)
+## Bigger headings (`render-md.lua`)
 
 `#` and `##` are drawn bigger when the terminal can do it; anywhere else nothing changes and `mdview` draws the headings as above.
 
