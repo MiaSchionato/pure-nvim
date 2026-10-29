@@ -202,7 +202,7 @@ See [manim.md](manim.md).
 
 | Key | Mode | What |
 |---|---|---|
-| `<leader>vf` | n | Find a node (file, headline with an `:ID:`, alias); a new title makes a note |
+| `<leader>vf` | n | Find a note, a heading or an alias in one coloured picker (as Doom's `SPC v f`); a title that matches nothing makes a seed |
 | `<leader>vF` | n | Find a file of the vault |
 | `<leader>vg` | n | Grep the vault |
 | `<leader>vn` | n | New seed (inbox) |
