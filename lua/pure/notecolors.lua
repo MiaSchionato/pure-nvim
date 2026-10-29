@@ -39,6 +39,11 @@ local task_links = {
   Cancelled = 'NonText',
 }
 
+-- The Flora finder (pure/flora.lua): a note, an alias, the separators and the path on the right. Ethereal: the colours of
+-- Doom's vault-open.el (my/vf-note, my/vf-alias, my/vf-sep).
+local finder_links = { PureNoteFile = 'Directory', PureNoteAlias = 'Special', PureNoteSep = 'Comment' }
+local ethereal_finder = { PureNoteFile = '#4f8a96', PureNoteAlias = '#c89dc1', PureNoteSep = '#6d7db6' }
+
 M.task_states = { 'Todo', 'Done', 'Progress', 'Important', 'Deferred', 'Cancelled' }
 
 local function isEthereal()
@@ -58,6 +63,14 @@ function M.apply()
       vim.api.nvim_set_hl(0, name, { fg = colours[level] or colours[#colours], bold = true })
     elseif next(vim.api.nvim_get_hl(0, { name = name, link = false })) == nil then
       vim.api.nvim_set_hl(0, name, { link = heading_links[level] })
+    end
+  end
+
+  for name, link in pairs(finder_links) do
+    if isEthereal() then
+      vim.api.nvim_set_hl(0, name, { fg = ethereal_finder[name] })
+    else
+      vim.api.nvim_set_hl(0, name, { link = link })
     end
   end
 

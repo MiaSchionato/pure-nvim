@@ -67,7 +67,208 @@ end
 -- -----------------------------------------------------------------------------
 --  Finding, making
 -- -----------------------------------------------------------------------------
-M.find = org('roam_node_find')
+-- -----------------------------------------------------------------------------
+--  Find (<leader>vf): notes, headings and aliases in one picker
+-- -----------------------------------------------------------------------------
+--  A port of Doom's `SPC v f` (C:\doom\config\vault-open.el), with its colours:
+--    a note reads     Note name                      (a file, or its #+title)
+--    a heading reads  Note name › Heading            (the note dimmer, the heading in the colour of its level)
+--    an alias reads   Alias → Note name › Heading    (the alias in its own colour, italic)
+--  and on the right, dim, the path from the root of the vault and how long ago the note was written.
+--  Order: the notes written last first, `archive/` always last; for each note the note, its aliases, then its headings.
+--  Enter opens the note (at the heading); a title that matches nothing makes a seed in the inbox.
+--  The colours are pure/notecolors.lua's (PureNoteFile, PureNoteAlias, PureNoteSep, the heading colours).
+
+local FIND_MAX_LEVEL = 4
+local ESC = string.char(27)
+
+local parsed = {} -- file -> { mtime, title, aliases, headings = { { level, text, lnum, aliases } } }
+
+local function parseFile(path)
+  local stat = vim.uv.fs_stat(path)
+  local hit = parsed[path]
+  if hit and stat and hit.mtime == stat.mtime.sec then return hit end
+  local ok, lines = pcall(vim.fn.readfile, path)
+  local info = { mtime = stat and stat.mtime.sec or 0, title = nil, aliases = {}, headings = {} }
+  if not ok then return info end
+  local current, block
+  local db = roamDb()
+  for i, line in ipairs(lines) do
+    local name = line:match('^%s*#%+[Bb][Ee][Gg][Ii][Nn]_(%w+)')
+    if block then
+      local ending = line:match('^%s*#%+[Ee][Nn][Dd]_(%w+)')
+      if ending and ending:lower() == block then block = nil end
+    elseif name then
+      block = name:lower()
+    else
+      local title = line:match('^#%+[Tt][Ii][Tt][Ll][Ee]:%s*(.-)%s*$')
+      local stars, rest = line:match('^(%*+)%s+(.*)$')
+      local aliases = line:match('^%s*:ROAM_ALIASES:%s+(.-)%s*$')
+      if title and not info.title and title ~= '' then
+        info.title = title
+      elseif stars then
+        current = nil
+        local text = rest:gsub('^%u%u+%s+', ''):gsub('^%[#%u%]%s+', ''):gsub('%s+:[%w_@#%%:]+:%s*$', '')
+        text = vim.trim(text)
+        if #stars <= FIND_MAX_LEVEL and text ~= '' then
+          current = { level = #stars, text = text, lnum = i, aliases = {} }
+          info.headings[#info.headings + 1] = current
+        end
+      elseif aliases then
+        local names = db and db.split_quoted(aliases) or vim.split(aliases, '%s+', { trimempty = true })
+        local into = current and current.aliases or info.aliases
+        for _, a in ipairs(names) do into[#into + 1] = a end
+      end
+    end
+  end
+  parsed[path] = info
+  return info
+end
+
+--- The .org files of the vault as { path, rel }, leaving out the editor's backup files and files/.
+local function vaultFiles(root)
+  local out = {}
+  for _, path in ipairs(vim.fn.globpath(root, '**/*.org', false, true)) do
+    path = vim.fs.normalize(path)
+    local rel = path:sub(#root + 2)
+    if not (rel:match('^files/') or rel:match('/[.#]') or rel:match('^[.#]')) then
+      out[#out + 1] = { path = path, rel = rel }
+    end
+  end
+  return out
+end
+
+--- Every entry of the vault in the default order.
+local function findEntries(root)
+  local groups = {}
+  for _, f in ipairs(vaultFiles(root)) do
+    local info = parseFile(f.path)
+    local archive = f.rel:match('^archive/') ~= nil
+    local note = info.title or vim.fn.fnamemodify(f.rel, ':t:r')
+    local base = { file = f.path, path = f.rel, mtime = info.mtime, archive = archive, note = note }
+    local list = { vim.tbl_extend('force', base, { kind = 'note', title = note, lnum = 1 }) }
+    for _, a in ipairs(info.aliases) do
+      list[#list + 1] = vim.tbl_extend('force', base, { kind = 'alias', title = a, target = note, lnum = 1 })
+    end
+    for _, h in ipairs(info.headings) do
+      list[#list + 1] = vim.tbl_extend('force', base, { kind = 'heading', title = h.text, level = h.level, lnum = h.lnum })
+      for _, a in ipairs(h.aliases) do
+        list[#list + 1] = vim.tbl_extend('force', base,
+          { kind = 'alias', title = a, target = h.text, level = h.level, lnum = h.lnum, heading = true })
+      end
+    end
+    groups[#groups + 1] = { archive = archive, mtime = info.mtime, list = list }
+  end
+  table.sort(groups, function(a, b)
+    if a.archive ~= b.archive then return not a.archive end
+    return a.mtime > b.mtime
+  end)
+  local out = {}
+  for _, g in ipairs(groups) do vim.list_extend(out, g.list) end
+  return out
+end
+
+local function trunc(text, width)
+  if vim.fn.strdisplaywidth(text) <= width then return text end
+  while vim.fn.strdisplaywidth(text) > width - 1 and #text > 0 do
+    text = vim.fn.strcharpart(text, 0, vim.fn.strchars(text) - 1)
+  end
+  return text .. '…'
+end
+
+local function truncLeft(text, width)
+  if vim.fn.strdisplaywidth(text) <= width then return text end
+  while vim.fn.strdisplaywidth(text) > width - 1 and #text > 0 do
+    text = vim.fn.strcharpart(text, 1)
+  end
+  return '…' .. text
+end
+
+--- Dired's way of saying how long ago: now, 37m ago, 1h 37m ago, 1d 17h ago, 23d ago.
+local function age(mtime)
+  local secs = math.max(0, os.time() - mtime)
+  local d, h, m = math.floor(secs / 86400), math.floor(secs % 86400 / 3600), math.floor(secs % 3600 / 60)
+  if secs < 60 then return 'now' end
+  if secs < 3600 then return m .. 'm ago' end
+  if secs < 86400 then return h .. 'h ' .. m .. 'm ago' end
+  if d < 10 then return d .. 'd ' .. h .. 'h ago' end
+  return d .. 'd ago'
+end
+
+--- `text` in the foreground of highlight group `group` (ANSI truecolor); `extra` adds attributes ("3;" italic).
+local function paint(group, text, extra)
+  local n = vim.api.nvim_get_hl(0, { name = group, link = false }).fg
+  if not n then return text end
+  return string.format('%s[%s38;2;%d;%d;%dm%s%s[0m', ESC, extra or '', math.floor(n / 65536), math.floor(n / 256) % 256, n % 256, text, ESC)
+end
+
+local function levelGroup(level)
+  return '@markup.heading.' .. math.min(level or 1, 6) .. '.markdown'
+end
+
+--- One line of the list: the coloured text, then (after tabs) the file and the line, which fzf does not show.
+local function findLine(e)
+  local noteGroup = e.archive and 'PureNoteSep' or 'PureNoteFile'
+  local sep = paint('PureNoteSep', ' › ')
+  local arrow = paint('PureNoteSep', '  → ')
+  local visible
+  if e.kind == 'note' then
+    visible = paint(noteGroup, trunc(e.title, 60))
+  elseif e.kind == 'heading' then
+    visible = paint(noteGroup, trunc(e.note, 26)) .. sep .. paint(levelGroup(e.level), trunc(e.title, 44))
+  elseif e.heading then
+    visible = paint('PureNoteAlias', trunc(e.title, 30), '3;') .. arrow
+      .. paint(noteGroup, trunc(e.note, 22)) .. sep .. paint(levelGroup(e.level), trunc(e.target, 40))
+  else
+    visible = paint('PureNoteAlias', trunc(e.title, 30), '3;') .. arrow .. paint(noteGroup, trunc(e.target, 40))
+  end
+  local width = vim.fn.strdisplaywidth((visible:gsub(ESC .. '%[[%d;]*m', '')))
+  local meta = string.format('%s  %11s', truncLeft(e.path, 36), age(e.mtime))
+  return table.concat({ visible .. string.rep(' ', math.max(70 - width, 2)) .. paint('PureNoteSep', meta), e.file, e.lnum }, '\t')
+end
+
+--- A new seed in the inbox, then open it.
+local function newSeed(title)
+  local root = M.path()
+  if not root then return end
+  local inbox = root .. '/inbox.org'
+  local lines = vim.fn.filereadable(inbox) == 1 and vim.fn.readfile(inbox) or {}
+  if #lines > 0 and lines[#lines] ~= '' then lines[#lines + 1] = '' end
+  local first = #lines + 1
+  vim.list_extend(lines, { '* SEED ' .. title, ':PROPERTIES:', ':CREATED:  [' .. os.date('%Y-%m-%d %a %H:%M') .. ']', ':END:' })
+  vim.fn.writefile(lines, inbox)
+  vim.cmd('edit ' .. vim.fn.fnameescape(inbox))
+  vim.cmd('silent! checktime')
+  pcall(vim.api.nvim_win_set_cursor, 0, { first, 0 })
+end
+
+function M.find()
+  local root = M.path()
+  if not root then return end
+  require('pure.notecolors').apply()
+  local lines = {}
+  for _, e in ipairs(findEntries(root)) do lines[#lines + 1] = findLine(e) end
+  require('pure.fuzzyUtils').pickList(lines, {
+    title = ' Flora ',
+    ratio = 0.8,
+    -- Enter on a title that matches nothing returns the query itself (no tab in it): a new seed.
+    fzf = "--ansi --delimiter '\\t' --with-nth 1 --tiebreak=index --bind enter:accept-or-print-query",
+  }, function(selection)
+    local file, lnum = selection:match('\t([^\t]+)\t(%d+)%s*$')
+    if not file then
+      local title = vim.trim(selection)
+      if title ~= '' then newSeed(title) end
+      return
+    end
+    vim.cmd('edit ' .. vim.fn.fnameescape(file))
+    pcall(vim.api.nvim_win_set_cursor, 0, { tonumber(lnum), 0 })
+    vim.cmd('normal! zvzz')
+  end)
+end
+
+-- Exposed for tests.
+M._find = { entries = findEntries, line = findLine, newSeed = newSeed }
+
 M.newNote = org('roam_capture')
 M.insertLink = org('roam_node_insert')
 M.backlinks = org('roam_buffer_toggle')

@@ -95,3 +95,19 @@ save and commit (`s`), preview and quick edit the linked note (`p`, `q`, in org
 notes). The list is in [keymaps.md](keymaps.md). Links are by `:ID:`, so renaming
 or moving a note breaks none. The Atlas functions are left in
 `pure/zettelkasten.lua` and `pure/notes.lua` as commands, without keys.
+
+## Find (`<leader>vf`)
+
+One picker for the whole vault, a port of Doom's `SPC v f` (`vault-open.el`), in
+`lua/pure/flora.lua` (fzf, coloured). A note (a file, named by its `#+title`) reads
+`Note name`; a heading (down to level 4) reads `Note name › Heading`, the heading in the
+colour of its level; an alias (`:ROAM_ALIASES:`, of a note or a heading) reads
+`Alias → Note name › Heading`, in italics. On the right, dim: the path and how long ago the
+note was written. The newest notes come first and `archive/` last; any part of the name,
+the path or an alias matches, words in any order. Enter opens the note at the heading; a
+title that matches nothing makes a seed in `inbox.org`.
+
+The colours (`pure/notecolors.lua`) follow the colorscheme; in Ethereal they are Doom's
+exactly: note `#4f8a96`, alias `#c89dc1`, separators and path `#6d7db6`, headings the
+level colours. It lists every note and heading, not only the ones with an `:ID:`
+(org-roam's `roam_node_find` is still `<leader>omf`).
