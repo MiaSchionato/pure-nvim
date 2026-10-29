@@ -164,9 +164,10 @@ local function run(dir)
 end
 
 --- Save, commit, pull and push the vault, in that order.
-function M.sync()
+function M.sync(dir)
   if running then return notify('a sync is already running') end
-  local dir = require('pure.zettelkasten').vaultPath()
+  -- The user command passes a table of arguments; Flora passes its folder.
+  if type(dir) ~= 'string' then dir = require('pure.zettelkasten').vaultPath() end
   if not dir then
     return notify('no vault set, see :ZettelVault', vim.log.levels.WARN)
   end
