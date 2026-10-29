@@ -28,6 +28,7 @@ local fallback = {
   IconsPurple    = { fg = '#ae81ff' },
   IconsOrange    = { fg = '#f78c6c' },
   IconsYellow    = { fg = '#e3d18a' },
+  IconsGreen     = { fg = '#21c7a8' }, -- the org icon
 }
 local function setFallbackColours()
   for name, spec in pairs(fallback) do

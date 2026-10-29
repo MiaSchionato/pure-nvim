@@ -283,6 +283,7 @@ end
   dockerfile             = { icon = '󰡨', hl = 'IconsBlue'   },
   yaml                   = { icon = '', hl = 'IconsPurple' },
   markdown               = { icon = '󰍔', hl = 'IconsGrey'   },
+  org                    = { icon = '\u{E633}', hl = 'IconsGreen' }, -- nf-custom-orgmode
 
   -- Shell
   bash                   = { icon = '', hl = 'IconsGrey'   },
