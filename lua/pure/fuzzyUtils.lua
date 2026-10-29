@@ -159,8 +159,26 @@ end
 -- fzf honours the last occurrence of a flag.
 appendFzfOpts("--height=100% --border=none")
 
+-- fzf paints its own background. A FZF_DEFAULT_OPTS exported by a shell profile
+-- (this one: Tokyo Night's --color=bg:#1a1b26,fg:#c0caf5...) fixed it to one
+-- colour, so the picker did not match the editor in any other theme. The
+-- background, the selected line and the text now come from the current
+-- colorscheme at every launch (Normal, CursorLine, Normal), appended last so
+-- they win. A theme with a transparent Normal gives -1: the terminal's own.
+local fzfBase = vim.env.FZF_DEFAULT_OPTS or ""
+local function themeFzfColors()
+  local function hl(group, field) return vim.api.nvim_get_hl(0, { name = group, link = false })[field] end
+  local function hex(n, default) return n and string.format("#%06x", n) or default end
+  local bg = hex(hl("Normal", "bg"), "-1")
+  local fg = hex(hl("Normal", "fg"), "-1")
+  local selected = hex(hl("CursorLine", "bg") or hl("Visual", "bg"), bg)
+  vim.env.FZF_DEFAULT_OPTS = fzfBase .. " --color=bg:" .. bg .. ",bg+:" .. selected .. ",fg:" .. fg .. ",fg+:" .. fg
+end
+M.themeFzfColors = themeFzfColors
+
 ---@param opts table The options for fuzzy logic.
 function M.fuzzyLogic(opts)
+  themeFzfColors()
   local win,buf = func.createWindow(opts.title, opts.ratio)
   local temp = vim.fn.stdpath("cache") .. "/opts_run"
   vim.api.nvim_set_option_value('bufhidden', 'wipe', {buf = buf})

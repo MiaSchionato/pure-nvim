@@ -110,19 +110,12 @@ local function setHighlights()
   set('PureMdFootnote', { link = 'Special' })
   set('PureMdLink', { link = '@markup.link.label' })
 
-  -- Checkbox icons: fixed colours, the same in every colorscheme, so a state
-  -- always reads the same at a glance. Not `default` and re-applied on
-  -- ColorScheme: a theme switch must not restyle them.
-  local task_colours = {
-    PureMdTaskTodo      = '#8b949e', -- [ ] grey
-    PureMdTaskDone      = '#3fb950', -- [x] green
-    PureMdTaskProgress  = '#58a6ff', -- [~] blue
-    PureMdTaskImportant = '#f85149', -- [!] red
-    PureMdTaskDeferred  = '#a371f7', -- [>] purple
-    PureMdTaskCancelled = '#6e7681', -- [-] dark grey
-  }
-  for name, fg in pairs(task_colours) do
-    vim.api.nvim_set_hl(0, name, { fg = fg })
+  -- Checkbox icons: the colours of pure/notecolors.lua, which follow the
+  -- colorscheme (fixed values only in Ethereal). Not `default` and re-applied
+  -- on ColorScheme, as the groups below link to the ones it defines.
+  require('pure.notecolors').apply()
+  for _, state in ipairs(require('pure.notecolors').task_states) do
+    vim.api.nvim_set_hl(0, 'PureMdTask' .. state, { link = 'PureNoteTask' .. state })
   end
 end
 

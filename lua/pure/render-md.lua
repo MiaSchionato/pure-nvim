@@ -2,24 +2,11 @@ local M = {}
 
 local mdGroup = vim.api.nvim_create_augroup("PureMarkdown", { clear = true})
 
--- The colour of each heading level, H1 to H6: the same list as the Emacs look (my/heading-colours in ethereal-look.el):
--- blue, purple, pink, cyan, green, orange. vim.g.pure_md_heading_colors replaces the list; false keeps the colorscheme's own
--- groups (Title, Directory, Type, Special for H1 to H4).
-local ethereal_headings = { "#7d82d9", "#c89dc1", "#faaaa9", "#a3bfd1", "#92a593", "#F99957" }
-
+-- The colour of each heading level, H1 to H6: the colorscheme's own (pure/notecolors.lua), except in Ethereal, where it is
+-- the list of the Emacs look (my/heading-colours in ethereal-look.el). vim.g.pure_md_heading_colors replaces the list
+-- in any theme.
 local function headingColours()
-  local colours = vim.g.pure_md_heading_colors
-  if colours == nil then colours = ethereal_headings end
-  if colours then
-    for level = 1, 6 do
-      vim.api.nvim_set_hl(0, "@markup.heading." .. level .. ".markdown", { fg = colours[level] or colours[#colours], bold = true })
-    end
-  else
-    vim.api.nvim_set_hl(0, "@markup.heading.1.markdown", { link = "Title" })
-    vim.api.nvim_set_hl(0, "@markup.heading.2.markdown", { link = "Directory" })
-    vim.api.nvim_set_hl(0, "@markup.heading.3.markdown", { link = "Type" })
-    vim.api.nvim_set_hl(0, "@markup.heading.4.markdown", { link = "Special" })
-  end
+  require("pure.notecolors").apply()
 end
 
 -- A colorscheme change clears the groups: put the heading colours back (mdview's bands follow them).
