@@ -49,8 +49,41 @@ which is also org.nvim's roam group). The prefix is still to be decided
 
 org.nvim's own drawing over the text (concealed links, star bullets,
 checkbox icons, indent) is off in `lua/plugins/org.lua`: the rendering is
-`lua/pure/render-org.lua`'s, so it can be toggled with `<leader>om` and follows
-the terminal. Its syntax colours stay.
+`lua/pure/render-org.lua`'s, so it can be toggled and follows the terminal.
+Its syntax colours stay. The file is the org twin of `render-md.lua` (settings,
+view, bigger headlines) and uses the same colours (`pure/notecolors.lua`, which
+follow the colorscheme). The text is never changed; marks are drawn over it.
+
+`<leader>om` turns the drawing on and off, in markdown and in org notes. In an
+org note it also waits for `timeoutlen`, because org.nvim's own roam keys start
+with `<leader>om` (decision pending, see Keys).
+
+| In the note | On screen |
+|---|---|
+| `* Headline` | icon instead of the stars and a coloured band; `*` and `**` bigger where the terminal can (below) |
+| `- item` | bullet per level: • ◦ ▪ ▫ (`vim.g.pure_md_bullets`); `1.` stays |
+| `- [ ]` `- [X]` `- [-]` | checkbox icons; done items dimmed |
+| `#+begin_src lua` … `#+end_src` | shaded block, the language as a label (any `#+begin_xxx`); quote blocks get a bar |
+| `-----` | a full-width line |
+| `\| tables \|` | box-drawing borders |
+| `[[target][text]]`, `[[target]]` | only the text (or the target); the link under the cursor stays raw |
+| `*bold*` `/italic/` `_u_` `=verbatim=` `~code~` `+strike+` | the marks around are hidden (`vim.g.pure_org_emphasis = false` keeps them) |
+| `:PROPERTIES:` and `:LOGBOOK:` drawers | hidden; they come back while the cursor is on them |
+| `#+title: Name` | drawn as a first-level title |
+
+Blocks and drawers are read first, so a `*` or a link inside a src block is plain text.
+
+### Bigger headlines
+
+Where the terminal can: kitty draws `*` (3x) and `**` (2x) with OSC 66, WezTerm with the
+double-height lines (DECDHL, only when the window spans the terminal's width), the others
+draw the icon and band. Same checks as the markdown headings: `vim.g.pure_org_headings`
+(or `vim.g.pure_md_headings` when nil): `auto`, `osc66`, `decdhl`, `off`;
+`:PureOrgHeadings [auto|osc66|decdhl|off]` changes it while Neovim runs. In WSL set it to
+`decdhl` for WezTerm, as for markdown. The terminal code is a copy of `render-md.lua`'s.
+
+Not tested with a real terminal: the escape sequences were not drawn on a screen here,
+only the marks, the reserved lines and the choice of mode.
 
 ## Flora keys (`<leader>v`, `lua/pure/flora.lua`)
 
