@@ -501,7 +501,11 @@ map('n', '<leader>op', func.toggleCopilot, func.getOpts(opts, "Toggle Copilot"))
 map('n', '<leader>oh', func.toggleWordHighlight, func.getOpts(opts, "Toggle word highlight"))
 map('n', '<leader>h', func.toggleWordHighlight, func.getOpts(opts, "Toggle word highlight (short form)"))
 map({ 'n', 'v' }, '<leader>or', func.toggleRelativenumber, func.getOpts(opts, "Toggle relativenumber"))
-map('n', '<leader>om', function() require('pure.mdview').toggle() end, func.getOpts(opts, "Toggle markdown rendering"))
+-- One toggle for the notes: markdown (pure/render-md.lua) or org (pure/render-org.lua), by the buffer.
+map('n', '<leader>om', function()
+  local module = vim.bo.filetype == 'org' and 'pure.render-org' or 'pure.render-md'
+  require(module).toggle()
+end, func.getOpts(opts, "Toggle note rendering (markdown, org)"))
 map({ 'n', 'v' }, '<leader>on', function()
   func.toggleNumber()
   func.toggleRelativenumber()
