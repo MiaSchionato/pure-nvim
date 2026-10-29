@@ -20,6 +20,7 @@ When a module changes, update its page here in the same commit.
 | [notes.md](notes.md) | Links between notes: follow, complete `[[`, rename without breaking links, backlinks |
 | [linkview.md](linkview.md) | Preview and quick edit of the note a link points to, in a floating window |
 | [zettelkasten.md](zettelkasten.md) | Obsidian vault, note templates, daily / weekly / monthly notes |
+| [org.md](org.md) | org.nvim on the Flora vault: agenda, keywords, capture templates, org-roam |
 | [markdown.md](markdown.md) | How markdown is drawn: headings, tasks, tables, wikilinks, frontmatter, footnotes |
 | [keyhint.md](keyhint.md) | The window that lists the keys after `<leader>` |
 | [fuzzy.md](fuzzy.md) | The fzf pickers: files, grep, buffers, help, explorer, `vim.ui.select` |
