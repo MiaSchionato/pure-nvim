@@ -15,6 +15,8 @@ local servers = {
   --                started a second, redundant Copilot client.
   'csharp_ls',
   'scls',
+  'pyright', -- Python (npm install -g pyright)
+  'bashls', -- bash and sh (npm install -g bash-language-server)
 }
 
 local isWindows = vim.fn.has('win32') == 1
