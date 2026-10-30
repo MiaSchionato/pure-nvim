@@ -210,3 +210,12 @@ The colours (`pure/notecolors.lua`) follow the colorscheme; in Ethereal they are
 exactly: note `#4f8a96`, alias `#c89dc1`, separators and path `#6d7db6`, headings the
 level colours. It lists every note and heading, not only the ones with an `:ID:`
 (org-roam's `roam_node_find` is still `<leader>mmf`).
+
+## `lua/lsp/orgls.lua` (merged copy, not loaded yet)
+
+The vault reading of `pure/flora.lua` (path, `parseFile`, `findEntries`) and all of `pure/links.lua`
+(search, ids and aliases, the `[[` menu, resolving a link, reconcile and its diagnostics, `omnifunc`, attach)
+in one file, the code as it was, as the base of the org language server. The picker (`flora.find`,
+`links.pick`) and the other Flora commands stay where they are. `pure/links.lua` and `pure/flora.lua` are
+untouched and remain the ones in use; nothing requires `lsp.orgls` yet, and the two must not be loaded
+together (same buffer variable, autocmd groups and namespaces). Plan: Flora note `projects/setup/Org LSP.org`.
