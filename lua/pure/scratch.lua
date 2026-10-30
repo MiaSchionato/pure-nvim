@@ -14,6 +14,10 @@
 --    new tab             opens on it (:tabnew, <leader>wn)
 --    :Scratch            open it         :Scratch clear   empty it
 --
+--  Where it stands: the note lives in the data folder, so each window that shows it remembers the folder it
+--  was opened from (w:pure_dir; scratch.dir(levels) gives it to the pickers) and makes it the buffer's
+--  working folder with :bcd, so :terminal, :grep and :! run there.
+--
 --  Settings (configs.lua):
 --    vim.g.pure_scratch_filetype  'org' (default): the notes of Flora; any filetype works
 --    vim.g.pure_scratch_file      the path (default stdpath('data')/scratch.<ext>)
@@ -51,10 +55,21 @@ function M.buf()
   if buf ~= -1 and vim.api.nvim_buf_is_loaded(buf) then return buf end
 end
 
+--- Make the folder this window remembers the buffer's working folder (:bcd, Neovim 0.13+), so that
+--- :terminal, :grep, :make and :! run there, as the pickers already start from it. The note is one
+--- buffer in every window, so the folder follows the window that is entered.
+local function workspace()
+  local dir = vim.w.pure_dir
+  if vim.b.pure_scratch and dir and dir ~= '' and vim.fn.exists(':bcd') == 2 and vim.fn.isdirectory(dir) == 1 then
+    pcall(vim.cmd, 'bcd ' .. vim.fn.fnameescape(dir))
+  end
+end
+
 local function attach(buf)
   if vim.b[buf].pure_scratch then return end
   vim.b[buf].pure_scratch = true
   local group = vim.api.nvim_create_augroup('PureScratch' .. buf, { clear = true })
+  vim.api.nvim_create_autocmd({ 'BufEnter', 'WinEnter' }, { group = group, buffer = buf, callback = workspace })
   vim.api.nvim_create_autocmd({ 'TextChanged', 'InsertLeave', 'BufLeave', 'FocusLost' }, {
     group = group,
     buffer = buf,
@@ -133,6 +148,7 @@ function M.open(win)
     vim.api.nvim_buf_call(buf, function() vim.cmd('silent! noautocmd write') end)
   end
   attach(buf)
+  vim.api.nvim_win_call(win, workspace)
   return buf
 end
 

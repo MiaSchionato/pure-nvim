@@ -71,6 +71,13 @@ Neovims deletes the file for both). `vim.g.pure_scratch_keep = true` keeps the n
 `vim.g.pure_scratch_file` (the path), `vim.g.pure_scratch_message` (the first line of an empty
 note), `vim.g.pure_newtab` (`'scratch'` default, `'dashboard'`, `'empty'`).
 
+**Where the note stands.** It lives in the data folder, so each window that shows it remembers the
+folder it was opened from (the file the window showed before, or the previous tab's file for a new
+tab, or the working folder). The pickers that start from the current file's folder start from that
+one (`require('pure.scratch').dir(levels)`), and it is also the buffer's working folder, set with
+`:bcd` (Neovim 0.13+), so `:terminal`, `:grep`, `:make` and `:!` run there too. The folder follows
+the window you enter, and it does not leak: another buffer keeps the global working folder.
+
 ## Tabline (`configs/functions.lua`, `MyTabline`)
 
 Shown only with two or more tabs. Tabs: `<leader>wn` new (on the scratch note), `wh` / `wl`
