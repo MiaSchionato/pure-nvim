@@ -268,6 +268,15 @@ local defaultHighlights = {
   end
 end
 
+-- The icon that stands for a file with no icon of its own (an org note, a text file...): the logo of the
+-- system Neovim runs on. Windows, the apple on macOS, the penguin on Linux (WSL included).
+-- Nerd Font Material Design glyphs, by code point.
+local function systemIcon()
+  if vim.fn.has('win32') == 1 then return vim.fn.nr2char(0xF05B3) end -- nf-md-microsoft_windows
+  if vim.fn.has('mac') == 1 or vim.fn.has('macunix') == 1 then return vim.fn.nr2char(0xF0035) end -- nf-md-apple
+  return vim.fn.nr2char(0xF033D) -- nf-md-linux
+end
+
 -- =============================================================================
  M.icons_group = {
   -- Languages
@@ -293,7 +302,7 @@ end
   terminal                   = { icon = " ", hl = 'IconsGrey'   },
 
   -- Default icon
- default_icon        = { icon = '󰀵', hl = 'IconsBlue'},
+ default_icon        = { icon = systemIcon(), hl = 'IconsBlue'},
  -- default_icon = { icon = "󰈚", hl = "StatusLine" },
 }
 
