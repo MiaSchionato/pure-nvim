@@ -75,7 +75,7 @@ end
 --    a heading reads  Note name › Heading            (the note dimmer, the heading in the colour of its level)
 --    an alias reads   Alias → Note name › Heading    (the alias in its own colour, italic)
 --  and on the right, dim, the path from the root of the vault and how long ago the note was written.
---  Order: the notes written last first, `archive/` always last; for each note the note, its aliases, then its headings.
+--  Order: every note (and its aliases) first, the notes written last first, then the headings (and their aliases) in the same order, `archive/` always last: the name of a note weighs more than a word inside it.
 --  Enter opens the note (at the heading); a title that matches nothing makes a seed in the inbox.
 --  The colours are pure/notecolors.lua's (PureNoteFile, PureNoteAlias, PureNoteSep, the heading colours).
 
@@ -146,25 +146,38 @@ local function findEntries(root)
     local archive = f.rel:match('^archive/') ~= nil
     local note = info.title or vim.fn.fnamemodify(f.rel, ':t:r')
     local base = { file = f.path, path = f.rel, mtime = info.mtime, archive = archive, note = note }
-    local list = { vim.tbl_extend('force', base, { kind = 'note', title = note, lnum = 1 }) }
+    -- What is in the name of the note (the note and its aliases) apart from what is inside it (headings).
+    local top = { vim.tbl_extend('force', base, { kind = 'note', title = note, lnum = 1 }) }
     for _, a in ipairs(info.aliases) do
-      list[#list + 1] = vim.tbl_extend('force', base, { kind = 'alias', title = a, target = note, lnum = 1 })
+      top[#top + 1] = vim.tbl_extend('force', base, { kind = 'alias', title = a, target = note, lnum = 1 })
     end
+    local inside = {}
     for _, h in ipairs(info.headings) do
-      list[#list + 1] = vim.tbl_extend('force', base, { kind = 'heading', title = h.text, level = h.level, lnum = h.lnum })
+      inside[#inside + 1] = vim.tbl_extend('force', base, { kind = 'heading', title = h.text, level = h.level, lnum = h.lnum })
       for _, a in ipairs(h.aliases) do
-        list[#list + 1] = vim.tbl_extend('force', base,
+        inside[#inside + 1] = vim.tbl_extend('force', base,
           { kind = 'alias', title = a, target = h.text, level = h.level, lnum = h.lnum, heading = true })
       end
     end
-    groups[#groups + 1] = { archive = archive, mtime = info.mtime, list = list }
+    groups[#groups + 1] = { archive = archive, mtime = info.mtime, top = top, inside = inside }
   end
   table.sort(groups, function(a, b)
     if a.archive ~= b.archive then return not a.archive end
     return a.mtime > b.mtime
   end)
+  -- The name of a note weighs more than a word inside it: every note (and alias of a note) comes before any
+  -- heading, so on equal matches (fzf keeps the order of the list) a note is above the headings of its own or of
+  -- another note whose line also holds the typed name; the notes written last first in each part, `archive/`
+  -- last of all (its notes, then its headings).
   local out = {}
-  for _, g in ipairs(groups) do vim.list_extend(out, g.list) end
+  for _, archive in ipairs({ false, true }) do
+    for _, g in ipairs(groups) do
+      if g.archive == archive then vim.list_extend(out, g.top) end
+    end
+    for _, g in ipairs(groups) do
+      if g.archive == archive then vim.list_extend(out, g.inside) end
+    end
+  end
   return out
 end
 
