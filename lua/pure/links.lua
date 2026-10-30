@@ -508,6 +508,203 @@ local function ensureAliasAtPoint()
   end
 end
 
+-- -----------------------------------------------------------------------------
+--  Links written by hand: the text decides where they go
+-- -----------------------------------------------------------------------------
+--  Writing is the workflow, the menu only tells what exists. So the TEXT of a link is what it is to:
+--    [[Note#Heading||alias]]              typed whole, no id: becomes [[id:ID][Note#Heading||alias]]
+--    [[id:ID][Note#Heading||alias]]       the text edited: the id is changed to the one of that heading
+--  Words are enough (`[[nota li#bud||x]]`) as long as they name ONE note (and ONE heading of it); the text is
+--  then made canonical (`Nota linkada#Budget||x`), the target gets its :ID: now if it had none, and the alias goes
+--  into its :ROAM_ALIASES:. A link whose text names nothing is left alone and flagged as a diagnostic.
+--  When: on :w (every link of the buffer that was not already checked) and when a link is followed (<CR>, gx),
+--  so that it goes where its text says. A link with no || is just text with an id and is never reinterpreted.
+local verified = {} -- buf -> { [text of the link] = true }: already consistent, not looked at again
+local DIAG_NS = api.nvim_create_namespace('pure_links_diag')
+local RECON_NS = api.nvim_create_namespace('pure_links_recon')
+
+--- The one entry of `list` (several entries of a file count once; of a note and its archive copy, the live one), or nil.
+local function unique(list)
+  local byTarget, n, live = {}, 0, {}
+  for _, e in ipairs(list) do
+    local file, lnum = targetOf(e)
+    local k = file .. '\0' .. lnum
+    if not byTarget[k] then
+      byTarget[k] = e
+      n = n + 1
+      if not e.archive then live[#live + 1] = e end
+    end
+  end
+  if n == 1 then return select(2, next(byTarget)) end
+  if #live == 1 then return live[1] end
+  return nil
+end
+
+local function findNote(entries, name)
+  local q = fold(vim.trim(name))
+  if q == '' then return nil end
+  local ws = words(name)
+  local exact, loose = {}, {}
+  for _, e in ipairs(entries) do
+    if e.kind == 'note' or (e.kind == 'alias' and not e.heading) then
+      local t = fold(e.title)
+      if t == q then exact[#exact + 1] = e elseif hasAll(t, ws) then loose[#loose + 1] = e end
+    end
+  end
+  return unique(exact) or unique(loose)
+end
+
+local function findHeading(entries, file, text)
+  local q = fold(vim.trim(text))
+  if q == '' then return nil end
+  local ws = words(text)
+  local exact, loose = {}, {}
+  for _, e in ipairs(entries) do
+    if samePath(e.file, file) and (e.kind == 'heading' or (e.kind == 'alias' and e.heading)) then
+      local t = fold(e.title)
+      if t == q then exact[#exact + 1] = e elseif hasAll(t, ws) then loose[#loose + 1] = e end
+    end
+  end
+  return unique(exact) or unique(loose)
+end
+
+--- Where the text `spec` ("Note", "Note#Heading", "Note*Heading", "Note:Heading") points to:
+--- { file, lnum, text = canonical text } or nil. The whole text is tried as a note first (a title with a colon).
+local function resolveSpec(entries, spec)
+  spec = vim.trim(spec)
+  local function noteTitle(e) return (e.kind == 'alias') and e.target or e.title end
+  local note = findNote(entries, spec)
+  if note then return { file = note.file, lnum = 1, text = noteTitle(note) } end
+  for i = 1, #spec do
+    local c = spec:sub(i, i)
+    if c == '#' or c == '*' or c == ':' then
+      local left, right = vim.trim(spec:sub(1, i - 1)), vim.trim(spec:sub(i + 1))
+      local n = left ~= '' and right ~= '' and findNote(entries, left) or nil
+      local h = n and findHeading(entries, n.file, right) or nil
+      if h then
+        return { file = n.file, lnum = h.lnum, text = noteTitle(n) .. '#' .. (h.kind == 'alias' and h.target or h.title) }
+      end
+    end
+  end
+  return nil
+end
+
+--- The links of a line that are about where they go: { s, e (1-based, inclusive), kind, id, spec, alias, inner }.
+local function scanLinks(line)
+  local out, pos = {}, 1
+  while true do
+    local s, e, inner = line:find('%[%[(.-)%]%]', pos)
+    if not s then break end
+    pos = e + 1
+    local id, desc = inner:match('^id:([^%]]+)%]%[(.*)$')
+    if id then
+      local spec, alias = desc:match('^(.-)||(.*)$')
+      if spec then
+        out[#out + 1] = { s = s, e = e, kind = 'id', id = id, spec = vim.trim(spec), alias = vim.trim(alias), inner = inner }
+      end
+    elseif inner ~= '' and not inner:find('%]%[') and not inner:find('[/\\]') and not inner:match('^[*#.~]') then
+      local scheme = inner:match('^(%a[%w+.-]*):')
+      if not (scheme and SCHEMES[scheme:lower()]) then
+        local spec, alias = inner:match('^(.-)||(.*)$')
+        out[#out + 1] = {
+          s = s, e = e, kind = 'raw', spec = vim.trim(spec or inner), alias = alias and vim.trim(alias) or nil, inner = inner,
+        }
+      end
+    end
+  end
+  return out
+end
+
+--- Make the links of the buffer say where they go. `at`: { row (0-based), col } = only the link there (a follow).
+--- @return integer changed
+local function reconcile(buf, at)
+  if vim.g.pure_links_reconcile == false then return 0 end
+  local okId, ids = pcall(require, 'org.id')
+  if not okId then return 0 end
+  local entries = allEntries()
+  if #entries == 0 then return 0 end
+  verified[buf] = verified[buf] or {}
+  local seen = verified[buf]
+  local lines = api.nvim_buf_get_lines(buf, 0, -1, false)
+  local jobs, diags = {}, {}
+
+  for row0, line in ipairs(lines) do
+    local row = row0 - 1
+    if line:find('[[', 1, true) and (not at or at.row == row) then
+      for _, L in ipairs(scanLinks(line)) do
+        local here = not at or (at.col >= L.s - 1 and at.col < L.e)
+        if here and not seen[L.inner] then
+          local r = resolveSpec(entries, L.spec)
+          if not r then
+            -- Said to be a link (an id, or an alias) but names nothing: tell. A plain [[text]] may be an org link.
+            if at == nil and (L.kind == 'id' or L.alias) then
+              diags[#diags + 1] = {
+                lnum = row, col = L.s - 1, end_lnum = row, end_col = L.e, severity = vim.diagnostic.severity.WARN,
+                source = 'links', message = 'No single note or heading named "' .. L.spec .. '"',
+              }
+            end
+          else
+            local alias = (L.alias and L.alias ~= '') and L.alias or nil
+            local text = r.text .. (alias and ('||' .. alias) or '')
+            local same = false
+            if L.kind == 'id' then
+              local loc = ids.find(L.id)
+              same = loc ~= nil and loc.filename ~= nil and samePath(loc.filename, r.file) and (loc.lnum or 1) == r.lnum
+            end
+            if same and L.inner:match('^id:[^%]]+%]%[(.*)$') == text then
+              -- Already says where it goes: only its alias is made sure of.
+              seen[L.inner] = true
+              if alias then jobs[#jobs + 1] = { row = row, L = L, r = r, text = text, alias = alias, keep = true } end
+            else
+              jobs[#jobs + 1] = { row = row, L = L, r = r, text = text, alias = alias }
+            end
+          end
+        end
+      end
+    end
+  end
+  if not at then vim.diagnostic.set(DIAG_NS, buf, diags) end
+  if #jobs == 0 then return 0 end
+
+  -- The links follow the lines that making an id may add above (a drawer, in this very buffer).
+  for _, j in ipairs(jobs) do
+    j.mark = api.nvim_buf_set_extmark(buf, RECON_NS, j.row, j.L.s - 1, { end_row = j.row, end_col = j.L.e })
+  end
+  -- Ids from the bottom of each file up: making one adds lines (its drawer), and the heading below it would
+  -- otherwise be looked for where it no longer is.
+  local order = {}
+  for _, j in ipairs(jobs) do order[#order + 1] = j end
+  table.sort(order, function(a, b)
+    if a.r.file ~= b.r.file then return a.r.file < b.r.file end
+    return a.r.lnum > b.r.lnum
+  end)
+  for _, j in ipairs(order) do
+    j.id = ensureId(j.r.file, j.r.lnum, j.alias)
+  end
+  local function where(j) return api.nvim_buf_get_extmark_by_id(buf, RECON_NS, j.mark, { details = true }) end
+  table.sort(jobs, function(a, b)
+    local pa, pb = where(a), where(b)
+    if pa[1] ~= pb[1] then return pa[1] > pb[1] end
+    return pa[2] > pb[2]
+  end)
+  local changed = 0
+  for _, j in ipairs(jobs) do
+    local pos = where(j)
+    api.nvim_buf_del_extmark(buf, RECON_NS, j.mark)
+    if j.id then
+      local inner = ('id:%s][%s'):format(j.id, j.text)
+      seen[inner] = true
+      if not j.keep and pos[1] then
+        local link = '[[' .. inner .. ']]'
+        local ok = pcall(api.nvim_buf_set_text, buf, pos[1], pos[2], pos[1], pos[3].end_col, { link })
+        if ok then changed = changed + 1 end
+      end
+    end
+  end
+  if changed > 0 then syncIndexSoon() end
+  return changed
+end
+
 local followPatched = false
 --- org.nvim's open_at_point is called by name for <CR>, gx and the rest: the check goes in front of it.
 local function patchFollow()
@@ -517,7 +714,12 @@ local function patchFollow()
   followPatched = true
   local orig = ctx.open_at_point
   ctx.open_at_point = function(...)
-    if vim.g.pure_links_complete ~= false then pcall(ensureAliasAtPoint) end
+    if vim.g.pure_links_complete ~= false then
+      local buf = api.nvim_get_current_buf()
+      local cur = api.nvim_win_get_cursor(0)
+      pcall(reconcile, buf, { row = cur[1] - 1, col = cur[2] })
+      pcall(ensureAliasAtPoint)
+    end
     return orig(...)
   end
 end
@@ -731,6 +933,15 @@ local function attach(buf)
   patchFollow()
   if vim.b[buf].pure_links then return end
   vim.b[buf].pure_links = true
+  -- On :w: the links typed by hand (or edited) are made to say where they go, before the file is written.
+  api.nvim_create_autocmd('BufWritePre', {
+    group = api.nvim_create_augroup('PureLinksSave' .. buf, { clear = true }),
+    buffer = buf,
+    callback = function()
+      local ok, err = pcall(reconcile, buf)
+      if not ok then vim.notify('Links: ' .. tostring(err), vim.log.levels.WARN) end
+    end,
+  })
   vim.bo[buf].completefunc = "v:lua.require'pure.links'.complete"
   local OMNI = "v:lua.require'pure.links'.omnifunc"
   vim.bo[buf].omnifunc = OMNI
@@ -855,6 +1066,7 @@ end
 -- Exposed for tests.
 M._candidates, M._parse, M._ensureId, M._writeLink, M._accept = candidates, parse, ensureId, writeLink, accept
 M._resolve = resolveAliasLinks
+M._reconcile, M._resolveSpec = reconcile, resolveSpec
 M._state = state
 
 return M

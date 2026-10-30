@@ -168,6 +168,15 @@ open only closes the menu; the second one leaves insert mode.) A title with a co
 hash in it ("Emacs log: to do") is found as typed: the separator only asks for headings when the whole
 text is not the name of a note; the same goes for a title with `||` in it.
 
+**Writing the link by hand.** The menu only tells what exists; you can type the whole link, or edit the
+text of one that is already there, and **the text decides where it goes**: on `:w` (and when a link is
+followed, `<CR>` / `gx`) every link whose text has a `||`, or that has no id yet, is read: `[[nota li#bud||x]]`
+or `[[id:OLD][Nota linkada#Budget||x]]` become `[[id:ID-OF-THAT-HEADING][Nota linkada#Budget||x]]` (words are
+enough, as long as they name ONE note and ONE heading of it; the text is made canonical, the target gets its
+`:ID:` and the alias its `:ROAM_ALIASES:`). A link that names nothing is left as it is and flagged (a warning
+at the link). A link without `||` is only text with an id and is never reinterpreted. Links already checked
+are not looked at again until their text changes. `vim.g.pure_links_reconcile = false` turns it off.
+
 **Why it can fail.** The menu is the `omnifunc` of the buffer (this module answers for the `[[` and
 hands every other question to org.nvim's own, which is what the 'autocomplete' of this configuration
 asks as you type; before, org.nvim's menu opened on every `[[` and this one never did). With
