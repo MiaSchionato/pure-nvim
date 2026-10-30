@@ -374,6 +374,10 @@ function M.complete(findstart, base)
       local loc = ok and ids.find(id) or nil
       if not (loc and loc.filename) then return -3 end
       state.mode, state.linkstart, state.file = 'heading', a - 1, loc.filename
+      -- Columns (0-based) of the id, of the # * : typed, for the accept: only these change.
+      state.idfrom = a - 1 + #'[[id:'
+      state.idto = state.idfrom + #id
+      state.sepcol = b - #q - 1
       return b - #q
     end
     local s, _, query = before:find('%[%[([^%]]*)$')
@@ -401,7 +405,10 @@ function M.complete(findstart, base)
       abbr, hl, kind = e.title .. ' → ' .. e.target, 'PureNoteAlias', 'alias'
     end
     out[#out + 1] = {
-      word = e.title, abbr = abbr, kind = kind, menu = style.truncLeft(e.path, 28),
+      -- In a link that is already there the menu must not write: the accept changes only the id and completes
+      -- the typed text (see accept).
+      word = state.mode == 'heading' and base or e.title, dup = 1,
+      abbr = abbr, kind = kind, menu = style.truncLeft(e.path, 28),
       abbr_hlgroup = hl, kind_hlgroup = 'PureNoteSep', menu_hlgroup = 'PureNoteSep',
       user_data = { pure_link = i },
       icase = 1, equal = 1,
@@ -421,6 +428,31 @@ end
 
 --- An item of the menu was taken: replace `[[...` by the link.
 --- `snap`: what the menu was working on when the item was taken (the state moves on once the text changes).
+--- A heading taken in a link that is already there (`[[id:ID][Note#he|]]`): only the id changes, to the heading's,
+--- and the typed text is completed (`Note#Heading`, the # whichever of # * : was typed); the brackets, the text
+--- before and what follows are left as they are.
+local function changeTarget(buf, win, row, col, snap, entry)
+  local file, lnum = targetOf(entry)
+  if lnum > 1 then
+    lnum = headingLine(file, lnum, entry.kind == 'alias' and entry.target or entry.title)
+    if not lnum then return vim.notify('Link: that heading is gone', vim.log.levels.WARN) end
+  end
+  -- Making the id may add lines above (a drawer, in this very buffer): follow the line.
+  local ns = api.nvim_create_namespace('pure_links')
+  local mark = api.nvim_buf_set_extmark(buf, ns, row, 0, {})
+  local id = ensureId(file, lnum)
+  local pos = api.nvim_buf_get_extmark_by_id(buf, ns, mark, {})
+  api.nvim_buf_del_extmark(buf, ns, mark)
+  if not id then return end
+  row = pos[1] or row
+  local title = entry.kind == 'alias' and entry.target or entry.title
+  -- From the right: the text first, so the columns of the id do not move.
+  api.nvim_buf_set_text(buf, row, snap.sepcol, row, col, { '#' .. title })
+  api.nvim_buf_set_text(buf, row, snap.idfrom, row, snap.idto, { id })
+  pcall(api.nvim_win_set_cursor, win, { row + 1, snap.sepcol + 1 + #title + (#id - (snap.idto - snap.idfrom)) })
+  syncIndexSoon()
+end
+
 local function accept(item, snap)
   local ud = item.user_data
   if type(ud) ~= 'table' or ud.pure_link == nil then return end
@@ -428,6 +460,9 @@ local function accept(item, snap)
   local buf, win = api.nvim_get_current_buf(), api.nvim_get_current_win()
   local cursor = api.nvim_win_get_cursor(win)
   local row, col = cursor[1] - 1, cursor[2]
+  if snap.mode == 'heading' and snap.sepcol and ud.pure_link > 0 and snap.items[ud.pure_link] then
+    return changeTarget(buf, win, row, col, snap, snap.items[ud.pure_link])
+  end
   local from = snap.linkstart
   local alias = snap.mode == 'note' and aliasOf(snap.input) or nil
   local entry = ud.pure_link > 0 and snap.items[ud.pure_link] or nil
@@ -763,7 +798,10 @@ api.nvim_create_autocmd('CompleteDone', {
     -- The text the completion wrote (the title of the item) must not open the menu again, and the
     -- state is kept now: the next menu would overwrite it.
     state.quietUntil = vim.uv.hrtime() + 600e6
-    local snap = { mode = state.mode, linkstart = state.linkstart, input = state.input, items = state.items }
+    local snap = {
+      mode = state.mode, linkstart = state.linkstart, input = state.input, items = state.items,
+      idfrom = state.idfrom, idto = state.idto, sepcol = state.sepcol,
+    }
     -- After the completion has finished writing its own text.
     vim.schedule(function() accept(item, snap) end)
   end,

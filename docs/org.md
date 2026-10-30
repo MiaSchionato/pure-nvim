@@ -142,7 +142,10 @@ modified).
 After a note is taken the cursor stays **inside** the link, at the end of its text, so `]` goes out
 past the `]]` (the pairs already skip it) and `*`, `#` or `:` there opens the headings of that note
 (the separator has to be typed there: a colon that is already in a title does nothing); taking one
-turns the link into a link to that heading, `[[id:HEADING-ID][Heading]]`, with the cursor after it.
+changes **only the id**, to the heading's, and completes what was typed (`[[id:HEADING-ID][Note#Heading]]`,
+whichever of `# * :` was typed, which becomes `#`): the brackets, the text before the separator, an
+`||alias` and whatever follows are left as they are, so no `]]` is added. It works the same on a link
+that was already in the note: put the cursor in its text, type `#` and a few letters of the heading.
 A typed link (`[[file:`, `[[https:`...) is not searched.
 
 **How the alias works.** An alias is another name for the note you picked; it never makes a new note
