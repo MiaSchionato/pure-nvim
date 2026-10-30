@@ -40,6 +40,10 @@ local MAX_ITEMS = 60
 -- linkstart: 0-based column of the [[; input: the text last asked for; file: the note of 'heading'.
 local state = { mode = nil, linkstart = 0, input = '', items = {}, file = nil }
 
+-- The links this module has written (an extmark over each): only those are read for a ||alias, so a link that
+-- was already in a note, whatever its text, is never rewritten.
+local FRESH_NS = api.nvim_create_namespace('pure_links_fresh')
+
 -- -----------------------------------------------------------------------------
 --  Text helpers
 -- -----------------------------------------------------------------------------
@@ -110,7 +114,7 @@ end
 local function search(input, mode, file, nosep)
   local headingsOnly, noteWords, query = parse(input)
   -- A # * : in the text may be part of a title ("Emacs log: to do"): then the whole text is the search.
-  if nosep then headingsOnly, noteWords, query = false, nil, (input:match('^(.-)||') or input) end
+  if nosep then headingsOnly, noteWords, query = false, nil, (nosep == 'whole' and input or (input:match('^(.-)||') or input)) end
   local qwords = words(query)
   local nwords = noteWords and words(noteWords) or nil
   local q = fold(vim.trim(query))
@@ -159,6 +163,13 @@ end
 --- The entries for the text typed after [[. `note:head`, `note*head` and `note#head` ask for headings of a
 --- note, unless the whole text is the name of a note (a title with a colon): then it is a plain search.
 local function candidates(input, mode, file)
+  -- A title with || in it: the whole text is searched first (the note "A || B" typed as [[A || B).
+  if mode ~= 'heading' and input:find('||', 1, true) then
+    local whole, q = search(input, mode, file, 'whole')
+    for _, e in ipairs(whole) do
+      if e.kind == 'note' and fold(e.title):find(fold(vim.trim(input)), 1, true) then return whole, q, false end
+    end
+  end
   if mode ~= 'heading' then
     local headingsOnly, noteWords = parse(input)
     if headingsOnly and noteWords then
@@ -204,18 +215,20 @@ local function ensureId(file, lnum, alias)
     vim.bo[buf].buflisted = false
   end
   local id = ids.get_create({ bufnr = buf, lnum = lnum })
+  local added = false
   if id and alias then
     local _, f, hl = edit.resolve({ bufnr = buf, lnum = lnum })
     local names = splitQuoted((hl and hl.properties or f.properties).ROAM_ALIASES)
     if not vim.tbl_contains(names, alias) then
       names[#names + 1] = alias
       edit.set_property(buf, hl and hl.line or 1, 'ROAM_ALIASES', joinQuoted(names))
+      added = true
     end
   end
   if buf ~= api.nvim_get_current_buf() and not wasModified and vim.bo[buf].modified then
     api.nvim_buf_call(buf, function() vim.cmd('silent! write') end)
   end
-  return id
+  return id, nil, added
 end
 
 --- The line of the heading `title` in the buffer of `file` when it is open and its text moved since the
@@ -314,8 +327,9 @@ local function writeLink(buf, win, row, from, to, entry, opts)
   local line = api.nvim_buf_get_lines(buf, row, row + 1, false)[1] or ''
   -- The ]] that the pairs added with the [[ are part of the link now.
   if line:sub(to + 1, to + 2) == ']]' then to = to + 2 end
-  local link = string.format('[[id:%s][%s]]', id, text)
+  local link = string.format('[[id:%s][%s]]', id, text .. (opts.tail or ''))
   api.nvim_buf_set_text(buf, row, from, row, to, { link })
+  api.nvim_buf_set_extmark(buf, FRESH_NS, row, from, { end_row = row, end_col = from + #link })
   if win and api.nvim_win_is_valid(win) then
     local col = from + #link - (opts.after and 0 or 2)
     pcall(api.nvim_win_set_cursor, win, { row + 1, col })
@@ -397,11 +411,132 @@ local function accept(item, snap)
   local from = snap.linkstart
   local alias = snap.mode == 'note' and aliasOf(snap.input) or nil
   local entry = ud.pure_link > 0 and snap.items[ud.pure_link] or nil
+  -- The note was picked (Tab, <C-n>) and then a | was typed, which ended the completion: that | is the
+  -- start of a ||alias for the link, so it stays, in the text of the link.
+  local seg = api.nvim_get_current_line():sub(from + 1, col)
+  local tail = (not alias and snap.mode == 'note') and seg:match('|+$') or nil
   if ud.new then
-    writeLink(buf, win, row, from, col, nil, { new = ud.new, alias = alias })
+    writeLink(buf, win, row, from, col, nil, { new = ud.new, alias = alias, tail = tail })
   elseif entry then
-    writeLink(buf, win, row, from, col, entry, { alias = alias, after = snap.mode == 'heading' or entry.kind == 'heading' or entry.heading == true })
+    writeLink(buf, win, row, from, col, entry, {
+      alias = alias, tail = tail,
+      after = snap.mode == 'heading' or entry.kind == 'heading' or entry.heading == true,
+    })
   end
+end
+
+-- -----------------------------------------------------------------------------
+--  Following a link that has a ||alias: the note gets the alias if it has none
+-- -----------------------------------------------------------------------------
+--  `[[id:ID][Title||alias]]` under the cursor, followed (<CR>, gx): before org.nvim jumps, the alias is looked for
+--  in the :ROAM_ALIASES: of the note (or heading) the id names, and added when it is not there. The link is left
+--  as it is written.
+local function ensureAliasAtPoint()
+  local line = api.nvim_get_current_line()
+  local col = api.nvim_win_get_cursor(0)[2]
+  local pos = 1
+  while true do
+    local s, e, id, text = line:find('%[%[id:([^%]]+)%]%[([^%]]*)%]%]', pos)
+    if not s then return end
+    if col >= s - 1 and col < e then
+      local alias = text:match('||(.*)$')
+      alias = alias and vim.trim(alias) or ''
+      if alias == '' then return end
+      local ok, ids = pcall(require, 'org.id')
+      local loc = ok and ids.find(id) or nil
+      if not (loc and loc.filename) then return end
+      local _, _, added = ensureId(loc.filename, loc.lnum or 1, alias)
+      if added then vim.notify(('Alias "%s" added to the note'):format(alias)) end
+      return
+    end
+    pos = e + 1
+  end
+end
+
+local followPatched = false
+--- org.nvim's open_at_point is called by name for <CR>, gx and the rest: the check goes in front of it.
+local function patchFollow()
+  if followPatched then return end
+  local ok, ctx = pcall(require, 'org.context')
+  if not (ok and type(ctx.open_at_point) == 'function') then return end
+  followPatched = true
+  local orig = ctx.open_at_point
+  ctx.open_at_point = function(...)
+    if vim.g.pure_links_complete ~= false then pcall(ensureAliasAtPoint) end
+    return orig(...)
+  end
+end
+
+-- -----------------------------------------------------------------------------
+--  [[id:ID][Title||alias]]: the alias of a link that is already there
+-- -----------------------------------------------------------------------------
+--  The note is usually picked from the menu first, and the alias typed after, inside the link: its text is
+--  `Title||alias`. When the cursor leaves it (Enter, Esc, a move) it becomes `[[id:ID][alias]]` and the alias
+--  is added to the :ROAM_ALIASES: of the note (or heading) the id names.
+local ALIASLINK = '%[%[id:([^%]]+)%]%[([^%]]-)||([^%]]*)%]%]'
+
+--- Resolve the `||alias` links of the current line. `force`: also the one the cursor is in (Enter).
+--- @return boolean changed
+local function resolveAliasLinks(buf, force)
+  local win = api.nvim_get_current_win()
+  if api.nvim_win_get_buf(win) ~= buf then return false end
+  local row, col = unpack(api.nvim_win_get_cursor(win))
+  row = row - 1
+  local line = api.nvim_buf_get_lines(buf, row, row + 1, false)[1] or ''
+  if not line:find('||', 1, true) then return false end
+  local ok, ids = pcall(require, 'org.id')
+  if not ok then return false end
+
+  local ns = api.nvim_create_namespace('pure_links_alias')
+  local mark = api.nvim_buf_set_extmark(buf, ns, row, 0, {})
+  local marks = api.nvim_buf_get_extmarks(buf, FRESH_NS, { row, 0 }, { row, -1 }, { details = true })
+  local function isFresh(s0, e0)
+    for _, m in ipairs(marks) do
+      local c0, c1 = m[3], m[4].end_col
+      if m[4].end_row == row and s0 < c1 and e0 > c0 then return true end
+    end
+    return false
+  end
+  local jobs, pos = {}, 1
+  while true do
+    local s, e, id, _, alias = line:find(ALIASLINK, pos)
+    if not s then break end
+    alias = vim.trim(alias)
+    local inside = col >= s - 1 and col <= e
+    if alias ~= '' and isFresh(s - 1, e) and (force or not inside) then jobs[#jobs + 1] = { s = s, e = e, id = id, alias = alias, inside = inside } end
+    pos = e + 1
+  end
+  if #jobs == 0 then
+    api.nvim_buf_del_extmark(buf, ns, mark)
+    return false
+  end
+
+  local result, shift, newcol, changed = {}, 0, col, false
+  local last = 1
+  for _, j in ipairs(jobs) do
+    local loc = ids.find(j.id)
+    local done = loc and loc.filename and ensureId(loc.filename, loc.lnum or 1, j.alias)
+    if done then
+      local link = string.format('[[id:%s][%s]]', j.id, j.alias)
+      result[#result + 1] = line:sub(last, j.s - 1)
+      result[#result + 1] = link
+      last = j.e + 1
+      local delta = #link - (j.e - j.s + 1)
+      if j.inside then newcol = j.s - 1 + #link elseif col > j.e then newcol = newcol + delta end
+      changed = true
+    end
+  end
+  result[#result + 1] = line:sub(last)
+  -- Making the alias may have added lines above in this very buffer (a drawer): follow the line.
+  local pos2 = api.nvim_buf_get_extmark_by_id(buf, ns, mark, {})
+  api.nvim_buf_del_extmark(buf, ns, mark)
+  row = pos2[1] or row
+  if changed then
+    api.nvim_buf_set_lines(buf, row, row + 1, false, { table.concat(result) })
+    pcall(api.nvim_win_set_cursor, win, { row + 1, newcol })
+    syncIndexSoon()
+  end
+  return changed
 end
 
 -- -----------------------------------------------------------------------------
@@ -511,6 +646,14 @@ local function installEnter(buf)
   -- What <CR> was: this buffer's (org.nvim's table row) or the global one (list item, Copilot, menu).
   local prev = (type(cur) == 'table' and cur.lhs) and cur or nil
   vim.keymap.set('i', '<CR>', function()
+    -- Enter in the text of a link, after ||alias: the alias is written, no new line.
+    if vim.g.pure_links_complete ~= false and api.nvim_get_current_line():find('||', 1, true) then
+      local c = api.nvim_win_get_cursor(0)[2]
+      if api.nvim_get_current_line():sub(1, c):find('%[%[id:[^%]]+%]%[[^%]]-||[^%]]*$') then
+        if vim.fn.pumvisible() == 1 then keys('<C-e>') end
+        if resolveAliasLinks(api.nvim_get_current_buf(), true) then return end
+      end
+    end
     if vim.fn.pumvisible() == 1 then
       local info = vim.fn.complete_info({ 'items', 'selected' })
       local function ours(it) return it and type(it.user_data) == 'table' and it.user_data.pure_link ~= nil end
@@ -532,6 +675,7 @@ local function installEnter(buf)
 end
 
 local function attach(buf)
+  patchFollow()
   if vim.b[buf].pure_links then return end
   vim.b[buf].pure_links = true
   vim.bo[buf].completefunc = "v:lua.require'pure.links'.complete"
@@ -540,6 +684,15 @@ local function attach(buf)
   vim.opt_local.completeopt = { 'menu', 'menuone', 'noinsert' }
   local group = api.nvim_create_augroup('PureLinks' .. buf, { clear = true })
   -- org.nvim sets its omnifunc when it attaches to the buffer, which can be after this: take it back.
+  api.nvim_create_autocmd({ 'InsertLeavePre', 'CursorMovedI' }, {
+    group = group,
+    buffer = buf,
+    callback = function(args)
+      if vim.g.pure_links_complete == false then return end
+      if args.event == 'InsertLeavePre' then return resolveAliasLinks(buf, true) end
+      vim.schedule(function() resolveAliasLinks(buf, false) end)
+    end,
+  })
   api.nvim_create_autocmd({ 'BufEnter', 'InsertEnter' }, {
     group = group,
     buffer = buf,
