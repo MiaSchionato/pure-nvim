@@ -27,6 +27,16 @@ split and make fzf quit.)
 | `<leader>gl` | git log | shows the picked commit in a split (`q` closes) |
 | `<leader>n…` | new file | straight into its folder, asking only the name (`nh` home, `n.` ~/.config, `nn` nvim, `ne` here; `vim.g.pure_new_file_ask_name = false`: an unnamed buffer there instead). `nf` picks the folder first; `nv` is a note in the vault's inbox; `nd` a new folder here |
 
+**One look for every picker** (`lua/pure/pickerstyle.lua`): the style of `<leader>vf` (the Flora
+finder). The name is in colour on the left (`PureNoteFile`), then, dim to the right (`PureNoteSep`),
+its folder and how long ago it was written. What you type matches the name, the folder and the age.
+The full path (and the line) ride along as hidden fields. Files (`ff`, `fn`, `f.`, `f~`), recent files
+(`f/`), buffers (most recently used first), the jump list, help (page › section), registers and
+colorschemes draw their lines this way; the file search has no age column (it lists thousands of
+files; the folder is drawn by an `awk` at the end of the `fd` pipe). Live grep colours ripgrep's
+output with the same groups: the file in the name colour, the numbers dim, the match in the alias
+colour. The git log and the explorer keep the colours of `git` and `ls`.
+
 **Live grep** (`<leader>fg`): nothing is listed until you type; ripgrep runs
 again on every change of the query (a regular expression; case-sensitive
 only if you type a capital letter). The preview shows the match in its file;
