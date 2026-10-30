@@ -157,7 +157,10 @@ asks as you type; before, org.nvim's menu opened on every `[[` and this one neve
 `vim.g.pure_links_complete = false` (configs.lua) the menu is **off**, and then there is no `||`, no
 id and no headings: `[[` is org.nvim's own completion. `<C-x><C-u>` after a `[[` still opens this menu by hand.
 Enter takes the first item when none is highlighted (`noselect` leaves none), and is what it was
-(a new line, org.nvim's table row) anywhere else.
+(a new line, a list item, org.nvim's table row, Copilot) anywhere else. Enter right after a typed
+`[[note||alias`, before the menu has caught up with the last key (no menu on screen), writes the link
+for the best match at once (or for a new note called as typed when nothing matches), so typing fast
+does not lose the alias.
 
 `<leader>vi` (normal mode) is the same list in the picker of `<leader>vf` (the same look and order)
 and inserts the link at the cursor; a title that matches nothing makes a seed in the inbox and links
