@@ -172,6 +172,18 @@ Going back to opaque does not change the saved theme.
 | `ow` | wrap |
 | `oxc` | transparent background |
 | `oz` | zen mode: no bars, numbers, sign column, inlay hints or inline diagnostics |
+| reading mode (`<leader>tR`, `:PureReading`) | a column of text in the middle between wide margins (below) |
+
+**Reading mode** (`lua/pure/reading.lua`): two empty windows, one on each side, take the width the
+text does not need, so the window with the text is a column (`vim.g.pure_reading_width`, 84 by
+default) and lines wrap at its width. The margins are plain windows, not padding drawn in the text,
+so wrapping, the cursor and the other modules see an ordinary window; the cursor never stays in
+one (entering a margin goes back to the text) and `:q` closes them first, so it quits as it would
+without them. `vim.g.pure_reading_min` (4) is the smallest margin. It is per tab, saved like the other
+toggles (key `reading`) and applied again at the next start and in new tabs that open on a file.
+Splits inside the column are laid out for the window as it was when the mode started: toggle it off
+and on to lay it out again. WezTerm's big headings (DECDHL) need the full width, so they fall back
+to the icon and band while the margins are there.
 
 The toggles stay as you left them (`lua/configs/toggles.lua`): a toggle you press is saved in
 `stdpath('data')/toggles.json` and applied again on the next start. That covers the note
