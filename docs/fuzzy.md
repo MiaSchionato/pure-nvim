@@ -32,8 +32,10 @@ finder). The name is in colour on the left (`PureNoteFile`), then, dim to the ri
 its folder and how long ago it was written. What you type matches the name, the folder and the age.
 The full path (and the line) ride along as hidden fields. Files (`ff`, `fn`, `f.`, `f~`), recent files
 (`f/`), buffers (most recently used first), the jump list, help (page › section), registers and
-colorschemes draw their lines this way; the file search has no age column (it lists thousands of
-files; the folder is drawn by an `awk` at the end of the `fd` pipe). Live grep colours ripgrep's
+colorschemes draw their lines this way. In the file search the age is the time since the last
+modification (`2h 0m ago`, `3d 2h ago`, as Dired does), but only for the recently changed files
+(`vim.g.pure_fuzzy_recent`, below): reading the time of every file takes minutes in a big tree, so
+the older ones read `14d+ ago`. The line is drawn by an `awk` at the end of the `fd` pipe. Live grep colours ripgrep's
 output with the same groups: the file in the name colour, the numbers dim, the match in the alias
 colour. The git log and the explorer keep the colours of `git` and `ls`.
 
