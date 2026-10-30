@@ -394,8 +394,47 @@ local function feed()
   api.nvim_feedkeys(api.nvim_replace_termcodes('<C-x><C-u>', true, false, true), 'n', false)
 end
 
+--- A separator # * : typed at this place (not one that was already in a title).
+local function freshSeparator(sepcol)
+  local row = api.nvim_win_get_cursor(0)[1]
+  return state.sepAt ~= nil and state.sepAt[1] == row and state.sepAt[2] == sepcol
+end
+
+--- The 'omnifunc' of org notes. org.nvim sets its own (links, files, tags, properties...) and the
+--- 'autocomplete' of this configuration asks it as you type, so its menu came up on every [[ and ours never did.
+--- This one answers for the [[ links (and the headings of a link) and hands every other question to org.nvim's.
+function M.omnifunc(findstart, base)
+  local function org()
+    local ok, comp = pcall(require, 'org.completion')
+    return ok and comp or nil
+  end
+  if findstart == 1 then
+    state.via = nil
+    if vim.g.pure_links_complete ~= false then
+      local col = api.nvim_win_get_cursor(0)[2]
+      local before = api.nvim_get_current_line():sub(1, col)
+      local a, b, _, _, _, q = before:find(IDLINK)
+      if not (a and not freshSeparator(b - #q - 1)) then
+        local start = M.complete(1, base)
+        if start ~= -3 then
+          state.via = 'links'
+          return start
+        end
+      end
+    end
+    state.via = 'org'
+    local comp = org()
+    return comp and comp.omnifunc(1, base) or -3
+  end
+  if state.via == 'links' then return M.complete(0, base) end
+  local comp = org()
+  return comp and comp.omnifunc(0, base) or {}
+end
+
 local function trigger(buf)
   if vim.g.pure_links_complete == false or vim.fn.pumvisible() == 1 then return end
+  -- With 'autocomplete' the omnifunc above is asked as you type: no need to open the menu by hand.
+  if vim.o.autocomplete and vim.o.complete:find('o', 1, true) then return end
   -- Not while an item was just taken: the text is about to be replaced by the link.
   if vim.uv.hrtime() < (state.quietUntil or 0) then return end
   if api.nvim_get_current_buf() ~= buf or not api.nvim_get_mode().mode:match('^i') then return end
@@ -416,12 +455,49 @@ local function trigger(buf)
   end
 end
 
+local function keys(text, mode)
+  api.nvim_feedkeys(api.nvim_replace_termcodes(text, true, false, true), mode or 'ni', false)
+end
+
+--- Enter in insert mode: with our menu open it takes the highlighted item, or the first when none is
+--- highlighted ('noselect' of this configuration leaves none: Enter would only have made a new line, and
+--- a [[foo||short could never be written). Anything else is what Enter was (org.nvim's table row, ...).
+local PREV_DESC = 'pure-links-enter'
+local function installEnter(buf)
+  local cur = vim.fn.maparg('<CR>', 'i', false, true)
+  if cur.desc == PREV_DESC and cur.buffer == 1 then return end
+  local prev = (type(cur) == 'table' and cur.buffer == 1) and cur or nil
+  vim.keymap.set('i', '<CR>', function()
+    if vim.fn.pumvisible() == 1 then
+      local info = vim.fn.complete_info({ 'items', 'selected' })
+      local function ours(it) return it and type(it.user_data) == 'table' and it.user_data.pure_link ~= nil end
+      if info.selected >= 0 and ours(info.items[info.selected + 1]) then return keys('<C-y>') end
+      if info.selected < 0 and ours(info.items[1]) then return keys('<C-n><C-y>') end
+    end
+    if prev and prev.callback then return prev.callback() end
+    if prev and prev.rhs and prev.rhs ~= '' then return keys(prev.rhs, prev.noremap == 1 and 'ni' or 'mi') end
+    keys('<CR>')
+  end, { buffer = buf, desc = PREV_DESC })
+end
+
 local function attach(buf)
   if vim.b[buf].pure_links then return end
   vim.b[buf].pure_links = true
   vim.bo[buf].completefunc = "v:lua.require'pure.links'.complete"
+  local OMNI = "v:lua.require'pure.links'.omnifunc"
+  vim.bo[buf].omnifunc = OMNI
   vim.opt_local.completeopt = { 'menu', 'menuone', 'noinsert' }
   local group = api.nvim_create_augroup('PureLinks' .. buf, { clear = true })
+  -- org.nvim sets its omnifunc when it attaches to the buffer, which can be after this: take it back.
+  api.nvim_create_autocmd({ 'BufEnter', 'InsertEnter' }, {
+    group = group,
+    buffer = buf,
+    callback = function()
+      if vim.bo[buf].omnifunc ~= OMNI then vim.bo[buf].omnifunc = OMNI end
+      installEnter(buf)
+    end,
+  })
+  installEnter(buf)
   api.nvim_create_autocmd('InsertCharPre', {
     group = group,
     buffer = buf,
