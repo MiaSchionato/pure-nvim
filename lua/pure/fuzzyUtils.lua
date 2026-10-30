@@ -16,7 +16,13 @@ local cache_dir = vim.fn.stdpath("cache") if vim.fn.isdirectory(cache_dir) == 0 
 -- Override with, for example:
 --   vim.g.pure_fuzzy_ignore = { ".git", ".obsidian", "node_modules", "target" }
 local function ignoredDirs()
-  return vim.g.pure_fuzzy_ignore or { ".git", ".obsidian" }
+  local list = vim.deepcopy(vim.g.pure_fuzzy_ignore or { ".git", ".obsidian" })
+  -- Folders that are never what a file search is after and can hold tens of thousands of files (the Go
+  -- module cache alone was 30 000 of the 47 000 files under the home). vim.g.pure_fuzzy_ignore_extra
+  -- replaces this list ({} keeps nothing extra).
+  vim.list_extend(list, vim.g.pure_fuzzy_ignore_extra or
+    { "node_modules", "__pycache__", ".venv", "venv", "site-packages", "**/pkg/mod" })
+  return list
 end
 
 --- Guarantee a single trailing slash.
@@ -363,21 +369,32 @@ local function dotAwareList(path, kind, styled)
     return ("%s --hidden %s%s . --strip-cwd-prefix --base-directory %s"):format(fd, common, extra, base)
   end
 
-  -- The files changed lately come first, the newest on top (<leader>vf does the same with notes);
-  -- then all the others. fd cannot sort, so the recent ones (few) go through ls -t. The window is
-  -- vim.g.pure_fuzzy_recent ('14d' by default; false turns it off).
-  local recent = (kind == "file" and vim.g.pure_fuzzy_recent ~= false) and (vim.g.pure_fuzzy_recent or "14d") or nil
+  -- The files changed lately come first (<leader>vf does the same with notes): the list is made in tiers,
+  -- one fd run each, the most recent tier first, then all the others. fd cannot sort, and reading the time
+  -- of every file takes minutes in a big tree (it froze this picker once), so the order is by tier, and the
+  -- age column says the tier ("<1h ago", "<1d ago", "7d+ ago"). fzf shows the first tier at once while the
+  -- others are still being listed. vim.g.pure_fuzzy_recent is the list of limits ({ '1h', '1d', '7d' } by
+  -- default; a single string works too; false turns the tiers off).
+  local tiers
+  if styled and kind == "file" and vim.g.pure_fuzzy_recent ~= false then
+    local setting = vim.g.pure_fuzzy_recent or { "1h", "1d", "7d" }
+    tiers = type(setting) == "table" and setting or { setting }
+  end
   local function ordered(linesOf)
-    if not recent then return linesOf("") end
-    local out = { "cd " .. base .. " || exit 0", "{" }
-    vim.list_extend(out, linesOf(" --changed-within " .. recent))
-    -- Styled lists carry the modification time ("EPOCH<tab>path", newest first: sort -rn) for the age
-    -- column; stat over every file would take minutes in a big tree, so only these few are read.
-    local sorted = styled and "xargs -r -d '\\n' stat --printf '%Y\\t%n\\n' -- | sort -rn"
-      or "xargs -r -d '\\n' ls -td --"
-    vim.list_extend(out, { "} | " .. sorted, "{" })
-    vim.list_extend(out, linesOf(" --changed-before " .. recent))
-    out[#out + 1] = "}"
+    if not tiers then return linesOf("") end
+    local out = { "cd " .. base .. " || exit 0" }
+    for i, limit in ipairs(tiers) do
+      local filter = " --changed-within " .. limit .. (i > 1 and (" --changed-before " .. tiers[i - 1]) or "")
+      -- The tag the awk reads as the age column: "@<1h ago<tab>path".
+      -- One list item per line: writefile() turns a "\n" inside an item into a NUL.
+      out[#out + 1] = "{"
+      vim.list_extend(out, linesOf(filter))
+      out[#out + 1] = "} | sed 's/^/@<" .. limit .. " ago\\t/'"
+    end
+    local last = tiers[#tiers]
+    out[#out + 1] = "{"
+    vim.list_extend(out, linesOf(" --changed-before " .. last))
+    out[#out + 1] = "} | sed 's/^/@" .. last .. "+ ago\\t/'"
     return out
   end
 
@@ -388,9 +405,7 @@ local function dotAwareList(path, kind, styled)
   local awk
   if styled then
     awk = vim.fs.normalize(vim.fn.tempname()) .. ".awk"
-    -- The files older than the recent window have no age of their own: they read "14d+ ago".
-    local stale = recent and (recent .. "+ ago") or nil
-    vim.fn.writefile(vim.split(require('pure.pickerstyle').awkProgram(stale), "\n", { plain = true }), awk)
+    vim.fn.writefile(vim.split(require('pure.pickerstyle').awkProgram(), "\n", { plain = true }), awk)
   end
   -- The list of a script, drawn when `styled`.
   local function listOf(file)
@@ -498,9 +513,8 @@ end
 function M.fuzzyTodo()
   local style = require('pure.pickerstyle')
   style.colors()
-  local here = vim.api.nvim_buf_get_name(0)
-  local dir = here ~= "" and vim.fs.dirname(here) or vim.fn.getcwd()
-  dir = vim.fs.normalize(dir)
+  -- The folder of the current file; in the scratch note, the one the note was opened from (pure/scratch.lua).
+  local dir = vim.api.nvim_buf_get_name(0) ~= "" and require("pure.scratch").dir(0) or vim.fs.normalize(vim.fn.getcwd())
   local root = vim.fs.root(dir, ".git")
   local base = root or dir
   local depth = root and "" or (" --max-depth " .. (vim.g.pure_todo_depth or 3))
@@ -617,7 +631,7 @@ function M.fuzzyHelp()
 end
 
 function M.fuzzyGit()
-  local path = vim.fn.expand("%:p:h")
+  local path = require("pure.scratch").dir(0)
 
   local fzf = "fzf --ansi --preview 'git show --color=always {1}' --preview-window 'up,60\\%,wrap,border-bottom'"
   local git = "git log --oneline --color=always "
@@ -650,7 +664,7 @@ function M.fuzzyGitGrep()
   local git_grep = "git grep --line-number --column"
   local fzf = "fzf --ansi --delimiter : --preview '" .. tool("bat", "batcat") .. " --style=numbers --color=always --highlight-line {2} {1}' --preview-window 'up,60\\%,border-bottom,+{2}+3/3'"
   -- Already cd's below, so git grep prints relative names and {1}/{2} line up.
-  local path = asDir(vim.fn.expand("%:p:h"))
+  local path = asDir(require("pure.scratch").dir(0))
 
   M.fuzzyLogic({
     title = "Fuzzy Git Grep",
