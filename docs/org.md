@@ -142,8 +142,22 @@ After a note is taken the cursor stays **inside** the link, at the end of its te
 past the `]]` (the pairs already skip it) and `*`, `#` or `:` there opens the headings of that note
 (the separator has to be typed there: a colon that is already in a title does nothing); taking one
 turns the link into a link to that heading, `[[id:HEADING-ID][Heading]]`, with the cursor after it.
-A typed link (`[[file:`, `[[https:`...) is not searched. `vim.g.pure_links_complete = false` turns the
-menu off.
+A typed link (`[[file:`, `[[https:`...) is not searched.
+
+**How the alias works.** `||` is read when you take an item from the menu: type the note, `||`, the
+text, and Enter (the menu has to be open: it is what writes the link). The text after `||` is not part
+of the search; it becomes the text of the link and is added to the `:ROAM_ALIASES:` of the note (or of
+the heading), so from then on it is also an entry of the menu and of `<leader>vf` ("short → Note").
+It does nothing in a link that already exists (`[[id:..][Title||x]]`): there the only thing typing
+does is `*`, `#` or `:`.
+
+**Why it can fail.** The menu is the `omnifunc` of the buffer (this module answers for the `[[` and
+hands every other question to org.nvim's own, which is what the 'autocomplete' of this configuration
+asks as you type; before, org.nvim's menu opened on every `[[` and this one never did). With
+`vim.g.pure_links_complete = false` (configs.lua) the menu is **off**, and then there is no `||`, no
+id and no headings: `[[` is org.nvim's own completion. `<C-x><C-u>` after a `[[` still opens this menu by hand.
+Enter takes the first item when none is highlighted (`noselect` leaves none), and is what it was
+(a new line, org.nvim's table row) anywhere else.
 
 `<leader>vi` (normal mode) is the same list in the picker of `<leader>vf` (the same look and order)
 and inserts the link at the cursor; a title that matches nothing makes a seed in the inbox and links
