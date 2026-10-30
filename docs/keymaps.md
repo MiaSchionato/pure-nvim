@@ -99,6 +99,7 @@ See [llm.md](llm.md).
 | `<leader>fg` | n | Grep |
 | `<leader>fh` | n | Help tags |
 | `<leader>fj` | n | Jump list |
+| `<leader>ft` | n | Every `TODO:` of the repo (or the folder), searchable, with preview |
 | `<leader>f"` | n | Registers (Enter: make it the register p pastes) |
 | `<leader>fl` | n | Notes linking here (backlinks, also <leader>vb) |
 | `<leader>fn` | n | Find in nvim config |
