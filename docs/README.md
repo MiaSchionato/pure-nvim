@@ -131,7 +131,8 @@ where to change them.
 | `vim.g.pure_keyhint_triggers` | `<leader>` in normal and visual | [keyhint](keyhint.md) |
 | `vim.g.pure_keyhint` | on (`false` turns it off) | [keyhint](keyhint.md) |
 | `vim.g.pure_fuzzy_ignore` | `{ '.git', '.obsidian' }` | [fuzzy](fuzzy.md) |
-| `vim.g.pure_fuzzy_recent` | `'14d'` (`false`: off) | [fuzzy](fuzzy.md) |
+| `vim.g.pure_fuzzy_recent` | `{ '1h', '1d', '7d' }` (`false`: off) | [fuzzy](fuzzy.md) |
+| `vim.g.pure_fuzzy_ignore_extra` | node_modules, `__pycache__`, `.venv`, `venv`, `site-packages`, `**/pkg/mod` | [fuzzy](fuzzy.md) |
 | `vim.g.pure_dashboard_scale` | `'auto'` | [ui](ui.md) |
 | `vim.g.pure_hexcolors_filetypes` | `{ 'markdown', 'org', 'text' }` | [ui](ui.md) |
 | `vim.g.pure_terminal_shell` | nu, pwsh or powershell on Windows; `'shell'` elsewhere | [ui](ui.md) |
