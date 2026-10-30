@@ -496,9 +496,10 @@ end
 local aliasDone = {} -- id .. NUL .. alias, already saved in this session
 local ALIASLINK = '%[%[id:([^%]]+)%]%[([^%]]-)||([^%]]*)%]%]'
 
---- Resolve the `||alias` links of the current line. `force`: also the one the cursor is in (Enter).
+--- Save the `||alias` of the links of the current line. `force`: also the one the cursor is in. `move`: the cursor
+--- then goes after the link it was in (only Enter: any other event must leave the cursor where it is).
 --- @return boolean changed
-local function resolveAliasLinks(buf, force)
+local function resolveAliasLinks(buf, force, move)
   local win = api.nvim_get_current_win()
   if api.nvim_win_get_buf(win) ~= buf then return false end
   local row, col = unpack(api.nvim_win_get_cursor(win))
@@ -545,7 +546,7 @@ local function resolveAliasLinks(buf, force)
       if added then wrote = true end
     end
     -- Enter inside the link: the cursor goes after it.
-    if j.inside then newcol = j.e; changed = true end
+    if j.inside and move then newcol = j.e; changed = true end
   end
   -- Making the alias may have added lines above in this very buffer (a drawer): follow the line.
   local pos2 = api.nvim_buf_get_extmark_by_id(buf, ns, mark, {})
@@ -668,7 +669,7 @@ local function installEnter(buf)
       local c = api.nvim_win_get_cursor(0)[2]
       if api.nvim_get_current_line():sub(1, c):find('%[%[id:[^%]]+%]%[[^%]]-||[^%]]*$') then
         if vim.fn.pumvisible() == 1 then keys('<C-e>') end
-        if resolveAliasLinks(api.nvim_get_current_buf(), true) then return end
+        if resolveAliasLinks(api.nvim_get_current_buf(), true, true) then return end
       end
     end
     if vim.fn.pumvisible() == 1 then
