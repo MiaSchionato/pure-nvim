@@ -144,14 +144,22 @@ past the `]]` (the pairs already skip it) and `*`, `#` or `:` there opens the he
 turns the link into a link to that heading, `[[id:HEADING-ID][Heading]]`, with the cursor after it.
 A typed link (`[[file:`, `[[https:`...) is not searched.
 
-**How the alias works.** `||` is read when you take an item from the menu: type the note, `||`, the
-text, and Enter (the menu has to be open: it is what writes the link). The text after `||` is not part
-of the search; it becomes the text of the link and is added to the `:ROAM_ALIASES:` of the note (or of
-the heading), so from then on it is also an entry of the menu and of `<leader>vf` ("short → Note").
-The alias belongs to the note that was matched: it never makes a new note (with `||` typed the menu has no
-`+ New note` item). It does nothing in a link that already exists (`[[id:..][Title||x]]`): there the only
-thing typing does is `*`, `#` or `:`. A title with a colon, a star or a hash in it ("Emacs log: to do") is
-found as typed: the separator only asks for headings when the whole text is not the name of a note.
+**How the alias works.** An alias is another name for the note you picked; it never makes a new note
+(with `||` typed the menu has no `+ New note` item). Two ways, both ending in `[[id:ID][alias]]` and in
+the alias added to the `:ROAM_ALIASES:` of the note (or of the heading), so from then on it is also an
+entry of the menu and of `<leader>vf` ("short → Note"):
+
+1. **Pick the note, then type the alias inside the link.** Take the note from the menu (Enter, or Tab and
+   then keep typing) and type `||alias` where the cursor is, inside the link: `[[id:ID][Title||alias]]`.
+   When you leave it (Enter, Esc, or a move out of the link) it becomes `[[id:ID][alias]]`.
+2. **Type it all, then Enter.** `[[note||alias` with the menu open (or typed faster than the menu follows).
+   The text after `||` is not part of the search.
+
+Only links this module has just written are read for a `||` (an older link, whatever its text, is never
+rewritten). **Following** a link that has a `||` (`<CR>`, `gx`) checks the alias in the note it points to
+and adds it when it is not there; the link itself is left as written. A title with a colon, a star or a
+hash in it ("Emacs log: to do") is found as typed: the separator only asks for headings when the whole
+text is not the name of a note; the same goes for a title with `||` in it.
 
 **Why it can fail.** The menu is the `omnifunc` of the buffer (this module answers for the `[[` and
 hands every other question to org.nvim's own, which is what the 'autocomplete' of this configuration
