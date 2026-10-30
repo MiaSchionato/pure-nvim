@@ -486,6 +486,81 @@ function M.fuzzyGrep(path)
   })
 end
 
+--- Every `TODO:` of the repository (or the folder), to search and jump to.
+---
+--- The scope: from the folder of the current file, walk up to a `.git` (a repository, or a worktree);
+--- the TODOs of the whole repository are listed. With no repository, the folder of the file and its
+--- subfolders down to vim.g.pure_todo_depth levels (3). Not org.nvim's TODO keyword: the plain text
+--- `TODO:` that a snippet puts in code or notes, kept in the file it was written in.
+--- Drawn as <leader>vf: the text of the TODO on the left, dim to the right the file, the line and the
+--- age of the file. The files written last come first, the lines of a file in order.
+--- vim.g.pure_todo_pattern is the regex ('TODO:'; 'TODO:|FIXME:' adds another).
+function M.fuzzyTodo()
+  local style = require('pure.pickerstyle')
+  style.colors()
+  local here = vim.api.nvim_buf_get_name(0)
+  local dir = here ~= "" and vim.fs.dirname(here) or vim.fn.getcwd()
+  dir = vim.fs.normalize(dir)
+  local root = vim.fs.root(dir, ".git")
+  local base = root or dir
+  local depth = root and "" or (" --max-depth " .. (vim.g.pure_todo_depth or 3))
+  local pattern = vim.g.pure_todo_pattern or "TODO:"
+
+  local cmd = string.format("cd %s && rg --line-number --column --no-heading --color=never%s%s -e %s -- .",
+    vim.fn.shellescape(base), depth, vaultNoIgnore(base .. "/"), vim.fn.shellescape(pattern))
+  local found = vim.fn.systemlist(cmd)
+  local scope = root and ("repo " .. vim.fs.basename(root)) or ("folder " .. vim.fs.basename(dir))
+
+  -- path:line:col:text, the files by modification time (newest first), the lines in order.
+  local mtimes, entries = {}, {}
+  for _, row in ipairs(found) do
+    local rel, lnum, col, text = row:match("^(.-):(%d+):(%d+):(.*)$")
+    if rel then
+      -- ripgrep on Windows writes .\dir\file.
+      rel = rel:gsub("^%.[/\\]", ""):gsub("\\", "/")
+      local full = base .. "/" .. rel
+      if mtimes[full] == nil then
+        local stat = vim.uv.fs_stat(full)
+        mtimes[full] = stat and stat.mtime.sec or 0
+      end
+      entries[#entries + 1] = { full = full, rel = rel, lnum = tonumber(lnum), col = tonumber(col), text = text }
+    end
+  end
+  if #entries == 0 then
+    return vim.notify(("No %s found in %s"):format(pattern, scope), vim.log.levels.INFO)
+  end
+  table.sort(entries, function(a, b)
+    if mtimes[a.full] ~= mtimes[b.full] then return mtimes[a.full] > mtimes[b.full] end
+    if a.full ~= b.full then return a.full < b.full end
+    return a.lnum < b.lnum
+  end)
+
+  local lines = {}
+  for _, e in ipairs(entries) do
+    -- What the TODO says: the text after the marker (the whole line when nothing follows it).
+    local tag, rest = e.text:match("(%u+):%s*(.*)$")
+    local said = vim.trim((rest and rest ~= "") and rest or e.text)
+    local left = style.paint("PureNoteAlias", (tag or "TODO") .. " ") .. style.trunc(said, style.NAME_WIDTH + 30)
+    local meta = string.format("%-36s  %11s", style.truncLeft(e.rel .. ":" .. e.lnum, 36), style.age(mtimes[e.full]))
+    -- The hidden fields: the path, the line and the column (tab-separated: a drive letter's ":" is no trouble).
+    lines[#lines + 1] = table.concat({ style.row(left, meta), e.full, e.lnum, e.col }, "\t")
+  end
+
+  pickList(lines, {
+    title = (" TODO · %s · %d "):format(scope, #entries),
+    ratio = 0.8,
+    fzf = style.FZF .. " --preview '" .. tool("bat", "batcat") .. " --style=numbers --color=always --highlight-line {3} {2}' --preview-window 'up,60\\%,border-bottom,+{3}+3/3'",
+  }, function(selection)
+    local fields = style.fields(selection)
+    local path, lnum, col = fields[1], tonumber(fields[2]), tonumber(fields[3])
+    if not (path and lnum) then return end
+    vim.cmd("edit! " .. vim.fn.fnameescape(path))
+    pcall(vim.api.nvim_win_set_cursor, 0, { lnum, math.max((col or 1) - 1, 0) })
+    vim.cmd("normal! zvzz")
+    vim.cmd("filetype detect")
+  end)
+end
+
 --- Neovim's help files, and every section of this config's own docs/ pages
 --- ("pure todoist › Sync on …"): picking a section opens its page in a split
 --- at that heading, drawn by mdview.

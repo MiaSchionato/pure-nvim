@@ -20,6 +20,7 @@ split and make fzf quit.)
 | `<leader>fb` | buffers | open buffers |
 | `<leader>f/` | recent files | `:oldfiles` |
 | `<leader>fj` | jump list | with a preview of the spot |
+| `<leader>ft` | **TODO:** | every `TODO:` of the repository (walks up to a `.git`; with none, the folder and 3 levels down); see below |
 | `<leader>f"` | registers | every register with text; `Enter` makes it the unnamed register (the one `p` pastes) |
 | `<leader>fh` | help | Neovim's help files and every section of these docs (`pure todoist › …`) |
 | `<leader>fc` | colorschemes | the choice is remembered across restarts; **omarchy** (first) follows the Omarchy theme |
@@ -38,6 +39,14 @@ modification (`2h 0m ago`, `3d 2h ago`, as Dired does), but only for the recentl
 the older ones read `14d+ ago`. The line is drawn by an `awk` at the end of the `fd` pipe. Live grep colours ripgrep's
 output with the same groups: the file in the name colour, the numbers dim, the match in the alias
 colour. The git log and the explorer keep the colours of `git` and `ls`.
+
+**TODO:** (`<leader>ft`): lists every `TODO:` (the plain text a snippet puts in code or notes; not
+org.nvim's keyword, so each note and file keeps its own). The scope is the repository: from the folder
+of the current file it walks up to a `.git` and searches the whole repo. With no repository it
+searches the folder of the file and the subfolders down to `vim.g.pure_todo_depth` levels (3). The
+files written last come first. Each line is the text of the TODO, then the file, the line and how long
+ago the file changed; typing filters all of that, the preview shows the spot, `Enter` jumps to it.
+`vim.g.pure_todo_pattern` is the regex (`'TODO:'`; `'TODO:|FIXME:'` adds another).
 
 **Live grep** (`<leader>fg`): nothing is listed until you type; ripgrep runs
 again on every change of the query (a regular expression; case-sensitive
