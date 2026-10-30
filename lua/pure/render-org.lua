@@ -796,11 +796,18 @@ local function links(buf, row, text, from, raw_col, mark)
         local first = start + 1 -- 0-based column after '[['
         if desc then
           local shown = first + #target + 2 -- after '][', where the text starts
+          -- [[id:ID][Note#Heading||alias]]: the text keeps what the link is to, the render shows the alias only.
+          local bar = desc:find('||', 1, true)
+          if bar and bar + 1 < #desc then shown = shown + bar + 1 end
           mark(row, start - 1, { end_col = shown, conceal = '' })
           mark(row, shown, { end_col = stop - 3, hl_group = 'PureMdLink' })
         else
-          mark(row, start - 1, { end_col = first, conceal = '' })
-          mark(row, first, { end_col = stop - 3, hl_group = 'PureMdLink' })
+          -- [[Note#Heading||alias]] (no target apart from the text): the same, the alias only.
+          local bar = inner:find('||', 1, true)
+          local shown = first
+          if bar and bar + 1 < #inner then shown = first + bar + 1 end
+          mark(row, start - 1, { end_col = shown, conceal = '' })
+          mark(row, shown, { end_col = stop - 3, hl_group = 'PureMdLink' })
         end
         mark(row, stop - 3, { end_col = stop - 1, conceal = '' })
       end
