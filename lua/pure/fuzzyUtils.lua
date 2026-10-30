@@ -371,7 +371,11 @@ local function dotAwareList(path, kind, styled)
     if not recent then return linesOf("") end
     local out = { "cd " .. base .. " || exit 0", "{" }
     vim.list_extend(out, linesOf(" --changed-within " .. recent))
-    vim.list_extend(out, { "} | xargs -r -d '\\n' ls -td --", "{" })
+    -- Styled lists carry the modification time ("EPOCH<tab>path", newest first: sort -rn) for the age
+    -- column; stat over every file would take minutes in a big tree, so only these few are read.
+    local sorted = styled and "xargs -r -d '\\n' stat --printf '%Y\\t%n\\n' -- | sort -rn"
+      or "xargs -r -d '\\n' ls -td --"
+    vim.list_extend(out, { "} | " .. sorted, "{" })
     vim.list_extend(out, linesOf(" --changed-before " .. recent))
     out[#out + 1] = "}"
     return out
@@ -384,7 +388,9 @@ local function dotAwareList(path, kind, styled)
   local awk
   if styled then
     awk = vim.fs.normalize(vim.fn.tempname()) .. ".awk"
-    vim.fn.writefile(vim.split(require('pure.pickerstyle').awkProgram(), "\n", { plain = true }), awk)
+    -- The files older than the recent window have no age of their own: they read "14d+ ago".
+    local stale = recent and (recent .. "+ ago") or nil
+    vim.fn.writefile(vim.split(require('pure.pickerstyle').awkProgram(stale), "\n", { plain = true }), awk)
   end
   -- The list of a script, drawn when `styled`.
   local function listOf(file)

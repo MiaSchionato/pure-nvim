@@ -86,6 +86,8 @@ function M.fileLine(path, hidden, extra)
   local dir = vim.fn.fnamemodify(full, ':~:h')
   local stat = vim.uv.fs_stat(full)
   local meta = M.truncLeft(dir, 36) .. (extra or '')
+  -- The age in a column of its own, so the lines line up (as the file search's awk does).
+  meta = meta .. string.rep(' ', math.max(36 - vim.fn.strdisplaywidth(meta), 0))
   if stat then meta = string.format('%s  %11s', meta, M.age(stat.mtime.sec)) end
   local fields = { M.row(M.paint('PureNoteFile', M.trunc(name, M.NAME_WIDTH - 2)), meta) }
   for _, field in ipairs(hidden or { full }) do fields[#fields + 1] = tostring(field) end
@@ -104,9 +106,12 @@ function M.fields(selection)
   return out
 end
 
---- The awk program that turns a list of paths into such lines (name, then the folder, dim; the path after a tab).
---- Used where the list is made by fd, so the lines are drawn without Neovim reading them.
-function M.awkProgram()
+--- The awk program that turns a list of paths into such lines (name, then the folder and the age, dim;
+--- the path after a tab). Used where the list is made by fd, so the lines are drawn without Neovim
+--- reading them. A line may start with "EPOCH<tab>" (the modification time, which the recent files
+--- carry): its age is drawn like Dired's (1h 37m ago). A line without it gets `staleLabel` (e.g.
+--- "14d+ ago": older than the recent window, whose files are not looked at one by one), or nothing.
+function M.awkProgram(staleLabel)
   local function sgr(group)
     local r, g, b = M.rgb(group)
     if not r then return '', '' end
@@ -115,15 +120,30 @@ function M.awkProgram()
   local nameOn, off = sgr('PureNoteFile')
   local dirOn = sgr('PureNoteSep')
   return table.concat({
+    'function ago(s,   d, h, m) {',
+    '  if (s < 0) s = 0',
+    '  d = int(s / 86400); h = int(s % 86400 / 3600); m = int(s % 3600 / 60)',
+    '  if (s < 60) return "now"',
+    '  if (s < 3600) return m "m ago"',
+    '  if (s < 86400) return h "h " m "m ago"',
+    '  if (d < 10) return d "d " h "h ago"',
+    '  return d "d ago"',
+    '}',
+    'BEGIN { now = systime() }',
     '{',
     '  line = $0',
+    '  stamp = ""',
+    '  if (match(line, /^[0-9]+\\t/)) { stamp = ago(now - substr(line, 1, RLENGTH - 1)); line = substr(line, RLENGTH + 1) }',
+    '  else stamp = "' .. (staleLabel or '') .. '"',
     '  n = split(line, a, "/")',
     '  name = a[n]',
     '  if (name == "" && n > 1) name = a[n - 1] "/"',
     '  dir = (n > 1) ? substr(line, 1, length(line) - length(a[n]) - 1) : ""',
+    '  if (length(dir) > 36) dir = "…" substr(dir, length(dir) - 34)',
     '  pad = ' .. M.NAME_WIDTH .. ' - length(name)',
     '  if (pad < 2) pad = 2',
-    string.format('  printf "%s%%s%s%%*s%s%%s%s\\t%%s\\n", name, pad, "", dir, line', nameOn, off, dirOn, off),
+    '  meta = sprintf("%-36s  %11s", dir, stamp)',
+    string.format('  printf "%s%%s%s%%*s%s%%s%s\\t%%s\\n", name, pad, "", meta, line', nameOn, off, dirOn, off),
     '}',
   }, '\n') .. '\n'
 end
