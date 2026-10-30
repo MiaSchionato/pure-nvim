@@ -463,18 +463,53 @@ end
 --- highlighted ('noselect' of this configuration leaves none: Enter would only have made a new line, and
 --- a [[foo||short could never be written). Anything else is what Enter was (org.nvim's table row, ...).
 local PREV_DESC = 'pure-links-enter'
+
+--- Enter right after a typed `[[note||alias`, with no menu on screen (typed faster than the menu follows):
+--- the link is written for the best match, or for a new note when nothing matches.
+local function takeTyped()
+  if vim.g.pure_links_complete == false then return false end
+  local win, buf = api.nvim_get_current_win(), api.nvim_get_current_buf()
+  local row, col = unpack(api.nvim_win_get_cursor(win))
+  local before = api.nvim_get_current_line():sub(1, col)
+  local _, _, typed = before:find('%[%[([^%]]*)$')
+  if not typed or not typed:find('||', 1, true) then return false end
+  local start = M.complete(1, '')
+  if start == -3 or state.mode ~= 'note' then return false end
+  local base = before:sub(start + 1)
+  local list, query, headingsOnly = candidates(base, 'note', nil)
+  state.input, state.items = base, list
+  local alias = aliasOf(base)
+  if list[1] then
+    writeLink(buf, win, row - 1, state.linkstart, col, list[1], { alias = alias })
+  elseif query ~= '' and not headingsOnly then
+    writeLink(buf, win, row - 1, state.linkstart, col, nil, { new = query, alias = alias })
+  else
+    return false
+  end
+  return true
+end
+
 local function installEnter(buf)
   local cur = vim.fn.maparg('<CR>', 'i', false, true)
   if cur.desc == PREV_DESC and cur.buffer == 1 then return end
-  local prev = (type(cur) == 'table' and cur.buffer == 1) and cur or nil
+  -- What <CR> was: this buffer's (org.nvim's table row) or the global one (list item, Copilot, menu).
+  local prev = (type(cur) == 'table' and cur.lhs) and cur or nil
   vim.keymap.set('i', '<CR>', function()
     if vim.fn.pumvisible() == 1 then
       local info = vim.fn.complete_info({ 'items', 'selected' })
       local function ours(it) return it and type(it.user_data) == 'table' and it.user_data.pure_link ~= nil end
       if info.selected >= 0 and ours(info.items[info.selected + 1]) then return keys('<C-y>') end
       if info.selected < 0 and ours(info.items[1]) then return keys('<C-n><C-y>') end
+    elseif takeTyped() then
+      return
     end
-    if prev and prev.callback then return prev.callback() end
+    if prev and prev.callback then
+      local out = prev.callback()
+      if prev.expr == 1 and type(out) == 'string' and out ~= '' then
+        api.nvim_feedkeys(prev.replace_keycodes == 1 and api.nvim_replace_termcodes(out, true, false, true) or out, 'ni', false)
+      end
+      return
+    end
     if prev and prev.rhs and prev.rhs ~= '' then return keys(prev.rhs, prev.noremap == 1 and 'ni' or 'mi') end
     keys('<CR>')
   end, { buffer = buf, desc = PREV_DESC })
