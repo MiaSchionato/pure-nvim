@@ -108,10 +108,10 @@ end
 
 --- The awk program that turns a list of paths into such lines (name, then the folder and the age, dim;
 --- the path after a tab). Used where the list is made by fd, so the lines are drawn without Neovim
---- reading them. A line may start with "EPOCH<tab>" (the modification time, which the recent files
---- carry): its age is drawn like Dired's (1h 37m ago). A line without it gets `staleLabel` (e.g.
---- "14d+ ago": older than the recent window, whose files are not looked at one by one), or nothing.
-function M.awkProgram(staleLabel)
+--- reading them. A line may start with "@LABEL<tab>" (how recently the file changed, as the list's tier
+--- says: "<1h ago", "<1d ago", "7d+ ago"): the label is the age column. Reading the time of every file
+--- takes minutes in a big tree, so the age is the tier of the list, not the exact time.
+function M.awkProgram()
   local function sgr(group)
     local r, g, b = M.rgb(group)
     if not r then return '', '' end
@@ -120,21 +120,10 @@ function M.awkProgram(staleLabel)
   local nameOn, off = sgr('PureNoteFile')
   local dirOn = sgr('PureNoteSep')
   return table.concat({
-    'function ago(s,   d, h, m) {',
-    '  if (s < 0) s = 0',
-    '  d = int(s / 86400); h = int(s % 86400 / 3600); m = int(s % 3600 / 60)',
-    '  if (s < 60) return "now"',
-    '  if (s < 3600) return m "m ago"',
-    '  if (s < 86400) return h "h " m "m ago"',
-    '  if (d < 10) return d "d " h "h ago"',
-    '  return d "d ago"',
-    '}',
-    'BEGIN { now = systime() }',
     '{',
     '  line = $0',
     '  stamp = ""',
-    '  if (match(line, /^[0-9]+\\t/)) { stamp = ago(now - substr(line, 1, RLENGTH - 1)); line = substr(line, RLENGTH + 1) }',
-    '  else stamp = "' .. (staleLabel or '') .. '"',
+    '  if (match(line, /^@[^\\t]*\\t/)) { stamp = substr(line, 2, RLENGTH - 2); line = substr(line, RLENGTH + 1) }',
     '  n = split(line, a, "/")',
     '  name = a[n]',
     '  if (name == "" && n > 1) name = a[n - 1] "/"',

@@ -66,9 +66,61 @@ local function attach(buf)
   })
 end
 
+-- -----------------------------------------------------------------------------
+--  The folder the scratch note stands for
+-- -----------------------------------------------------------------------------
+-- The pickers start from the folder of the current file (<leader>ff, <leader>fg, <leader>nf, <leader>ft...).
+-- The scratch note lives in Neovim's data folder, which is nowhere you want to search, so each window that
+-- shows it remembers the folder it was opened from (w:pure_dir): that of the file the window had before, or
+-- of the previous tab's file for a new tab, or the working folder. It is per window, so two tabs on the
+-- same note can stand for two projects, and it only counts while the window shows the note.
+
+--- The folder to remember for `win`, which is about to show the scratch note.
+local function originDir(win)
+  local buf = vim.api.nvim_win_get_buf(win)
+  if vim.b[buf].pure_scratch then return vim.w[win].pure_dir end
+  local name = vim.api.nvim_buf_get_name(buf)
+  if name ~= '' and vim.bo[buf].buftype == '' then return vim.fs.dirname(vim.fs.normalize(name)) end
+  -- A new tab: look at what the previous tab was showing.
+  local prev = vim.fn.tabpagenr('#')
+  if prev > 0 then
+    local winnr = vim.fn.tabpagewinnr(prev)
+    local pbuf = vim.fn.tabpagebuflist(prev)[winnr]
+    if pbuf then
+      local pname = vim.api.nvim_buf_get_name(pbuf)
+      if vim.b[pbuf].pure_scratch then
+        local dir = vim.fn.gettabwinvar(prev, winnr, 'pure_dir')
+        if dir ~= '' then return dir end
+      elseif pname ~= '' and vim.bo[pbuf].buftype == '' then
+        return vim.fs.dirname(vim.fs.normalize(pname))
+      end
+    end
+  end
+  return vim.fs.normalize(vim.fn.getcwd())
+end
+
+--- The folder the pickers start from: that of the current file, or, in the scratch note, the one the
+--- window remembers. `up` is how many levels above it (0: the folder itself); no trailing slash.
+function M.dir(up)
+  local dir
+  if vim.b.pure_scratch and vim.w.pure_dir and vim.w.pure_dir ~= '' then
+    dir = vim.w.pure_dir
+  else
+    dir = vim.fn.expand('%:p:h')
+  end
+  dir = vim.fs.normalize(dir)
+  for _ = 1, up or 0 do
+    local parent = vim.fs.dirname(dir)
+    if parent == dir or parent == '.' then break end
+    dir = parent
+  end
+  return dir
+end
+
 --- Show the scratch note in `win` (default: the current window).
 function M.open(win)
   win = win or vim.api.nvim_get_current_win()
+  vim.w[win].pure_dir = originDir(win)
   local path = M.path()
   vim.fn.mkdir(vim.fs.dirname(path), 'p')
   local fresh = vim.fn.filereadable(path) == 0

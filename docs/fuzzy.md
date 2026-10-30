@@ -33,10 +33,11 @@ finder). The name is in colour on the left (`PureNoteFile`), then, dim to the ri
 its folder and how long ago it was written. What you type matches the name, the folder and the age.
 The full path (and the line) ride along as hidden fields. Files (`ff`, `fn`, `f.`, `f~`), recent files
 (`f/`), buffers (most recently used first), the jump list, help (page › section), registers and
-colorschemes draw their lines this way. In the file search the age is the time since the last
-modification (`2h 0m ago`, `3d 2h ago`, as Dired does), but only for the recently changed files
-(`vim.g.pure_fuzzy_recent`, below): reading the time of every file takes minutes in a big tree, so
-the older ones read `14d+ ago`. The line is drawn by an `awk` at the end of the `fd` pipe. Live grep colours ripgrep's
+colorschemes draw their lines this way. In the file search the age column is the tier the file is in
+(`<1h ago`, `<1d ago`, `<7d ago`, `7d+ ago`; see "Recent first" below), not the exact time: reading the
+time of every file took minutes in a big tree and froze the picker. Buffers and recent files show the
+exact time (`2h 0m ago`, as Dired does). The file search line is drawn by an `awk` at the end of the
+`fd` pipe. Live grep colours ripgrep's
 output with the same groups: the file in the name colour, the numbers dim, the match in the alias
 colour. The git log and the explorer keep the colours of `git` and `ls`.
 
@@ -80,16 +81,29 @@ the template picker…) gets this same fzf window.
 ```lua
 -- folders never listed by the file pickers
 vim.g.pure_fuzzy_ignore = { '.git', '.obsidian', 'node_modules' }
--- the file pickers list what changed within this time first, the newest on top ('14d' default; false: off)
-vim.g.pure_fuzzy_recent = '14d'
+-- besides vim.g.pure_fuzzy_ignore, these are never listed either (default: node_modules, __pycache__,
+-- .venv, venv, site-packages and **/pkg/mod, the Go module cache); {} for none
+vim.g.pure_fuzzy_ignore_extra = { 'node_modules', '__pycache__', '.venv', 'venv', 'site-packages', '**/pkg/mod' }
+-- the file pickers list what changed within these limits first, tier by tier ({ '1h', '1d', '7d' } is the
+-- default, a single string works too; false: off)
+vim.g.pure_fuzzy_recent = { '1h', '1d', '7d' }
 ```
 
-**Recent first.** In the file pickers the files edited lately are on top, the newest first, then all
-the others (so with nothing typed you see what you were working on; when you type, the best match
-still wins and, between equal matches, the newer file wins). fd cannot sort, so it lists what
-changed within `vim.g.pure_fuzzy_recent` (`fd --changed-within`) through `ls -t`, then the rest. The
-recent files, buffers (last used first) and the Flora finder (`<leader>vf`, notes written last first)
-already worked this way.
+**Recent first.** In the file pickers the files edited lately are on top, then all the others (so with
+nothing typed you see what you were working on; when you type, the best match still wins and, between
+equal matches, the earlier one in the list wins). fd cannot sort and reading the time of every file takes
+minutes, so the list is made in tiers, one fd run each (`--changed-within 1h`, then changed within 1d and
+before 1h, ... then everything older than the last limit); fzf shows the first tier at once while the
+others are still being listed. Inside a tier the order is the one of the folder walk. Buffers (last used
+first), recent files and the Flora finder (`<leader>vf`, notes written last first) are sorted exactly.
+The whole home folder (17 000 files) is listed in under a second; an earlier version that read the time
+of every recent file took over a minute.
+
+**The folder a picker starts from** is that of the current file (`<leader>ff` four levels up, `<leader>fg`
+and `<leader>nf` one level up, the TODO, git log and git grep pickers the folder itself). In the scratch
+note (it lives in Neovim's data folder, nowhere to search) the window remembers the folder it was
+opened from: that of the file the window showed before, or of the previous tab's file for a new tab, or
+the working folder (`pure/scratch.lua`, `require('pure.scratch').dir(levels)`).
 
 ## Adding a picker
 
