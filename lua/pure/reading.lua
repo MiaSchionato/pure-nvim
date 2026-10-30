@@ -8,12 +8,15 @@
 --
 --    toggle (<leader>tR)   reading mode on / off in this tab
 --    :PureReading [on|off|toggle]
+--    :PureReading width 100      the text column is 100 columns wide (now, and from then on)
+--    :PureReading width +8 / -8  wider / narrower by 8
+--    :PureReading width          shows it
 --
---  It is saved (configs/toggles.lua key `reading`) and applied again at the next
---  start and in new tabs that open on a file.
+--  It is saved (configs/toggles.lua keys `reading`, `reading_width`) and applied again at the
+--  next start and in new tabs that open on a file.
 --
 --  Settings (configs.lua):
---    vim.g.pure_reading_width   the width of the text column (default 84)
+--    vim.g.pure_reading_width   the width of the text column when none was chosen with the command (84)
 --    vim.g.pure_reading_min     the smallest margin, in columns (default 4); a window
 --                               too narrow for the column keeps the margins and the text shrinks
 --
@@ -51,9 +54,19 @@ local function valid(win)
   return win and api.nvim_win_is_valid(win)
 end
 
+local MIN_WIDTH, MAX_WIDTH = 30, 400
+
+--- The width of the text column: what :PureReading width chose (saved), else vim.g.pure_reading_width, else 84.
+function M.width()
+  local ok, toggles = pcall(require, 'configs.toggles')
+  local chosen = ok and toggles.get('reading_width')
+  if type(chosen) == 'number' then return chosen end
+  return setting('width', 84)
+end
+
 --- The margin that centres a column of the wanted width, never below the minimum.
 local function marginFor(total)
-  local width = setting('width', 84)
+  local width = M.width()
   local min = setting('min', 4)
   return math.max(math.floor((total - width) / 2), min)
 end
@@ -129,6 +142,26 @@ function M.set(want, quiet)
 end
 
 function M.toggle() M.set(nil) end
+
+--- Set the width of the text column: a number, or "+8" / "-8" from the current one. Saved; the margins
+--- of every tab are laid out again at once.
+function M.set_width(spec)
+  local current = M.width()
+  local text = tostring(spec):gsub('%s', '')
+  local width
+  if text:match('^[+-]%d+$') then
+    width = current + tonumber(text)
+  elseif text:match('^%d+$') then
+    width = tonumber(text)
+  else
+    return vim.notify('Reading width: ' .. current .. ' (use a number, +N or -N)')
+  end
+  width = math.min(math.max(width, MIN_WIDTH), MAX_WIDTH)
+  local ok, toggles = pcall(require, 'configs.toggles')
+  if ok then toggles.set('reading_width', width) end
+  for _, state in pairs(tabs) do sizes(state) end
+  vim.notify('Reading width ' .. width)
+end
 
 function M.is_on() return tabs[api.nvim_get_current_tabpage()] ~= nil end
 
@@ -207,12 +240,14 @@ api.nvim_create_autocmd('VimEnter', {
 })
 
 api.nvim_create_user_command('PureReading', function(opts)
-  if opts.args == 'on' then M.set(true)
-  elseif opts.args == 'off' then M.set(false)
+  local arg = vim.trim(opts.args)
+  if arg == 'on' then M.set(true)
+  elseif arg == 'off' then M.set(false)
+  elseif arg:match('^width') then M.set_width(vim.trim(arg:sub(6)))
   else M.toggle() end
 end, {
-  nargs = '?',
-  complete = function() return { 'on', 'off', 'toggle' } end,
+  nargs = '*',
+  complete = function() return { 'on', 'off', 'toggle', 'width' } end,
   desc = 'Reading mode: a column of text between wide margins',
 })
 
