@@ -822,10 +822,18 @@ function M.setup()
     end
 
     -- on_choice(nil, nil) on cancel, as vim.ui.select promises.
-    pickList(choices, { title = opts.prompt or "Select" }, function(selection)
-      for i, choice in ipairs(choices) do
-        if choice == selection then return selected(items[i], i) end
-      end
+    -- Drawn as <leader>vf (the choice in the name colour; its index is the hidden field that comes back), so
+    -- every list a plugin asks for (code actions, org.nvim's pickers, templates) looks like the others.
+    local style = require('pure.pickerstyle')
+    style.colors()
+    local lines = {}
+    for i, choice in ipairs(choices) do
+      lines[i] = style.paint('PureNoteFile', (choice:gsub('[\r\n\t]+', ' '))) .. '\t' .. i
+    end
+    local prompt = vim.trim((opts.prompt or 'Select'):gsub(':%s*$', ''))
+    pickList(lines, { title = ' ' .. prompt .. ' ', fzf = style.FZF .. ' --no-sort' }, function(selection)
+      local i = tonumber(style.last(selection))
+      if i and items[i] ~= nil then return selected(items[i], i) end
       selected(nil, nil)
     end, function() selected(nil, nil) end)
   end

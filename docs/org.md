@@ -119,6 +119,37 @@ notes). The list is in [keymaps.md](keymaps.md). Links are by `:ID:`, so renamin
 or moving a note breaks none. The Atlas functions are left in
 `pure/zettelkasten.lua` and `pure/notes.lua` as commands, without keys.
 
+## Links between notes (`[[`, `<leader>vi`, `lua/pure/links.lua`)
+
+A port of the Emacs side (`link-complete.el` and `aliases.el` in the Doom config). In an org note,
+typing `[[` opens Neovim's own completion menu (the `completefunc` of the buffer; Tab / S-Tab or
+`<C-n>` / `<C-p>` move, Enter takes the highlighted item, the first is highlighted at once, Esc closes
+it) with the notes, the aliases and the headings (levels 1-2) of the vault, filtered as you type
+(words in any order, accents and case ignored; better matches first, notes before headings, the
+newer first). Taking one replaces `[[foo` by `[[id:ID][Title]]` (the render shows only the title):
+the target gets its `:ID:` now when it had none, in the file or in the heading, through org.nvim's
+`org.id`, and the file is written (the buffer you are in, or one with unsaved changes, is left
+modified).
+
+| You type | What you get |
+|---|---|
+| `[[foo` | notes, aliases and headings called like foo; the last item, `+ New note: foo`, makes a `SEED` called foo in `inbox.org` and links to it |
+| `[[*foo` or `[[#foo` | only headings |
+| `[[note*foo`, `[[note#foo`, `[[note:foo` | only the headings of the notes whose name has "note" |
+| `[[foo\|\|short` | the link reads "short" and the alias is saved in the note (`:ROAM_ALIASES: short`, also at a heading when it is a heading that is linked) |
+
+After a note is taken the cursor stays **inside** the link, at the end of its text, so `]` goes out
+past the `]]` (the pairs already skip it) and `*`, `#` or `:` there opens the headings of that note
+(the separator has to be typed there: a colon that is already in a title does nothing); taking one
+turns the link into a link to that heading, `[[id:HEADING-ID][Heading]]`, with the cursor after it.
+A typed link (`[[file:`, `[[https:`...) is not searched. `vim.g.pure_links_complete = false` turns the
+menu off.
+
+`<leader>vi` (normal mode) is the same list in the picker of `<leader>vf` (the same look and order)
+and inserts the link at the cursor; a title that matches nothing makes a seed in the inbox and links
+to it. Every `vim.ui.select` list (org.nvim's own pickers, code actions, templates...) is drawn in
+that look too ([fuzzy.md](fuzzy.md)).
+
 ## Find (`<leader>vf`)
 
 One picker for the whole vault, a port of Doom's `SPC v f` (`vault-open.el`), in

@@ -270,7 +270,7 @@ end
 M._find = { entries = findEntries, line = findLine, newSeed = newSeed }
 
 M.newNote = org('roam_capture')
-M.insertLink = org('roam_node_insert')
+M.insertLink = function() require('pure.links').pick() end
 M.backlinks = org('roam_buffer_toggle')
 M.template = org('capture')
 M.newSeed = org('capture s')

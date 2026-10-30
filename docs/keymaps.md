@@ -211,7 +211,7 @@ See [manim.md](manim.md).
 | `<leader>vn` | n | New seed (inbox) |
 | `<leader>vN` | n | New note in its own file |
 | `<leader>vt` | n | Capture: pick a template |
-| `<leader>vi` | n | Insert a link to a node |
+| `<leader>vi` | n | Insert a link to a node: the picker of `<leader>vf`, then `[[id:ID][Title]]` at the cursor (typing `[[` in an org note opens the same list as a menu, see [org.md](org.md)) |
 | `<leader>vb` | n | Backlinks (notes linking here) |
 | `<leader>vr` | n | Rename this note (title and file; links are by `:ID:`) |
 | `<leader>vd` | n | Delete this note (moved to `archive/trash/`) |
