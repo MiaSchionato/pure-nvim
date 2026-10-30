@@ -171,7 +171,9 @@ One picker for the whole vault, a port of Doom's `SPC v f` (`vault-open.el`), in
 `Note name`; a heading (down to level 4) reads `Note name › Heading`, the heading in the
 colour of its level; an alias (`:ROAM_ALIASES:`, of a note or a heading) reads
 `Alias → Note name › Heading`, in italics. On the right, dim: the path and how long ago the
-note was written. The newest notes come first and `archive/` last; any part of the name,
+note was written. The name of a note weighs more than a word inside it: every note (and its aliases)
+comes before any heading, the newest first, then the headings in the same order, and `archive/` last
+of all, so with a typed name the note is above the headings that only hold it; any part of the name,
 the path or an alias matches, words in any order. Enter opens the note at the heading; a
 title that matches nothing makes a seed in `inbox.org`.
 
