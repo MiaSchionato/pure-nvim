@@ -615,23 +615,39 @@ end
 --  asks as you type (the 'o' in 'complete'). Outside a [[link it hands the
 --  question to the buffer's language server, when there is one.
 
+--  The same rules as the org notes' [[ menu (pure/links.lua), in Obsidian's syntax, which links by name
+--  (there is no id):
+--    [[Note#Head  [[Note*Head  [[Note:Head   the headings of that note; the separator becomes #
+--    [[Note||short                            [[Note|short]]: the link reads "short"
+--    [[Note||short#Head is not a thing: write [[Note#Head||short]]
+--  After a note is taken the cursor stays INSIDE the link, before the ]] (the pairs step over it), so
+--  that # (or * or :) there lists the headings of that note.
+
 local pending -- what findstart saw, for the second call
 
-function M.omnifunc(findstart, base)
+-- A typed link (`[[https:`, `[[file:`) is not a search for a note.
+local LINK_SCHEMES = { file = true, http = true, https = true, mailto = true, ftp = true, obsidian = true }
+
+local function omni(findstart, base)
   if findstart == 1 then
     pending = nil
     local line = vim.api.nvim_get_current_line()
     local col = vim.api.nvim_win_get_cursor(0)[2]
     local before, after = line:sub(1, col), line:sub(col + 1)
     local start, typed = before:match('.*()%[%[([^%[%]]*)$')
-    if start and not typed:find('|', 1, true) then
+    -- Whatever follows || is the alias; a single | is an alias typed by hand: nothing to complete.
+    local query = typed and (typed:match('^(.-)||') or typed)
+    if start and not query:find('|', 1, true) then
       local closes = after:match('^%]%]') ~= nil
-      local note, head = typed:match('^(.-)#([^#]*)$')
+      local note, sep = query:match('^(.-)([#*:])[^#*:]*$')
+      if note and sep == ':' and LINK_SCHEMES[note:lower()] then note = nil end
       if note then
-        pending = { kind = 'heading', note = note, closes = closes }
-        return col - #head
+        -- Right after the #; for * and : the separator itself, which the item replaces by a #.
+        local from = start + 1 + #note + (sep == '#' and 1 or 0)
+        pending = { kind = 'heading', note = note, closes = closes, sep = sep, col = from, start = start + 1 }
+        return from
       end
-      pending = { kind = 'note', closes = closes }
+      pending = { kind = 'note', closes = closes, col = start + 1 }
       return start + 1 -- 0-based column right after [[
     end
     if #vim.lsp.get_clients({ bufnr = 0, method = 'textDocument/completion' }) > 0 then
@@ -652,6 +668,26 @@ function M.omnifunc(findstart, base)
     local here = vim.api.nvim_buf_get_name(0)
     local from = here ~= '' and relTo(root, here) or nil
     local rel = p.note == '' and from or resolve(idx, p.note, from)
+    -- [[proj*bud: not a name that resolves, but words of one (as in the org notes): the shortest note whose
+    -- name has them all. The link is then written with the real name.
+    local fuzzyName
+    if not rel and p.note ~= '' then
+      local ws = {}
+      for w in lower(p.note):gmatch('%S+') do ws[#ws + 1] = w end
+      local best
+      for _, f in ipairs(idx.files) do
+        if f:match('%.md$') then
+          local name = lower(f:match('[^/]*$'))
+          local all = true
+          for _, w in ipairs(ws) do
+            if not name:find(w, 1, true) then all = false break end
+          end
+          if all and (not best or #f < #best) then best = f end
+        end
+      end
+      rel = best
+      fuzzyName = best and linkName(idx, best)
+    end
     if not rel then return {} end
     local path = root .. '/' .. rel
     local bufnr = vim.fn.bufnr(path)
@@ -662,12 +698,30 @@ function M.omnifunc(findstart, base)
       local text = l:match('^#+%s+(.-)%s*#*%s*$')
       if text and text ~= '' then table.insert(heads, text) end
     end
-    if base ~= '' then heads = vim.fn.matchfuzzy(heads, base) end
+    -- [[Note#Head||short: what follows || is the alias of the link, not part of the search.
+    local query, alias = base:match('^(.-)||(.*)$')
+    query = query or base
+    -- With * or : the text starts at the separator itself (the item replaces it by a #).
+    if p.sep ~= '#' then query = query:sub(2) end
+    local suffix = alias and ('|' .. alias) or ''
+    local lead = p.sep == '#' and '' or '#'
+    if query ~= '' then heads = vim.fn.matchfuzzy(heads, query) end
     for _, h in ipairs(heads) do
-      table.insert(items, { word = h .. close, abbr = h, menu = '#', equal = 1 })
+      if fuzzyName then
+        -- The note part was only words: the link starts again at the [[, with the note's real name.
+        table.insert(items, { word = fuzzyName .. '#' .. h .. suffix .. close, abbr = h, menu = fuzzyName, equal = 1,
+          user_data = { pure_md_from = p.start } })
+      else
+        table.insert(items, { word = lead .. h .. suffix .. close, abbr = h, menu = '#', equal = 1 })
+      end
     end
     return items
   end
+
+  -- [[Note||short: the part before || is what is searched; the link is written [[Note|short]].
+  local searched, aliasText = base:match('^(.-)||(.*)$')
+  if searched then base = searched end
+  local suffix = aliasText and ('|' .. aliasText) or ''
 
   -- Improved for Improvment.md in the vault ("the [[links]] and folders
   -- completion"). It only offered notes by name, so:
@@ -709,7 +763,7 @@ function M.omnifunc(findstart, base)
         local link = isNote(f) and f:match('%.md$') and (f:gsub('%.md$', '')) or f
         if isNote(f) then label = label:gsub('%.md$', '') end
         table.insert(cands, label)
-        info[label] = { word = link .. close, kind = isNote(f) and 'note' or 'file' }
+        info[label] = { word = link .. suffix .. close, kind = isNote(f) and 'note' or 'file' }
       end
     end
     cands = rest ~= '' and vim.fn.matchfuzzy(cands, rest) or cands
@@ -717,7 +771,8 @@ function M.omnifunc(findstart, base)
     for i, label in ipairs(cands) do
       if i > 200 then break end
       local it = info[label]
-      table.insert(items, { word = it.word, abbr = label, kind = it.kind, menu = dir_typed, equal = 1 })
+      table.insert(items, { word = it.word, abbr = label, kind = it.kind, menu = dir_typed, equal = 1,
+        user_data = { pure_note_link = it.kind == 'note' and suffix == '' } })
     end
     return items
   end
@@ -730,7 +785,7 @@ function M.omnifunc(findstart, base)
     local kind = isNote(f) and 'note' or 'file'
     local name = linkName(idx, f)
     if not by[name] then
-      by[name] = { word = name .. close, kind = kind, dir = dirOf(f), rank = recent[lower(f)] }
+      by[name] = { word = name .. suffix .. close, kind = kind, dir = dirOf(f), rank = recent[lower(f)] }
       table.insert(groups[kind], name)
     end
   end
@@ -770,7 +825,8 @@ function M.omnifunc(findstart, base)
       local it = by[name]
       local where = it.dir ~= '' and it.dir or '/'
       table.insert(items, { word = it.word, abbr = name, kind = it.kind,
-        menu = it.rank and ('󰋚 ' .. where) or where, equal = 1 })
+        menu = it.rank and ('󰋚 ' .. where) or where, equal = 1,
+        user_data = { pure_note_link = it.kind == 'note' and suffix == '' } })
     end
   end
   return items
@@ -1148,6 +1204,47 @@ vim.api.nvim_create_autocmd('FileType', {
     -- The Todoist list maps <CR> to toggle a task; it asks M.follow first.
     if vim.bo[buf].buftype ~= '' then return end
     vim.keymap.set('n', '<CR>', M.enter, { buffer = buf, desc = 'Follow link / open block / toggle checkbox' })
+  end,
+})
+
+-- The menu does not write the link itself: Neovim replaces the typed text by the item in its own way
+-- (it kept half of `[[idea||short` and appended `]]`), so each item carries the text of the link in its
+-- user_data and has as its `word` what was typed (nothing changes when it is selected); taking one
+-- (CompleteDone) writes the link over what was typed. A note taken leaves the cursor INSIDE the link,
+-- before the ]], so that a # (or * or :) there lists the headings of that note; the pairs step over
+-- the ]] when you type one.
+function M.omnifunc(findstart, base)
+  local res = omni(findstart, base)
+  if findstart == 1 or type(res) ~= 'table' or not pending or pending.kind == 'lsp' then return res end
+  for _, it in ipairs(res) do
+    if type(it.user_data) ~= 'table' then it.user_data = {} end
+    it.user_data.pure_md = it.word
+    it.word = base
+    it.dup = 1
+  end
+  return res
+end
+
+vim.api.nvim_create_autocmd('CompleteDone', {
+  group = group,
+  callback = function()
+    local item = vim.v.completed_item
+    if type(item) ~= 'table' or type(item.user_data) ~= 'table' or not item.user_data.pure_md then return end
+    if vim.bo.filetype ~= 'markdown' or not pending or not pending.col then return end
+    local from = item.user_data.pure_md_from or pending.col
+    local text, inside = item.user_data.pure_md, item.user_data.pure_note_link
+    vim.schedule(function()
+      local win, buf = vim.api.nvim_get_current_win(), vim.api.nvim_get_current_buf()
+      local row, col = unpack(vim.api.nvim_win_get_cursor(win))
+      local line = vim.api.nvim_get_current_line()
+      if col < from then return end
+      local to = col
+      -- The ]] the pairs added with the [[ are part of the link now.
+      if text:sub(-2) == ']]' and line:sub(to + 1, to + 2) == ']]' then to = to + 2 end
+      vim.api.nvim_buf_set_text(buf, row - 1, from, row - 1, to, { text })
+      local at = from + #text - (inside and text:sub(-2) == ']]' and 2 or 0)
+      pcall(vim.api.nvim_win_set_cursor, win, { row, at })
+    end)
   end,
 })
 

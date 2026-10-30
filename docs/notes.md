@@ -144,6 +144,21 @@ second `]]` (`pure/pairs.lua` already closed the `[[`).
 `Esc` closes the list, and then `Tab` steps past the `]]`
 ([editing.md](editing.md)).
 
+The same rules as the org notes' `[[` menu ([org.md](org.md)), in Obsidian's syntax, which links by name
+(there is no id to write):
+
+| You type | What you get |
+|---|---|
+| `[[Note#head`, `[[Note*head`, `[[Note:head` | the headings of that note; whichever separator you typed, the link is written `[[Note#Heading]]` |
+| `[[Note\|\|short` | `[[Note\|short]]`: the link reads "short" (Obsidian's own alias syntax) |
+| `[[Note#head\|\|short` | `[[Note#Heading\|short]]` |
+
+What follows `||` is not part of the search, and a single `|` typed by hand is left alone. A note taken from
+the menu leaves the cursor **inside** the link, before the `]]`, so a `#` (or `*` or `:`) there lists
+the headings of that note (`Tab` / `]` go out past the `]]`). A typed link (`[[https:`, `[[file:`) is not
+searched. Nothing is written into the other note: Obsidian's links need no id, and an alias lives in the
+link, not in the note.
+
 A name shared by two notes is listed with its folder (`Areas/Ideia`),
 which is how the link has to be written to reach that one. Otherwise
 `[[Note]]` is enough, wherever the note is: links resolve by name, as in
