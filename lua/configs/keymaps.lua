@@ -343,6 +343,7 @@ map('n', '<leader>fc', fzf.fuzzyColorscheme, func.getOpts(opts, "Colorschemes"))
 map("n", "<leader>nf", function() fzf.NewFile(vim.fn.expand('%:p:h:h') .. '/') end,
   func.getOpts(opts, "New file, pick the folder (from two levels up)"))
 map("n", "<leader>ne", function() fzf.NewFileIn(here()) end, func.getOpts(opts, "New file here"))
+map("n", "<leader>ns", function() require('pure.scratch').open() end, func.getOpts(opts, "Scratch note"))
 map("n", "<leader>nh", inDir(fzf.NewFileIn, dirs['~']), func.getOpts(opts, "New file in home"))
 map("n", "<leader>n.", inDir(fzf.NewFileIn, dirs['.']), func.getOpts(opts, "New file in ~/.config"))
 map("n", "<leader>nn", inDir(fzf.NewFileIn, dirs.n), func.getOpts(opts, "New file in nvim config"))
