@@ -309,7 +309,20 @@ local function writeLink(buf, win, row, from, to, entry, opts)
     end
   end
   if not file then return end
-  if opts.alias then text = opts.alias end
+  if opts.alias then
+    -- The text keeps what the link is to, and the alias after ||: the render shows only the alias.
+    local display
+    if opts.new then
+      display = opts.new
+    elseif entry.kind == 'heading' then
+      display = entry.note .. '#' .. entry.title
+    elseif entry.kind == 'alias' then
+      display = entry.heading and (entry.note .. '#' .. entry.target) or entry.target
+    else
+      display = entry.title
+    end
+    text = display .. '||' .. opts.alias
+  end
 
   -- Making the id may add lines above (the drawer of a note, in this very buffer): follow the line.
   local ns = api.nvim_create_namespace('pure_links')
@@ -473,6 +486,7 @@ end
 --  The note is usually picked from the menu first, and the alias typed after, inside the link: its text is
 --  `Title||alias`. When the cursor leaves it (Enter, Esc, a move) it becomes `[[id:ID][alias]]` and the alias
 --  is added to the :ROAM_ALIASES: of the note (or heading) the id names.
+local aliasDone = {} -- id .. NUL .. alias, already saved in this session
 local ALIASLINK = '%[%[id:([^%]]+)%]%[([^%]]-)||([^%]]*)%]%]'
 
 --- Resolve the `||alias` links of the current line. `force`: also the one the cursor is in (Enter).
@@ -511,31 +525,25 @@ local function resolveAliasLinks(buf, force)
     return false
   end
 
-  local result, shift, newcol, changed = {}, 0, col, false
-  local last = 1
+  -- The alias goes into the :ROAM_ALIASES: of the note (or heading) the id names; the text of the link is
+  -- left as it is (`Note#Heading||alias`: the render shows the alias only). Each alias once per session.
+  local newcol, changed = col, false
   for _, j in ipairs(jobs) do
-    local loc = ids.find(j.id)
-    local done = loc and loc.filename and ensureId(loc.filename, loc.lnum or 1, j.alias)
-    if done then
-      local link = string.format('[[id:%s][%s]]', j.id, j.alias)
-      result[#result + 1] = line:sub(last, j.s - 1)
-      result[#result + 1] = link
-      last = j.e + 1
-      local delta = #link - (j.e - j.s + 1)
-      if j.inside then newcol = j.s - 1 + #link elseif col > j.e then newcol = newcol + delta end
-      changed = true
+    local key = j.id .. '\0' .. j.alias
+    if not aliasDone[key] then
+      local loc = ids.find(j.id)
+      local done = loc and loc.filename and ensureId(loc.filename, loc.lnum or 1, j.alias)
+      if done then aliasDone[key] = true end
     end
+    -- Enter inside the link: the cursor goes after it.
+    if j.inside then newcol = j.e; changed = true end
   end
-  result[#result + 1] = line:sub(last)
   -- Making the alias may have added lines above in this very buffer (a drawer): follow the line.
   local pos2 = api.nvim_buf_get_extmark_by_id(buf, ns, mark, {})
   api.nvim_buf_del_extmark(buf, ns, mark)
   row = pos2[1] or row
-  if changed then
-    api.nvim_buf_set_lines(buf, row, row + 1, false, { table.concat(result) })
-    pcall(api.nvim_win_set_cursor, win, { row + 1, newcol })
-    syncIndexSoon()
-  end
+  if changed then pcall(api.nvim_win_set_cursor, win, { row + 1, newcol }) end
+  syncIndexSoon()
   return changed
 end
 
@@ -689,8 +697,27 @@ local function attach(buf)
     buffer = buf,
     callback = function(args)
       if vim.g.pure_links_complete == false then return end
-      if args.event == 'InsertLeavePre' then return resolveAliasLinks(buf, true) end
-      vim.schedule(function() resolveAliasLinks(buf, false) end)
+      -- A failure must not be silent: the alias would just not be saved.
+      local function run(force)
+        local ok, err = pcall(resolveAliasLinks, buf, force)
+        if not ok then
+          vim.g.pure_links_last_error = tostring(err)
+          vim.notify('Link alias: ' .. tostring(err), vim.log.levels.WARN)
+        end
+      end
+      if args.event == 'InsertLeavePre' then return run(true) end
+      vim.schedule(function() run(false) end)
+    end,
+  })
+  -- Out of insert mode too (Esc with a menu open, a move, an idle moment): the alias of a link left behind is
+  -- saved all the same. Each alias once per session, so this costs nothing when there is nothing to do.
+  api.nvim_create_autocmd({ 'InsertLeave', 'CursorMoved', 'CursorHold' }, {
+    group = group,
+    buffer = buf,
+    callback = function()
+      if vim.g.pure_links_complete == false then return end
+      local ok, err = pcall(resolveAliasLinks, buf, true)
+      if not ok then vim.g.pure_links_last_error = tostring(err) end
     end,
   })
   api.nvim_create_autocmd({ 'BufEnter', 'InsertEnter' }, {
@@ -779,6 +806,7 @@ end
 
 -- Exposed for tests.
 M._candidates, M._parse, M._ensureId, M._writeLink, M._accept = candidates, parse, ensureId, writeLink, accept
+M._resolve = resolveAliasLinks
 M._state = state
 
 return M
