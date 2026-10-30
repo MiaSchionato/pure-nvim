@@ -148,8 +148,10 @@ A typed link (`[[file:`, `[[https:`...) is not searched.
 text, and Enter (the menu has to be open: it is what writes the link). The text after `||` is not part
 of the search; it becomes the text of the link and is added to the `:ROAM_ALIASES:` of the note (or of
 the heading), so from then on it is also an entry of the menu and of `<leader>vf` ("short → Note").
-It does nothing in a link that already exists (`[[id:..][Title||x]]`): there the only thing typing
-does is `*`, `#` or `:`.
+The alias belongs to the note that was matched: it never makes a new note (with `||` typed the menu has no
+`+ New note` item). It does nothing in a link that already exists (`[[id:..][Title||x]]`): there the only
+thing typing does is `*`, `#` or `:`. A title with a colon, a star or a hash in it ("Emacs log: to do") is
+found as typed: the separator only asks for headings when the whole text is not the name of a note.
 
 **Why it can fail.** The menu is the `omnifunc` of the buffer (this module answers for the `[[` and
 hands every other question to org.nvim's own, which is what the 'autocomplete' of this configuration
