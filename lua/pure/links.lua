@@ -271,9 +271,16 @@ local function createSeed(title)
   return inbox, first
 end
 
+local syncPending = false
+--- The roam index learns of the new id or alias a moment later, once however many were made. The index's own
+--- sync is called (silent), not `:Org roam_db_sync`, which says "org-roam: N nodes ..." every time.
 local function syncIndexSoon()
+  if syncPending then return end
+  syncPending = true
   vim.defer_fn(function()
-    if vim.fn.exists(':Org') == 2 then pcall(vim.cmd, 'Org roam_db_sync') end
+    syncPending = false
+    local ok, db = pcall(require, 'org.extensions.roam.db')
+    if ok and type(db.sync) == 'function' then pcall(db.sync, false) end
   end, 1500)
 end
 
@@ -527,13 +534,15 @@ local function resolveAliasLinks(buf, force)
 
   -- The alias goes into the :ROAM_ALIASES: of the note (or heading) the id names; the text of the link is
   -- left as it is (`Note#Heading||alias`: the render shows the alias only). Each alias once per session.
-  local newcol, changed = col, false
+  local newcol, changed, wrote = col, false, false
   for _, j in ipairs(jobs) do
     local key = j.id .. '\0' .. j.alias
     if not aliasDone[key] then
       local loc = ids.find(j.id)
-      local done = loc and loc.filename and ensureId(loc.filename, loc.lnum or 1, j.alias)
+      local done, _, added
+      if loc and loc.filename then done, _, added = ensureId(loc.filename, loc.lnum or 1, j.alias) end
       if done then aliasDone[key] = true end
+      if added then wrote = true end
     end
     -- Enter inside the link: the cursor goes after it.
     if j.inside then newcol = j.e; changed = true end
@@ -543,7 +552,7 @@ local function resolveAliasLinks(buf, force)
   api.nvim_buf_del_extmark(buf, ns, mark)
   row = pos2[1] or row
   if changed then pcall(api.nvim_win_set_cursor, win, { row + 1, newcol }) end
-  syncIndexSoon()
+  if wrote then syncIndexSoon() end
   return changed
 end
 
