@@ -1,5 +1,11 @@
 local M = {}
 
+--- Remember a toggle across restarts (configs/toggles.lua). Never raises.
+local function save(key, value)
+  local ok, toggles = pcall(require, 'configs.toggles')
+  if ok then toggles.set(key, value) end
+end
+
 function M.ConfigHighlightByColorscheme(colorscheme, highlightGroups)
   vim.api.nvim_create_autocmd("ColorScheme", {
     pattern = colorscheme,
@@ -108,6 +114,7 @@ function M.toggleStatusline()
   else
     vim.o.laststatus = 0
   end
+  save('laststatus', vim.o.laststatus)
 end
 
 function M.toggleTabline()
@@ -116,6 +123,7 @@ function M.toggleTabline()
     else
         vim.o.showtabline = 1
     end
+    save('showtabline', vim.o.showtabline)
 end
 
 function M.toggleNumber()
@@ -124,10 +132,12 @@ function M.toggleNumber()
   else
     vim.o.number = true
   end
+  save('number', vim.o.number)
 end
 
 function M.toggleRelativenumber()
   vim.opt.relativenumber = not vim.opt.relativenumber:get()
+  save('relativenumber', vim.o.relativenumber)
 end
 
 function M.toggleSigncolumn()
@@ -136,19 +146,27 @@ function M.toggleSigncolumn()
   else
     vim.wo.signcolumn = 'yes'
   end
+  save('signcolumn', vim.wo.signcolumn)
+end
+
+function M.toggleWrap()
+  vim.wo.wrap = not vim.wo.wrap
+  save('wrap', vim.wo.wrap)
 end
 
 function M.toggleDiagnostics()
-  vim.diagnostic.config({
-    virtual_text = not vim.diagnostic.config().virtual_text
-  })
+  local on = not vim.diagnostic.config().virtual_text
+  vim.diagnostic.config({ virtual_text = on })
+  save('diagnostics_virtual_text', on)
 end
 
 function M.toggleInlayHints()
   -- This used to *assign* a boolean over vim.lsp.inlay_hint.enable, replacing
   -- the function itself. After one press the API was gone, which also broke
   -- toggleZenMode() above (it calls vim.lsp.inlay_hint.enable(...)).
-  vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled())
+  local on = not vim.lsp.inlay_hint.is_enabled()
+  vim.lsp.inlay_hint.enable(on)
+  save('inlay_hints', on)
 end
 
 function M.getOpts(base_opts, desc)
@@ -394,6 +412,7 @@ end
 function M.toggleCopilot()
   local enabled = vim.g.copilot_enabled ~= false and vim.g.copilot_enabled ~= 0
   vim.g.copilot_enabled = not enabled
+  save('copilot', not enabled)
   vim.notify(enabled and "Copilot Disabled" or "Copilot Enabled")
 end
 
@@ -437,6 +456,8 @@ local function applyTransparency()
   end
 end
 
+M.applyTransparency = applyTransparency
+
 -- Some themes (night-owl) never set g:colors_name, so the last scheme is kept here.
 local lastScheme
 
@@ -452,6 +473,7 @@ vim.api.nvim_create_autocmd("ColorScheme", {
 
 function M.toggleTransparency()
   M.transparent = not M.transparent
+  save('transparent', M.transparent)
   if M.transparent or vim.g.neovide then
     applyTransparency()
   else

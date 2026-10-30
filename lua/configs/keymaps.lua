@@ -319,7 +319,7 @@ map('n', '<leader><leader>', function() fzf.fuzzySearch(file.pp()) end,
 map('n', '<leader>f~', inDir(fzf.fuzzySearch, dirs['~']), func.getOpts(opts, "Find in home"))
 map('n', '<leader>f.', inDir(fzf.fuzzySearch, dirs['.']), func.getOpts(opts, "Find in ~/.config"))
 map('n', '<leader>fn', inDir(fzf.fuzzySearch, dirs.n), func.getOpts(opts, "Find in nvim config"))
-map('n', '<leader>fv', inDir(fzf.fuzzySearch, dirs.v), func.getOpts(opts, "Find in Flora, the vault"))
+-- <leader>fv is the same picker as <leader>vf (defined with the Flora keys below).
 
 map('n', "<leader>fe", function() inDir(fzf.fuzzyExplorer, here())() end,
   func.getOpts(opts, "fzf explorer, current directory"))
@@ -374,6 +374,7 @@ map('n', '<leader>Mi', function() require('pure.manim').interactive() end,
 --  follow, beside the other folders of their group.
 local flora = require('pure.flora')
 map('n', '<leader>vf', flora.find, func.getOpts(opts, "Find a note, heading or alias (a title that matches nothing makes a seed)"))
+map('n', '<leader>fv', flora.find, func.getOpts(opts, "Find a note, heading or alias (same as <leader>vf)"))
 map('n', '<leader>vF', flora.findFile, func.getOpts(opts, "Find a file of the vault"))
 map('n', '<leader>vg', flora.grep, func.getOpts(opts, "Grep the vault"))
 map('n', '<leader>vn', flora.newSeed, func.getOpts(opts, "New seed (inbox)"))
@@ -496,7 +497,9 @@ map('n', '<leader>oz', func.toggleZenMode, func.getOpts(opts, "Toggle zen mode")
 map('n', '<leader>os', func.toggleStatusline, func.getOpts(opts, "Toggle statusline"))
 map('n', '<leader>ot', func.toggleTabline, func.getOpts(opts, "Toggle tabline"))
 map('n', '<leader>oc', func.toggleSigncolumn, func.getOpts(opts, "Toggle signcolumn"))
-map('n', '<leader>ow', '<cmd>set wrap!<cr>', func.getOpts(opts, "Toggle wrap"))
+map('n', '<leader>ow', func.toggleWrap, func.getOpts(opts, "Toggle wrap"))
+map('n', '<leader>oH', function() require('configs.toggles').toggleHeadingBand() end,
+  func.getOpts(opts, "Toggle the heading background bar (md, org)"))
 map('n', '<leader>oi', func.toggleInlayHints, func.getOpts(opts, "Toggle inlay hints"))
 map('n', '<leader>op', func.toggleCopilot, func.getOpts(opts, "Toggle Copilot"))
 map('n', '<leader>oh', func.toggleWordHighlight, func.getOpts(opts, "Toggle word highlight"))

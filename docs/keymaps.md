@@ -102,7 +102,7 @@ See [llm.md](llm.md).
 | `<leader>f"` | n | Registers (Enter: make it the register p pastes) |
 | `<leader>fl` | n | Notes linking here (backlinks, also <leader>vb) |
 | `<leader>fn` | n | Find in nvim config |
-| `<leader>fv` | n | Find in Atlas, the Obsidian vault |
+| `<leader>fv` | n | Find a note, heading or alias in Flora (same as `<leader>vf`) |
 | `<leader>f~` | n | Find in home |
 
 ## `<leader>g` – Git
@@ -179,6 +179,7 @@ See [manim.md](manim.md).
 | `<leader>os` | n | Toggle statusline |
 | `<leader>ot` | n | Toggle tabline |
 | `<leader>ow` | n | Toggle wrap |
+| `<leader>oH` | n | Toggle the coloured bar behind md and org headings |
 | `<leader>oxc` | n | Toggle transparency |
 | `<leader>oz` | n | Toggle zen mode |
 
