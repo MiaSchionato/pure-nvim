@@ -14,6 +14,7 @@
 --    <leader>oc        signcolumn         <leader>ow   wrap
 --    <leader>on / or   number, relativenumber
 --    <leader>oi        inlay_hints        <leader>op   copilot
+--    reading mode      reading (pure/reading.lua: a centred column between wide margins)
 --
 --  Not saved on purpose: zen mode (a temporary state; it puts things back as
 --  they are) and the word highlight (<leader>oh, it follows the cursor).
