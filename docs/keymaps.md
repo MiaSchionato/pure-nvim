@@ -159,6 +159,7 @@ See [manim.md](manim.md).
 | `<leader>n.` | n | New file in ~/.config |
 | `<leader>nd` | n | New folder here |
 | `<leader>ne` | n | New file here |
+| `<leader>ns` | n | Scratch note (same in every tab; a new tab opens on it) |
 | `<leader>nf` | n | New file, pick the folder (from two levels up) |
 | `<leader>nh` | n | New file in home |
 | `<leader>nn` | n | New file in nvim config |

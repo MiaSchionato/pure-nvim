@@ -2,9 +2,9 @@
 
 ## Dashboard (`lua/pure/dashboard.lua`, `ascii.lua`)
 
-Shown when Neovim starts without a file, and in every new tab (`:tabnew`,
-`<leader>wn`) instead of an empty buffer; a tab opened on something
-(`:tabnew file`, `:tab help`) is left alone. The planet (`ascii.lua`,
+Shown when Neovim starts without a file. A new tab (`:tabnew`, `<leader>wn`) opens on the
+[scratch note](#scratch-note-luapurescratchlua) instead (`vim.g.pure_newtab = 'dashboard'` shows the
+dashboard there again); a tab opened on something (`:tabnew file`, `:tab help`) is left alone. The planet (`ascii.lua`,
 `M.saturn`) is centred and scaled up by the largest whole factor that fits
 the window, and redrawn when the window changes size. Blank lines fill the
 window to the bottom, so no `~` shows under the drawing.
@@ -13,7 +13,7 @@ window to the bottom, so no `~` shows under the drawing.
 |---|---|
 | `d` | today's daily note, created from the template if it is not there yet ([zettelkasten](zettelkasten.md)) |
 | `l` | the last note of the vault that was open, at the line where it was left (else the last file Neovim was closed on, `'0`) |
-| `n` | new empty buffer |
+| `n` | the scratch note (below) |
 | `v` | new note in the vault's inbox, asking only its name (same as `<leader>vn`) |
 | `q` | quit; in a tab while others are open, close just that tab |
 | `u` | update: the configuration's repository, then the plugins (below) |
@@ -58,9 +58,19 @@ shows the mode. Colours come from the theme when it defines them
 `<leader>os` hides / shows it, `<leader>ot` the tabline, `<leader>oz` zen mode
 (no bars, no numbers).
 
+## Scratch note (`lua/pure/scratch.lua`)
+
+Emacs' `*scratch*`, in a file: one note for whatever has no other place. It is the same buffer in
+every tab and window, and a new tab opens on it. Unlike `*scratch*` it is saved (to
+`stdpath('data')/scratch.org`, written when you stop typing, leave the buffer or lose focus).
+`<leader>ns` or `n` on the dashboard opens it in the current window; `:Scratch` too, and
+`:Scratch clear` empties it. Settings: `vim.g.pure_scratch_filetype` (default `'org'`),
+`vim.g.pure_scratch_file` (the path), `vim.g.pure_scratch_message` (the first line of an empty
+note), `vim.g.pure_newtab` (`'scratch'` default, `'dashboard'`, `'empty'`).
+
 ## Tabline (`configs/functions.lua`, `MyTabline`)
 
-Shown only with two or more tabs. Tabs: `<leader>wn` new (on the dashboard), `wh` / `wl`
+Shown only with two or more tabs. Tabs: `<leader>wn` new (on the scratch note), `wh` / `wl`
 previous / next, `wq` close, `wo` close the others.
 
 ## Notifications (`lua/pure/notify.lua`)
