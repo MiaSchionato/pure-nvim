@@ -159,6 +159,20 @@ Going back to opaque does not change the saved theme.
 | `oxc` | transparent background |
 | `oz` | zen mode: no bars, numbers, sign column, inlay hints or inline diagnostics |
 
+## Hex colours (`lua/pure/hexcolors.lua`)
+
+`#7d82d9` is drawn with its own colour behind it (black or white text on top, by brightness).
+Neovim already does this in `.lua` and CSS (`vim.lsp.document_color`, fed by `lua_ls` and the CSS
+servers); this module covers the files no server handles: markdown, org and text. A buffer with a
+server that reports colours is left to that server. Only the lines on screen are looked at and
+nothing is written to the buffer.
+
+`:PureHexColors [on|off|toggle]` changes it while Neovim runs. Settings (`lua/configs/configs.lua`):
+`vim.g.pure_hexcolors = false` turns it off, `vim.g.pure_hexcolors_filetypes` is the list of
+filetypes (default markdown, org, text), `vim.g.pure_hexcolors_style = 'foreground'` colours the text
+instead of the background, `vim.g.pure_hexcolors_short = true` also draws `#rgb` (off by default:
+it would catch tags like `#bad`).
+
 ## Highlighted comments
 
 A line with `TODO:` gets a grey background in file buffers.
