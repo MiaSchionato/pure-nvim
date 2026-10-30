@@ -90,6 +90,10 @@ draw the icon and band. Same checks as the markdown headings: `vim.g.pure_org_he
 `:PureOrgHeadings [auto|osc66|decdhl|off]` changes it while Neovim runs. In WSL set it to
 `decdhl` for WezTerm, as for markdown. The terminal code is a copy of `render-md.lua`'s.
 
+`<leader>om` cycles the rendering through three states: full, without the big headlines
+(everything else stays rendered; only the OSC 66 / DECDHL headlines go) and off.
+`require('pure.render-org').set_level('full'|'partial'|'off')` sets one directly.
+
 Tested in Kitsu (kitty for Windows) on the right monitor, with the real config, on a copy of the
 Flora garden notes: scrolling by lines and pages, fast `Ctrl-D/U/E/Y`, folds, inserting, toggling.
 What that found and fixed (the same engine draws the Markdown headings):
