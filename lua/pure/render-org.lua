@@ -39,13 +39,23 @@ local M = {}
 local View, Headings -- the sections below; they call into each other
 View = M
 
+-- The toggles stay as left (configs/toggles.lua): the saved value, or `default` when none.
+local function saved(key, default)
+  local ok, toggles = pcall(require, 'configs.toggles')
+  if ok then return toggles.get(key, default) end
+  return default
+end
+
+local startLevel = saved('render_org', 'full')
+if startLevel ~= 'partial' and startLevel ~= 'off' then startLevel = 'full' end
+
 -- The base groups (PureMd*: code shade, bullets, rule, table, bands) are defined by the Markdown file.
 pcall(require, 'pure.render-md')
 local notecolors = require('pure.notecolors')
 
 local ns = vim.api.nvim_create_namespace('pure_orgview')
-local enabled = true
-local level = 'full' -- 'full' | 'partial' (no terminal big headlines) | 'off'
+local enabled = startLevel ~= 'off'
+local level = startLevel -- 'full' | 'partial' (no terminal big headlines) | 'off'
 
 -- -----------------------------------------------------------------------------
 --  Settings of an org buffer
@@ -183,7 +193,7 @@ local ns = vim.api.nvim_create_namespace('pure_org_headings')
 
 local state = {
   mode = nil,      -- 'osc66' | 'decdhl' | nil (off)
-  enabled = true,  -- mdview's toggle
+  enabled = startLevel == 'full',  -- the big headlines: on only in the full state
   cursor = nil,    -- lnum of the heading under the cursor
   drawn = {},      -- blocks written by the last render: { row, col, width, height }
   setup = false,
@@ -651,7 +661,9 @@ local function headline(row, info, mark)
     virt_text = { { string.rep(' ', pad) .. icon, 'PureOrgH' .. math.min(level, 6) } },
     virt_text_pos = 'overlay',
   })
-  mark(row, 0, { line_hl_group = 'PureMdH' .. math.min(level, 6) .. 'Bg' })
+  if saved('heading_band', true) then
+    mark(row, 0, { line_hl_group = 'PureMdH' .. math.min(level, 6) .. 'Bg' })
+  end
 end
 
 -- ---- lists and checkboxes ----------------------------------------------------
@@ -1028,6 +1040,8 @@ function M.set_level(want)
   if not NEXT[want] then return end
   level = want
   enabled = want ~= 'off'
+  local ok, toggles = pcall(require, 'configs.toggles')
+  if ok then toggles.set('render_org', want) end
   Headings.set_enabled(want == 'full')
   M.refresh()
   vim.notify('Org rendering ' .. LABEL[want])

@@ -13,6 +13,13 @@
 local M = {}
 local View, Headings -- the sections below; the settings and the headings call into them
 
+-- The toggles stay as left (configs/toggles.lua): the saved value, or `default` when none.
+local function saved(key, default)
+  local ok, toggles = pcall(require, 'configs.toggles')
+  if ok then return toggles.get(key, default) end
+  return default
+end
+
 -- -----------------------------------------------------------------------------
 --  Settings of a markdown buffer
 -- -----------------------------------------------------------------------------
@@ -230,7 +237,7 @@ local ns = vim.api.nvim_create_namespace('pure_md_headings')
 
 local state = {
   mode = nil,      -- 'osc66' | 'decdhl' | nil (off)
-  enabled = true,  -- mdview's toggle
+  enabled = saved('render_md', true) ~= false,  -- mdview's toggle
   cursor = nil,    -- lnum of the heading under the cursor
   drawn = {},      -- blocks written by the last render: { row, col, width, height }
   setup = false,
@@ -731,7 +738,7 @@ View = (function()
 local M = {}
 
 local ns = vim.api.nvim_create_namespace('pure_mdview')
-local enabled = true
+local enabled = saved('render_md', true) ~= false
 
 local heading_icons = { '󰲡 ', '󰲣 ', '󰲥 ', '󰲧 ', '󰲩 ', '󰲫 ' }
 -- Smaller glyphs than the old ● ○ ◆ ◇, which looked heavy next to the text
@@ -864,7 +871,9 @@ function render.heading(buf, node, mark)
     virt_text = { { string.rep(' ', pad) .. icon, 'PureMdH' .. level } },
     virt_text_pos = 'overlay',
   })
-  mark(row, 0, { line_hl_group = 'PureMdH' .. level .. 'Bg' })
+  if saved('heading_band', true) then
+    mark(row, 0, { line_hl_group = 'PureMdH' .. level .. 'Bg' })
+  end
 end
 
 function render.code(buf, node, mark)
@@ -1449,6 +1458,8 @@ end
 
 function M.toggle()
   enabled = not enabled
+  local ok, toggles = pcall(require, 'configs.toggles')
+  if ok then toggles.set('render_md', enabled) end
   Headings.set_enabled(enabled)
   M.refresh()
   vim.notify('Markdown rendering ' .. (enabled and 'on' or 'off'))
