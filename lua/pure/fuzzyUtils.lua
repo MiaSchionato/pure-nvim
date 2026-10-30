@@ -344,19 +344,43 @@ local function dotAwareList(path, kind, styled)
   -- link sitting directly in `path` is followed, LINK_DEPTH levels deep, and
   -- the link itself is offered as a folder. .config follows its links too.
   local LINK_DEPTH = 3
-  local links = ("(cd %s && for l in * .config/*; do [ -L \"$l\" ] && [ -d \"$l\" ] || continue; %s"
-    .. "%s --follow --max-depth %d %s . \"$l\"; done)"):format(base,
-    kind == "directory" and 'echo "$l"; ' or "", fd, LINK_DEPTH, common)
-  local normal = script({
-    ("%s %s . --strip-cwd-prefix --base-directory %s"):format(fd, common, base),
-    ("[ -d %s ] && %s --hidden %s . .config --base-directory %s"):format(
-      vim.fn.shellescape(path .. ".config"), fd, common, base),
-    -- A folder list also offers .config itself.
-    kind == "directory" and ("[ -d %s ] && echo .config"):format(vim.fn.shellescape(path .. ".config")) or "",
-    links,
-    "true",
-  })
-  local hidden = script({ ("%s --hidden %s . --strip-cwd-prefix --base-directory %s"):format(fd, common, base) })
+  -- The commands of the normal list, with `extra` (an fd time filter, or "") added to each fd.
+  local function normalLines(extra)
+    local c = common .. extra
+    local links = ("(cd %s && for l in * .config/*; do [ -L \"$l\" ] && [ -d \"$l\" ] || continue; %s"
+      .. "%s --follow --max-depth %d %s . \"$l\"; done)"):format(base,
+      kind == "directory" and 'echo "$l"; ' or "", fd, LINK_DEPTH, c)
+    return {
+      ("%s %s . --strip-cwd-prefix --base-directory %s"):format(fd, c, base),
+      ("[ -d %s ] && %s --hidden %s . .config --base-directory %s"):format(
+        vim.fn.shellescape(path .. ".config"), fd, c, base),
+      -- A folder list also offers .config itself.
+      (kind == "directory" and extra == "") and ("[ -d %s ] && echo .config"):format(vim.fn.shellescape(path .. ".config")) or "",
+      links,
+    }
+  end
+  local hiddenLine = function(extra)
+    return ("%s --hidden %s%s . --strip-cwd-prefix --base-directory %s"):format(fd, common, extra, base)
+  end
+
+  -- The files changed lately come first, the newest on top (<leader>vf does the same with notes);
+  -- then all the others. fd cannot sort, so the recent ones (few) go through ls -t. The window is
+  -- vim.g.pure_fuzzy_recent ('14d' by default; false turns it off).
+  local recent = (kind == "file" and vim.g.pure_fuzzy_recent ~= false) and (vim.g.pure_fuzzy_recent or "14d") or nil
+  local function ordered(linesOf)
+    if not recent then return linesOf("") end
+    local out = { "cd " .. base .. " || exit 0", "{" }
+    vim.list_extend(out, linesOf(" --changed-within " .. recent))
+    vim.list_extend(out, { "} | xargs -r -d '\\n' ls -td --", "{" })
+    vim.list_extend(out, linesOf(" --changed-before " .. recent))
+    out[#out + 1] = "}"
+    return out
+  end
+
+  local normalCommands = ordered(normalLines)
+  normalCommands[#normalCommands + 1] = "true"
+  local normal = script(normalCommands)
+  local hidden = script(ordered(function(extra) return { hiddenLine(extra) } end))
   local awk
   if styled then
     awk = vim.fs.normalize(vim.fn.tempname()) .. ".awk"

@@ -69,7 +69,16 @@ the template picker…) gets this same fzf window.
 ```lua
 -- folders never listed by the file pickers
 vim.g.pure_fuzzy_ignore = { '.git', '.obsidian', 'node_modules' }
+-- the file pickers list what changed within this time first, the newest on top ('14d' default; false: off)
+vim.g.pure_fuzzy_recent = '14d'
 ```
+
+**Recent first.** In the file pickers the files edited lately are on top, the newest first, then all
+the others (so with nothing typed you see what you were working on; when you type, the best match
+still wins and, between equal matches, the newer file wins). fd cannot sort, so it lists what
+changed within `vim.g.pure_fuzzy_recent` (`fd --changed-within`) through `ls -t`, then the rest. The
+recent files, buffers (last used first) and the Flora finder (`<leader>vf`, notes written last first)
+already worked this way.
 
 ## Adding a picker
 
