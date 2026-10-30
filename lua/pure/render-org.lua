@@ -30,7 +30,9 @@
 --  or, when nil, vim.g.pure_md_headings: 'auto', 'osc66', 'decdhl', 'off').
 --  :PureOrgHeadings [auto|osc66|decdhl|off] changes it at run time.
 --
---    <leader>om   toggle the rendering (M.toggle)
+--    <leader>om   cycle the rendering (M.toggle): full -> no big headlines -> off -> full
+--                 (M.set_level('full'|'partial'|'off') sets one; 'partial' keeps the
+--                 rendering and turns off only the OSC 66 / DECDHL headlines)
 -- =============================================================================
 
 local M = {}
@@ -43,6 +45,7 @@ local notecolors = require('pure.notecolors')
 
 local ns = vim.api.nvim_create_namespace('pure_orgview')
 local enabled = true
+local level = 'full' -- 'full' | 'partial' (no terminal big headlines) | 'off'
 
 -- -----------------------------------------------------------------------------
 --  Settings of an org buffer
@@ -1014,11 +1017,26 @@ function M.refresh(force)
   vim.b[buf].pure_org_link = cursorLink()
 end
 
-function M.toggle()
-  enabled = not enabled
-  Headings.set_enabled(enabled)
+local NEXT = { full = 'partial', partial = 'off', off = 'full' }
+local LABEL = {
+  full = 'on',
+  partial = 'on, without the big headlines (OSC 66 / DECDHL)',
+  off = 'off',
+}
+
+function M.set_level(want)
+  if not NEXT[want] then return end
+  level = want
+  enabled = want ~= 'off'
+  Headings.set_enabled(want == 'full')
   M.refresh()
-  vim.notify('Org rendering ' .. (enabled and 'on' or 'off'))
+  vim.notify('Org rendering ' .. LABEL[want])
+end
+
+function M.level() return level end
+
+function M.toggle()
+  M.set_level(NEXT[level])
 end
 
 local group = vim.api.nvim_create_augroup('PureOrgview', { clear = true })
