@@ -185,6 +185,11 @@ Splits inside the column are laid out for the window as it was when the mode sta
 and on to lay it out again. WezTerm's big headings (DECDHL) need the full width, so they fall back
 to the icon and band while the margins are there.
 
+**How many columns:** `:PureReading width 100` sets the width of the text column (applied at once, in
+every tab, and saved: it is still 100 the next time), `:PureReading width +8` / `-8` makes it wider or
+narrower by 8, `:PureReading width` shows it. It is kept between 30 and 400. A width chosen with the
+command wins over `vim.g.pure_reading_width`, which is only the starting value (84).
+
 The toggles stay as you left them (`lua/configs/toggles.lua`): a toggle you press is saved in
 `stdpath('data')/toggles.json` and applied again on the next start. That covers the note
 rendering (markdown on/off, org full / no big headlines / off), the heading bar, transparency,
