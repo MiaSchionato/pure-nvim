@@ -122,6 +122,7 @@ where to change them.
 | `vim.g.pure_keyhint` | on (`false` turns it off) | [keyhint](keyhint.md) |
 | `vim.g.pure_fuzzy_ignore` | `{ '.git', '.obsidian' }` | [fuzzy](fuzzy.md) |
 | `vim.g.pure_dashboard_scale` | `'auto'` | [ui](ui.md) |
+| `vim.g.pure_hexcolors_filetypes` | `{ 'markdown', 'org', 'text' }` | [ui](ui.md) |
 | `vim.g.pure_terminal_shell` | nu, pwsh or powershell on Windows; `'shell'` elsewhere | [ui](ui.md) |
 | `vim.b.pure_indentscope_disable` | off | [editing](editing.md) |
 | `vim.g.pure_inbox` | `'0-Inbox'` | [zettelkasten](zettelkasten.md) |
