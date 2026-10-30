@@ -3,9 +3,11 @@
 -- =============================================================================
 --  One note for whatever has no other place: a number, a command to try, a
 --  thought. It is the same buffer in every tab and window, as *scratch* is in
---  Emacs, and a new tab opens on it. Unlike *scratch* it is saved: to a file in
---  stdpath('data') that is written whenever you stop typing, leave the buffer
---  or lose focus, so closing Neovim loses nothing.
+--  Emacs, and a new tab opens on it. And as *scratch*, it starts empty every
+--  time: the file in stdpath('data') is deleted when Neovim exits. While Neovim
+--  runs the file is written whenever you stop typing, leave the buffer or lose
+--  focus, so a crash or a kill does not lose the text (it is still there on the
+--  next start, and goes at the next normal exit).
 --
 --    <leader>ns          open it in this window
 --    n on the dashboard  the same
@@ -15,6 +17,7 @@
 --  Settings (configs.lua):
 --    vim.g.pure_scratch_filetype  'org' (default): the notes of Flora; any filetype works
 --    vim.g.pure_scratch_file      the path (default stdpath('data')/scratch.<ext>)
+--    vim.g.pure_scratch_keep      true keeps the note when Neovim exits (default: it is deleted)
 --    vim.g.pure_scratch_message   the text of a new, empty note
 --                                 (default: a short comment, in the syntax of the filetype)
 --    vim.g.pure_newtab            'scratch' (default) | 'dashboard' | 'empty': what a new tab shows
@@ -36,7 +39,7 @@ end
 
 local function message()
   if vim.g.pure_scratch_message then return vim.g.pure_scratch_message end
-  local text = 'Scratch: notes with no other place. Saved on its own; the same in every tab.'
+  local text = 'Scratch: notes with no other place. The same in every tab; emptied when Neovim closes.'
   local c = COMMENT[filetype()] or ''
   if c:find('%%s') then return c:format(text) end
   return c .. text
@@ -52,7 +55,7 @@ local function attach(buf)
   if vim.b[buf].pure_scratch then return end
   vim.b[buf].pure_scratch = true
   local group = vim.api.nvim_create_augroup('PureScratch' .. buf, { clear = true })
-  vim.api.nvim_create_autocmd({ 'TextChanged', 'InsertLeave', 'BufLeave', 'FocusLost', 'VimLeavePre' }, {
+  vim.api.nvim_create_autocmd({ 'TextChanged', 'InsertLeave', 'BufLeave', 'FocusLost' }, {
     group = group,
     buffer = buf,
     callback = function()
@@ -80,6 +83,15 @@ function M.open(win)
   attach(buf)
   return buf
 end
+
+-- Like *scratch*: it starts empty every time. The file goes when Neovim exits (vim.g.pure_scratch_keep keeps it).
+vim.api.nvim_create_autocmd('VimLeavePre', {
+  group = vim.api.nvim_create_augroup('PureScratchExit', { clear = true }),
+  callback = function()
+    if vim.g.pure_scratch_keep then return end
+    os.remove(M.path())
+  end,
+})
 
 function M.clear()
   local buf = M.buf()

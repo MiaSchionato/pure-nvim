@@ -61,8 +61,11 @@ shows the mode. Colours come from the theme when it defines them
 ## Scratch note (`lua/pure/scratch.lua`)
 
 Emacs' `*scratch*`, in a file: one note for whatever has no other place. It is the same buffer in
-every tab and window, and a new tab opens on it. Unlike `*scratch*` it is saved (to
-`stdpath('data')/scratch.org`, written when you stop typing, leave the buffer or lose focus).
+every tab and window, and a new tab opens on it. As `*scratch*`, it starts empty every time: its
+file (`stdpath('data')/scratch.org`) is deleted when Neovim exits. While Neovim runs the file is
+written when you stop typing, leave the buffer or lose focus, so a crash does not lose the text
+(it is still there on the next start and goes at the next normal exit; closing one of two running
+Neovims deletes the file for both). `vim.g.pure_scratch_keep = true` keeps the note across exits.
 `<leader>ns` or `n` on the dashboard opens it in the current window; `:Scratch` too, and
 `:Scratch clear` empties it. Settings: `vim.g.pure_scratch_filetype` (default `'org'`),
 `vim.g.pure_scratch_file` (the path), `vim.g.pure_scratch_message` (the first line of an empty
