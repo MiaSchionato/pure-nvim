@@ -37,7 +37,17 @@ When a module changes, update its page here in the same commit.
 - `lua/configs/` – options (`configs.lua`), keymaps, autocommands, LSP
   servers, shared helper functions (`functions.lua`).
 - `lua/lsp/` – one file per language server (`vim.lsp.config`). The list of
-  enabled servers is in `configs/lspConfigs.lua`.
+  enabled servers is in `configs/lspConfigs.lua`; a server is enabled only when its
+  executable is found. On the Windows machine: `lua_ls` (Lua, winget `LuaLS.lua-language-server`),
+  `gopls` (Go, `go install golang.org/x/tools/gopls@latest`), `clangd` (C/C++, winget
+  `LLVM.clangd`; it asks a compiler for the system headers: MSYS2's `gcc` is put on Neovim's own
+  PATH by `configs/environment.lua`), `pyright` (Python, `npm install -g pyright`), `bashls` (bash,
+  `npm install -g bash-language-server`; it also uses `shellcheck` when installed),
+  `markdown_oxide`, `csharp_ls`, `scls`.
+- `lua/configs/environment.lua` – what `:checkhealth` reports about the environment: the locale
+  (the shell exports `LANG=C.UTF-8`, which Windows does not know, so Neovim sat in the "C" locale;
+  it switches to the system's UTF-8 one), the remote-plugin providers nothing uses (node, perl,
+  python3, ruby: off), and the C compiler on Neovim's PATH.
 - `lua/plugins/` – the few third-party plugins (installed with `vim.pack`):
   treesitter, oil, copilot.
 - `lua/pure/` – the home-made modules documented here.
