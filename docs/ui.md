@@ -151,13 +151,22 @@ Going back to opaque does not change the saved theme.
 | `od` | diagnostics |
 | `oh` (also `<leader>h`) | highlight of the word under the cursor, everywhere |
 | `oi` | inlay hints |
-| `om` | markdown drawing |
+| `om` | markdown and org drawing (org: full, no big headlines, off) |
+| `oH` | the coloured bar behind md and org headings |
 | `on` / `or` | line numbers / relative numbers |
 | `op` | Copilot |
 | `os` / `ot` | statusline / tabline |
 | `ow` | wrap |
 | `oxc` | transparent background |
 | `oz` | zen mode: no bars, numbers, sign column, inlay hints or inline diagnostics |
+
+The toggles stay as you left them (`lua/configs/toggles.lua`): a toggle you press is saved in
+`stdpath('data')/toggles.json` and applied again on the next start. That covers the note
+rendering (markdown on/off, org full / no big headlines / off), the heading bar, transparency,
+diagnostics, statusline, tabline, sign column, wrap, line numbers, inlay hints and Copilot. Until a
+toggle is pressed, the default of `configs.lua` applies. Not saved: zen mode (temporary, it puts
+things back) and `oh` (the word highlight follows the cursor). `:PureToggles` shows what is saved,
+`:PureToggles reset` forgets it all.
 
 ## Hex colours (`lua/pure/hexcolors.lua`)
 
