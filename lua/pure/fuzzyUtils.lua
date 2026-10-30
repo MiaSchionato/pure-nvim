@@ -327,7 +327,9 @@ M.pickList = pickList
 --- key. The commands live in temp files, which keeps the quoting of paths
 --- with spaces out of fzf's own argument.
 --- @return string cmd, function cleanup
-local function dotAwareList(path, kind)
+--- `styled`: the lines are drawn as in <leader>vf (pure/pickerstyle.lua), by an awk script at the end of the
+--- pipe: the name in colour, then the folder dim, then (after a tab) the path that comes back.
+local function dotAwareList(path, kind, styled)
   local fd = tool("fd", "fdfind")
   local common = fdExcludes() .. vaultNoIgnore(path) .. " --type " .. kind
   local base = vim.fn.shellescape(path)
@@ -355,32 +357,45 @@ local function dotAwareList(path, kind)
     "true",
   })
   local hidden = script({ ("%s --hidden %s . --strip-cwd-prefix --base-directory %s"):format(fd, common, base) })
+  local awk
+  if styled then
+    awk = vim.fs.normalize(vim.fn.tempname()) .. ".awk"
+    vim.fn.writefile(vim.split(require('pure.pickerstyle').awkProgram(), "\n", { plain = true }), awk)
+  end
+  -- The list of a script, drawn when `styled`.
+  local function listOf(file)
+    if awk then return ('sh "%s" | awk -f "%s"'):format(file, awk) end
+    return ('sh "%s"'):format(file)
+  end
   local toggle = script({
     'case "$FZF_QUERY" in',
-    ('  .*) [ "$FZF_PROMPT" = ".> " ] || printf %%s \'change-prompt(.> )+reload(sh "%s")\' ;;'):format(hidden),
-    ('  *) [ "$FZF_PROMPT" = ".> " ] && printf %%s \'change-prompt(> )+reload(sh "%s")\' ;;'):format(normal),
+    ('  .*) [ "$FZF_PROMPT" = ".> " ] || printf %%s \'change-prompt(.> )+reload(%s)\' ;;'):format(listOf(hidden)),
+    ('  *) [ "$FZF_PROMPT" = ".> " ] && printf %%s \'change-prompt(> )+reload(%s)\' ;;'):format(listOf(normal)),
     'esac',
     'true',
   })
-  local cmd = ('sh "%s" | fzf --prompt %s --bind %s'):format(normal, vim.fn.shellescape("> "),
+  local cmd = ('%s | fzf --prompt %s --bind %s'):format(listOf(normal), vim.fn.shellescape("> "),
     vim.fn.shellescape(('change:transform(sh "%s")'):format(toggle)))
   return cmd, function()
-    for _, f in ipairs({ normal, hidden, toggle }) do os.remove(f) end
+    for _, f in ipairs({ normal, hidden, toggle, awk }) do os.remove(f) end
   end
 end
 
 function M.fuzzySearch(path)
   if path == nil then path = vim.uv.os_homedir():gsub("\\", "/") .. "/" end
   path = asDir(path)
-  local list, cleanup = dotAwareList(path, "file")
+  local style = require('pure.pickerstyle')
+  style.colors()
+  local list, cleanup = dotAwareList(path, "file", true)
 
   M.fuzzyLogic({
-    title = "Fuzzy Search",
-    ratio = 0.6,
-    cmd = list .. " --keep-right --tiebreak=end",
+    title = " Files ",
+    ratio = 0.8,
+    -- The list is drawn as in <leader>vf: name, then folder; the path is the last field.
+    cmd = list .. " " .. style.FZF,
     callback = function(selection)
       cleanup()
-      vim.cmd("edit! " .. vim.fn.fnameescape(path .. selection))
+      vim.cmd("edit! " .. vim.fn.fnameescape(path .. style.last(selection)))
       vim.cmd("filetype detect")
     end,
     on_cancel = cleanup,
@@ -394,7 +409,21 @@ end
 --- the first key. Nothing is listed until something is typed.
 function M.fuzzyGrep(path)
   path = asDir(path)
-  local rg = "rg --column --line-number --no-heading --color=always --smart-case" .. vaultNoIgnore(path)
+  -- ripgrep's own colours become the ones of <leader>vf: the file in colour, the numbers dim, the match in the alias colour.
+  local style = require('pure.pickerstyle')
+  style.colors()
+  local colors = {}
+  local function color(kind, group, bold)
+    local r, g, b = style.rgb(group)
+    if r then colors[#colors + 1] = ("--colors %s:fg:%d,%d,%d"):format(kind, r, g, b) end
+    if bold then colors[#colors + 1] = "--colors " .. kind .. ":style:bold" end
+  end
+  color("path", "PureNoteFile")
+  color("line", "PureNoteSep")
+  color("column", "PureNoteSep")
+  color("match", "PureNoteAlias", true)
+  local rg = "rg --column --line-number --no-heading --color=always --smart-case "
+    .. table.concat(colors, " ") .. vaultNoIgnore(path)
   -- fzf wants input on stdin even with --disabled; give it an empty one.
   -- By shell, not by OS: the windows branch runs these through Git bash.
   local empty = vim.o.shell:lower():match("cmd%.exe$") and "type nul" or "true"
@@ -405,7 +434,7 @@ function M.fuzzyGrep(path)
     .. " --preview '" .. tool("bat", "batcat") .. " --style=numbers --color=always --highlight-line {2} {1}' --preview-window 'up,60\\%,border-bottom,+{2}+3/3'"
 
   M.fuzzyLogic({
-    title = "Fuzzy Grep",
+    title = " Grep ",
     ratio = 0.8,
     -- Run from inside `path` so ripgrep prints relative names. Given an
     -- absolute path its output starts with the drive letter, and fzf splitting
@@ -459,7 +488,21 @@ function M.fuzzyHelp()
     if name:match("%.txt$") then table.insert(entries, name) end
   end
 
-  pickList(entries, { title = "Help" }, function(selection)
+  -- Drawn as <leader>vf: the page in the file colour, then › and the section in the heading colour; the
+  -- entry itself is the hidden field that comes back.
+  local style = require('pure.pickerstyle')
+  style.colors()
+  local lines = {}
+  for _, entry in ipairs(entries) do
+    local page, section = entry:match("^(pure [^›]-) › (.*)$")
+    local visible = page
+      and (style.paint("PureNoteFile", page) .. style.paint("PureNoteSep", " › ") .. style.paint("@markup.heading.2.markdown", section))
+      or style.paint("PureNoteFile", entry)
+    lines[#lines + 1] = visible .. "\t" .. entry
+  end
+
+  pickList(lines, { title = " Help ", ratio = 0.8, fzf = style.FZF }, function(selection)
+    selection = style.last(selection)
     local target = targets[selection]
     if not target then return vim.cmd("help " .. vim.fn.fnameescape(selection)) end
     vim.cmd("split " .. vim.fn.fnameescape(target.file))
@@ -526,30 +569,29 @@ function M.fuzzyGitGrep()
 end
 
 function M.fuzzyJump()
+  local style = require('pure.pickerstyle')
+  style.colors()
   local jumps = {}
   for _, jump in ipairs(vim.fn.getjumplist()[1]) do
     local path = vim.api.nvim_buf_get_name(jump.bufnr)
     if path ~= "" then
-      table.insert(jumps, string.format("%s:%d:%d", path, jump.lnum, jump.col))
+      -- Drawn as <leader>vf: name, then folder and line dim. The path, the line and the column are
+      -- the hidden fields (tab-separated, so a Windows drive letter's ":" is no trouble), the
+      -- preview reads them: {2} the path, {3} the line.
+      table.insert(jumps, style.fileLine(path, { path, jump.lnum, jump.col }, ":" .. jump.lnum))
     end
   end
 
-  -- Fields are counted from the END. These lines are "path:line:col", and on
-  -- Windows the path starts with a drive letter, so splitting on ":" made {1}
-  -- the bare letter "C" and {2} the path -- which bat received where it wanted
-  -- a line number, hence "[bat error]: invalid digit found in string".
-  -- {-2} is the line and {1..-3} rejoins the whole path, drive letter included.
   pickList(jumps, {
-    title = "fuzzy jumps",
+    title = " Jumps ",
     ratio = 0.8,
-    fzf = "--ansi --delimiter : --preview '" .. tool("bat", "batcat") .. " --style=numbers --color=always --highlight-line {-2} {1..-3}' --preview-window 'up,60\\%,border-bottom,+{-2}+3/3'",
+    fzf = style.FZF .. " --preview '" .. tool("bat", "batcat") .. " --style=numbers --color=always --highlight-line {3} {2}' --preview-window 'up,60\\%,border-bottom,+{3}+3/3'",
   }, function(selection)
-    -- Windows paths start with a drive letter, so a '^([^:]+):' pattern would
-    -- stop at the 'C:' colon; the lazy '.-' matches up to ':line:col'.
-    local full_path, line, col = selection:match("^(.-):(%d+):(%d+)")
-    if not full_path then return end
+    local fields = style.fields(selection)
+    local full_path, line, col = fields[1], tonumber(fields[2]), tonumber(fields[3])
+    if not (full_path and line and col) then return end
     vim.cmd("edit! " .. vim.fn.fnameescape(full_path))
-    vim.api.nvim_win_set_cursor(0, { tonumber(line), tonumber(col) })
+    vim.api.nvim_win_set_cursor(0, { line, col })
     vim.cmd("filetype detect")
   end)
 end
@@ -566,43 +608,53 @@ function M.fuzzyRegisters()
     if text ~= '' then
       -- A line break shows as ↵ and a tab as a space; fzf lists one line
       local shown = text:gsub('\n', '↵'):gsub('\t', ' ')
-      table.insert(names, { name = name, line = ('%s │ %s'):format(name, shown), info = info })
+      table.insert(names, { name = name, text = shown, info = info })
     end
   end
   if #names == 0 then return vim.notify('No register has text', vim.log.levels.INFO) end
 
-  pickList(vim.tbl_map(function(r) return r.line end, names),
-    { title = 'Registers (Enter: make it the register p pastes)', fzf = '--no-sort' },
+  -- Drawn as <leader>vf: the register in colour, its text dim; the index is the hidden field.
+  local style = require('pure.pickerstyle')
+  style.colors()
+  local lines = {}
+  for i, r in ipairs(names) do
+    lines[i] = style.row(style.paint('PureNoteFile', r.name), style.trunc(r.text, 80)) .. '\t' .. i
+  end
+
+  pickList(lines,
+    { title = ' Registers (Enter: make it the register p pastes) ', ratio = 0.8, fzf = style.FZF .. ' --no-sort' },
     function(selection)
-      for _, r in ipairs(names) do
-        if r.line == selection then
-          vim.fn.setreg('"', r.info.regcontents, r.info.regtype)
-          return vim.notify(('Register " is now %s'):format(r.name == '"' and 'itself' or r.name))
-        end
-      end
+      local r = names[tonumber(style.last(selection))]
+      if not r then return end
+      vim.fn.setreg('"', r.info.regcontents, r.info.regtype)
+      return vim.notify(('Register " is now %s'):format(r.name == '"' and 'itself' or r.name))
     end)
 end
 
 function M.fuzzyBuffers()
-  local buffers = {}
-  for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
-    local name = vim.api.nvim_buf_get_name(bufnr)
-    if vim.api.nvim_buf_is_loaded(bufnr) and vim.bo[bufnr].buflisted and name ~= "" then
-      table.insert(buffers, vim.fn.fnamemodify(name, ":."))
-    end
-  end
-  pickList(buffers, { title = "Fuzzy buffers", fzf = "--keep-right --tiebreak=end" }, function(selection)
-    vim.cmd("edit " .. vim.fn.fnameescape(selection))
+  local style = require('pure.pickerstyle')
+  style.colors()
+  -- The buffers used last first, drawn as <leader>vf (the path is the hidden field).
+  local infos = vim.tbl_filter(function(info)
+    return info.loaded == 1 and info.listed == 1 and info.name ~= ""
+  end, vim.fn.getbufinfo())
+  table.sort(infos, function(a, b) return a.lastused > b.lastused end)
+  local buffers = vim.tbl_map(function(info) return style.fileLine(info.name) end, infos)
+  pickList(buffers, { title = " Buffers ", ratio = 0.8, fzf = style.FZF }, function(selection)
+    vim.cmd("edit " .. vim.fn.fnameescape(style.last(selection)))
     vim.cmd("filetype detect")
   end)
 end
 
 function M.fuzzyOldfiles()
-  local oldfiles = vim.tbl_filter(function(f)
-    return vim.fn.filereadable(f) == 1
-  end, vim.v.oldfiles)
-  pickList(oldfiles, { title = "Oldfiles" }, function(selection)
-    vim.cmd("edit " .. vim.fn.fnameescape(selection))
+  local style = require('pure.pickerstyle')
+  style.colors()
+  local oldfiles = {}
+  for _, f in ipairs(vim.v.oldfiles) do
+    if vim.fn.filereadable(f) == 1 then oldfiles[#oldfiles + 1] = style.fileLine(f) end
+  end
+  pickList(oldfiles, { title = " Recent ", ratio = 0.8, fzf = style.FZF .. " --no-sort" }, function(selection)
+    vim.cmd("edit " .. vim.fn.fnameescape(style.last(selection)))
     vim.cmd("filetype detect")
   end)
 end
@@ -613,7 +665,14 @@ function M.fuzzyColorscheme()
   local items = vim.fn.getcompletion("", "color")
   if okOm then table.insert(items, 1, omarchy.LABEL) end
 
-  pickList(items, { title = "Colorschemes" }, function(theme)
+  -- Drawn as <leader>vf: the name in colour; the name itself is the hidden field.
+  local style = require('pure.pickerstyle')
+  style.colors()
+  local lines = {}
+  for i, item in ipairs(items) do lines[i] = style.paint('PureNoteFile', item) .. '\t' .. item end
+
+  pickList(lines, { title = " Colorschemes ", ratio = 0.8, fzf = style.FZF .. " --no-sort" }, function(theme)
+    theme = style.last(theme)
     if okOm and theme == omarchy.LABEL then
       vim.g.MY_THEME = omarchy.NAME
       omarchy.save(omarchy.NAME)
