@@ -107,8 +107,10 @@ end
 
 --- The entries a query asks for, best first: the title equal to the query, then the ones that start with
 --- it, notes before headings, shorter first, and (the entries come newest first) the newer.
-local function candidates(input, mode, file)
+local function search(input, mode, file, nosep)
   local headingsOnly, noteWords, query = parse(input)
+  -- A # * : in the text may be part of a title ("Emacs log: to do"): then the whole text is the search.
+  if nosep then headingsOnly, noteWords, query = false, nil, (input:match('^(.-)||') or input) end
   local qwords = words(query)
   local nwords = noteWords and words(noteWords) or nil
   local q = fold(vim.trim(query))
@@ -152,6 +154,21 @@ local function candidates(input, mode, file)
     if #list >= MAX_ITEMS then break end
   end
   return list, vim.trim(query), headingsOnly
+end
+
+--- The entries for the text typed after [[. `note:head`, `note*head` and `note#head` ask for headings of a
+--- note, unless the whole text is the name of a note (a title with a colon): then it is a plain search.
+local function candidates(input, mode, file)
+  if mode ~= 'heading' then
+    local headingsOnly, noteWords = parse(input)
+    if headingsOnly and noteWords then
+      local plain, q = search(input, mode, file, true)
+      for _, e in ipairs(plain) do
+        if e.kind == 'note' or (e.kind == 'alias' and not e.heading) then return plain, q, false end
+      end
+    end
+  end
+  return search(input, mode, file, false)
 end
 
 -- -----------------------------------------------------------------------------
@@ -356,7 +373,8 @@ function M.complete(findstart, base)
       icase = 1, equal = 1,
     }
   end
-  if state.mode == 'note' and query ~= '' and not headingsOnly then
+  -- An alias (||) is for the note chosen, never for a new one.
+  if state.mode == 'note' and query ~= '' and not headingsOnly and not aliasOf(base) then
     out[#out + 1] = {
       word = query, abbr = '+ New note: ' .. query, kind = 'new', menu = 'inbox',
       abbr_hlgroup = 'PureNoteAlias', kind_hlgroup = 'PureNoteSep', menu_hlgroup = 'PureNoteSep',
@@ -481,8 +499,6 @@ local function takeTyped()
   local alias = aliasOf(base)
   if list[1] then
     writeLink(buf, win, row - 1, state.linkstart, col, list[1], { alias = alias })
-  elseif query ~= '' and not headingsOnly then
-    writeLink(buf, win, row - 1, state.linkstart, col, nil, { new = query, alias = alias })
   else
     return false
   end
