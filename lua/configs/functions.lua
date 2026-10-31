@@ -226,9 +226,6 @@ function M.toggleWordHighlight()
   vim.o.hlsearch = true
 end
 
--- TODO: Move this func to its own file to extend functionality
--- Git Diff
-
 -- TODO:Add signcolumn always shown ()
 local namespace_id =vim.api.nvim_create_namespace("git-diff")
 -- Per buffer (b:pure_git_diff): one global flag meant toggling in a second
@@ -486,5 +483,145 @@ function M.toggleTransparency()
     end
   end
 end
+
+local file = vim.fn.stdpath('data') .. '/toggles.json'
+local data
+
+local function load()
+  if data then return data end
+  data = {}
+  local fh = io.open(file, 'r')
+  if fh then
+    local text = fh:read('*a')
+    fh:close()
+    local ok, decoded = pcall(vim.json.decode, text)
+    if ok and type(decoded) == 'table' then data = decoded end
+  end
+  return data
+end
+
+--- The saved value of a toggle, or `default` when it was never pressed.
+function M.get(key, default)
+  local value = load()[key]
+  if value == nil then return default end
+  return value
+end
+
+--- Save a value (nil forgets it). Never raises: a read-only data folder must not break a toggle.
+function M.set(key, value)
+  load()[key] = value
+  vim.fn.mkdir(vim.fn.stdpath('data'), 'p')
+  local ok, text = pcall(vim.json.encode, data)
+  if not ok then return end
+  local fh = io.open(file, 'w')
+  if fh then
+    fh:write(text)
+    fh:close()
+  end
+end
+
+-- -----------------------------------------------------------------------------
+--  The coloured bar behind the headings (md and org): <leader>oH
+-- -----------------------------------------------------------------------------
+function M.headingBand()
+  return M.get('heading_band', true)
+end
+
+function M.setHeadingBand(on)
+  M.set('heading_band', on)
+  for _, name in ipairs({ 'pure.render-md', 'pure.render-org' }) do
+    local module = package.loaded[name]
+    if type(module) == 'table' and module.refresh then pcall(module.refresh, true) end
+  end
+end
+
+function M.toggleHeadingBand()
+  local on = not M.headingBand()
+  M.setHeadingBand(on)
+  vim.notify('Heading background ' .. (on and 'on' or 'off'))
+end
+
+-- -----------------------------------------------------------------------------
+--  The automatic hover (configs/lspConfigs.lua): <leader>tk
+-- -----------------------------------------------------------------------------
+--  On unless vim.g.lsp_auto_hover is false; the choice is saved like the other toggles.
+function M.toggleAutoHover()
+  local on = vim.g.lsp_auto_hover == false
+  vim.g.lsp_auto_hover = on
+  M.set('lsp_auto_hover', on)
+  vim.notify('Automatic hover ' .. (on and 'on' or 'off'))
+end
+
+-- The key lives here until the <leader>t group of keymaps.lua is settled; move this line there then.
+vim.keymap.set('n', '<leader>tk', M.toggleAutoHover, { desc = 'Toggle the automatic hover (LSP)' })
+
+-- -----------------------------------------------------------------------------
+--  Put the saved state back
+-- -----------------------------------------------------------------------------
+local function restore()
+  local function saved(key, apply)
+    local value = M.get(key)
+    if value ~= nil then pcall(apply, value) end
+  end
+
+  saved('number', function(v) vim.o.number = v end)
+  saved('relativenumber', function(v) vim.o.relativenumber = v end)
+  saved('signcolumn', function(v) vim.o.signcolumn = v end)
+  saved('wrap', function(v) vim.o.wrap = v end)
+  saved('laststatus', function(v) vim.o.laststatus = v end)
+  saved('showtabline', function(v) vim.o.showtabline = v end)
+  saved('diagnostics_virtual_text', function(v) vim.diagnostic.config({ virtual_text = v }) end)
+  saved('copilot', function(v) vim.g.copilot_enabled = v end)
+  saved('lsp_auto_hover', function(v) vim.g.lsp_auto_hover = v end)
+  saved('transparent', function(v) require('configs.functions').transparent = v end)
+end
+
+restore()
+
+-- What needs a running UI or the LSP client: after startup.
+vim.api.nvim_create_autocmd('VimEnter', {
+  once = true,
+  callback = function()
+    local func = require('configs.functions')
+    if func.transparent then pcall(func.applyTransparency) end
+    local hints = M.get('inlay_hints')
+    if hints ~= nil then pcall(vim.lsp.inlay_hint.enable, hints) end
+  end,
+})
+
+vim.api.nvim_create_user_command('PureToggles', function(opts)
+  if opts.args == 'reset' then
+    data = {}
+    pcall(os.remove, file)
+    vim.notify('Saved toggles forgotten (the defaults apply on the next start)')
+    return
+  end
+  vim.notify(vim.inspect(load()))
+end, {
+  nargs = '?',
+  complete = function() return { 'reset' } end,
+  desc = 'Show or reset the saved toggle states',
+})
+
+
+  function M.explore(dir)
+    return function()
+      local oil = require('oil')
+      if vim.w.is_oil_win then
+        return oil.close()
+      end
+      -- Not `type(dir) == 'function' and dir() or dir`: when dir() returns nil
+      -- (no vault yet) that idiom falls through to `or dir`, the function itself.
+      local path = dir
+      if type(dir) == 'function' then path = dir() end
+      if not path then
+        return vim.notify('No Obsidian vault set: run :ZettelVault', vim.log.levels.WARN)
+      end
+      if vim.fn.isdirectory(path) == 0 then
+        return vim.notify('Directory does not exist: ' .. path, vim.log.levels.WARN)
+      end
+      oil.open_float(path)
+    end
+  end
 
 return M
