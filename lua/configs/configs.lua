@@ -526,7 +526,7 @@ g.pure_indentscope_disable = false
 -- -----------------------------------------------------------------------------
 -- The shell. Unset (default): on Windows the first of nu, pwsh, powershell
 -- found; elsewhere 'shell'.
--- g.pure_terminal_shell = 'cmd.exe'
+g.pure_terminal_shell = 'nu.exe'
 
 -- The bare floating terminal (<leader>ot): <Esc> leaves terminal mode at once,
 -- and a second <Esc> within this many milliseconds closes it. <A-Esc> sends a

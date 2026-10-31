@@ -609,7 +609,7 @@ local function checkedDir(dir)
   local path = dir
   if type(dir) == 'function' then path = dir() end
   if not path then
-    vim.notify('No Obsidian vault set: run :ZettelVault', vim.log.levels.WARN)
+    vim.notify('No directory set for this key', vim.log.levels.WARN)
     return nil
   end
   if vim.fn.isdirectory(path) == 0 then
@@ -661,6 +661,7 @@ M.dirs = {
   n     = home .. '.config/nvim/',
   -- The vault (org), vim.g.flora_dir or ~/Flora (pure/flora.lua).
   v     = vaultDir,
+  p     = home .. 'Projects',
   -- The file new notes go to (<leader>oi opens it): vim.g.orgls_inbox, as in lsp/orgls.lua, or inbox.org.
   inbox = function()
     local vault = vaultDir()

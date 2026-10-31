@@ -185,6 +185,7 @@ map('n', '<leader>E' , func.explore(dirs['~']), func.getOpts(opts, "Explore home
 map('n', '<leader>e.', func.explore(dirs['.']), func.getOpts(opts, "Explore ~/.config"))
 map('n', '<leader>en', func.explore(dirs.n), func.getOpts(opts, "Explore nvim config"))
 map('n', '<leader>ev', func.explore(dirs.v), func.getOpts(opts, "Explore the vault"))
+map('n', '<leader>ep', func.explore(dirs.p), func.getOpts(opts, "Explore the Projects directory"))
 -- oil is required on use: plugins/oil.lua loads after this file, so the module is not there yet.
 map('n', '<leader>eo', function() require('oil').toggle_float() end, func.getOpts(opts, "Oil Float"))
 
@@ -196,6 +197,7 @@ map('n', '<leader><leader>', function() fzf.fuzzySearch(file.pp()) end, func.get
 map('n', '<leader>f~', inDir(fzf.fuzzySearch, dirs['~']), func.getOpts(opts, "Find in home"))
 map('n', '<leader>f.', inDir(fzf.fuzzySearch, dirs['.']), func.getOpts(opts, "Find in ~/.config"))
 map('n', '<leader>fn', inDir(fzf.fuzzySearch, dirs.n), func.getOpts(opts, "Find in nvim config"))
+map('n', '<leader>fp', inDir(fzf.fuzzySearch, dirs.p), func.getOpts(opts, "Find in Projects"))
 -- <leader>fv is the same picker as <leader>vf (defined with the vault keys below).
 
 map('n', "<leader>fe", function() inDir(fzf.fuzzyExplorer, here())() end,
@@ -433,7 +435,7 @@ map("n", "dd", func.smartDd, { expr = true, desc = "Smart dd" })
 -- Terminal
 map('n', '<leader>ot', term.toggleTerminal, func.getOpts(opts, "Toggle terminal"))
 map('n', '<leader>oc', function() term.toggleTerminal("claude") end, func.getOpts(opts, "Toggle terminal Claude"))
-map('n', '<leader>om', "<CMD>tabnew | terminal<CR>i", func.getOpts(opts, "New tab on terminal mode"))
+map('n', '<leader>om', "<CMD>tabnew | terminal nu<CR>i", func.getOpts(opts, "New tab on terminal mode"))
 map('t', '<S-Del>', [[<C-\><C-n>]], func.getOpts(opts, "Leave terminal mode"))
 
 --  Todoist
