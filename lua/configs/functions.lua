@@ -624,4 +624,235 @@ end, {
     end
   end
 
+-- =============================================================================
+--  Helpers of the keymaps (moved from keymaps.lua, the logic as it was)
+-- =============================================================================
+
+local home = vim.uv.os_homedir():gsub("\\", "/") .. "/"
+
+--- One table feeds explore (<leader>e_), find (<leader>f_) and new file
+--- (<leader>n_), so each directory is written once instead of three times in
+--- three near-identical blocks.
+M.dirs = {
+  ['~'] = home,
+  ['.'] = home .. '.config/',
+  n     = home .. '.config/nvim/',
+  -- The Flora vault (org), vim.g.flora_dir or ~/Flora (pure/flora.lua).
+  v     = function()
+    local vault = vim.fs.normalize(vim.fn.expand(vim.g.flora_dir or '~/Flora'))
+    return vault and (vault .. '/') or nil
+  end,
+}
+
+--- Directory `levels` up from the current file, always with a trailing slash.
+--- A function, not a string: a string would be expanded once at startup and
+--- keep pointing at the first file. In the scratch note (which lives in the
+--- data folder) it counts from the folder the window was opened from:
+--- pure/scratch.lua, scratch.dir(levels up).
+function M.up(levels) return require('pure.scratch').dir(levels) .. '/' end
+
+--- Directory of the current file.
+function M.here()
+  return M.up(0)
+end
+
+--- The directories above the current file, as functions (see M.up).
+M.fileDirs = {
+  p      = function() return M.up(0) end,
+  pp     = function() return M.up(1) end,
+  ["3p"] = function() return M.up(2) end,
+  ["4p"] = function() return M.up(3) end,
+}
+
+--- Run `picker` on `dir`, saying so when the directory simply is not there.
+--- Without this the picker opens, the shell fails on a missing path, and the
+--- floating window blinks shut with nothing explaining why.
+function M.inDir(picker, dir)
+  return function()
+    -- Not `type(dir) == 'function' and dir() or dir`: when dir() returns nil
+    -- (no vault yet) that idiom falls through to `or dir`, the function itself.
+    local path = dir
+    if type(dir) == 'function' then path = dir() end
+    if not path then
+      return vim.notify('No Obsidian vault set: run :ZettelVault', vim.log.levels.WARN)
+    end
+    if vim.fn.isdirectory(path) == 0 then
+      return vim.notify('Directory does not exist: ' .. path, vim.log.levels.WARN)
+    end
+    picker(path)
+  end
+end
+
+--- Move lines (<up>/<down> in normal and visual mode).
+---
+--- Guarded by buffer type. The fuzzy pickers run fzf inside a terminal buffer,
+--- and any moment spent in terminal-normal mode there (fuzzyLogic only calls
+--- startinsert after a delay) meant the arrow keys fired this mapping instead of
+--- reaching fzf -- failing with "E21: Cannot make changes, 'modifiable' is off"
+--- and leaving the arrows apparently dead inside the picker.
+---
+--- Returning the key itself falls through to the builtin, because these mappings
+--- are noremap: the returned key is not looked up again.
+function M.moveLine(keys, fallback)
+  return function()
+    if vim.bo.buftype ~= '' or not vim.bo.modifiable then
+      return fallback
+    end
+    return keys
+  end
+end
+
+--- The file about you that every LLM request reads (outside any git repository).
+function M.openUserContext()
+  local path = require('pure.llm').userContextFile()
+  if not path then return vim.notify('User context is off (vim.g.pure_llm_user_context = false)') end
+  vim.cmd('edit ' .. vim.fn.fnameescape(path))
+end
+
+--- On a link, K follows it (pure/notes.lua): in markdown any link, elsewhere
+--- only web links, since [[x]] in code is not a note. Else LSP hover.
+function M.followOrHover()
+  if require('pure.notes').follow(vim.bo.filetype ~= 'markdown') then return end
+  vim.lsp.buf.hover()
+end
+
+--- <Up> in insert mode (expr map). Signature help only where a language server
+--- can answer: in markdown (no such server) it raised 'method
+--- "textDocument/signatureHelp" is not supported' on every press (Improvment.md).
+--- Elsewhere <Up> moves up, as it would unmapped.
+function M.signatureHelpOrUp()
+  if #vim.lsp.get_clients({ bufnr = 0, method = 'textDocument/signatureHelp' }) > 0 then
+    return "<Cmd>lua vim.lsp.buf.signature_help()<CR>"
+  end
+  return "<Up>"
+end
+
+--- One toggle for the notes: markdown (pure/render-md.lua) or org (pure/render-org.lua), by the buffer.
+function M.toggleNoteRendering()
+  local module = vim.bo.filetype == 'org' and 'pure.render-org' or 'pure.render-md'
+  require(module).toggle()
+end
+
+--- Delete the fold under the cursor, saying why when there is none.
+function M.deleteFold()
+  local ok, err = pcall(vim.cmd, 'normal! zd')
+  if not ok then vim.notify(err:gsub('^.-E%d+: ', ''), vim.log.levels.WARN) end
+end
+
+--- One key for zR / zM: opens everything if any fold is closed, otherwise
+--- closes them all.
+function M.toggleAllFolds()
+  for lnum = 1, vim.fn.line('$') do
+    if vim.fn.foldclosed(lnum) ~= -1 then return vim.cmd('normal! zR') end
+  end
+  vim.cmd('normal! zM')
+end
+
+--- dd (expr map): an empty line is deleted without overwriting the default register.
+function M.smartDd()
+  if vim.api.nvim_get_current_line():match("^%s*$") then
+    return '"_dd'
+  end
+  return "dd"
+end
+
+-- -----------------------------------------------------------------------------
+--  Insert mode: Tab, S-Tab, Esc, Enter (completion, closing pairs, snippets, lists)
+-- -----------------------------------------------------------------------------
+--  Tab in insert mode (as asked in the vault's Improvment.md, second
+--  round: Tab must not indent, and walks the suggestions). In order:
+--    the completion menu open           next suggestion (<CR> takes it)
+--    closers right after the cursor     step past all of them: "[[a|]]" -> "[[a]]|"
+--    a snippet with a next field        jump to it
+--    anything else                      a plain Tab, the one way left to
+--                                       type one (<C-v><Tab> works too)
+--  Tab never opens the menu itself ('autocomplete' opens it as you type):
+--  returning <C-n> from this mapping with the menu closed crashed Neovim
+--  0.12.5 (segfault) together with 'lazyredraw' and 'autocomplete'; it
+--  reproduces with --clean, so it is Neovim's bug, not this config's.
+--  The menu wins over a closer (third round, "option b"): inside [[...]]
+--  the ]] is always there, so with the closer first Tab could never pick a
+--  link. Esc closes the menu (below), then Tab steps past the pair.
+--  The first version of this indented a markdown list item (<C-t>); that
+--  was taken out on request. >> and << in normal mode still indent.
+local closers = "[%)%]}>\"'`]"
+local function closersAhead()
+  local col = vim.api.nvim_win_get_cursor(0)[2]
+  local ahead = vim.api.nvim_get_current_line():sub(col + 1)
+  return #(ahead:match('^' .. closers .. '+') or '')
+end
+
+-- Right after a list item's marker ("- [ ] |", "- |", "1. |"), where the
+-- item is still empty: Tab / S-Tab make it a sub-item / take it back out
+-- (Improvment.md, fourth round). Anywhere else Tab never indents.
+local function atItemStart()
+  local it = require('pure.lists').item()
+  return it ~= nil and vim.api.nvim_win_get_cursor(0)[2] == it.start
+end
+
+--- <Tab> in insert mode (expr map, replace_keycodes).
+function M.insertTab()
+  if atItemStart() then
+    return (vim.fn.pumvisible() == 1 and "<C-e>" or "") .. "<C-t>"
+  end
+  if vim.fn.pumvisible() == 1 then return "<C-n>" end
+  local n = closersAhead()
+  if n > 0 then return string.rep("<right>", n) end
+  if vim.snippet.active({ direction = 1 }) then
+    return "<cmd>lua vim.snippet.jump(1)<cr>"
+  end
+  return "<tab>"
+end
+
+--- Mirrors Tab backwards: previous suggestion, snippet back; else the builtin.
+function M.insertShiftTab()
+  if atItemStart() then
+    return (vim.fn.pumvisible() == 1 and "<C-e>" or "") .. "<C-d>"
+  end
+  if vim.fn.pumvisible() == 1 then return "<C-p>" end
+  -- was `direction = 1` here too, so the backward jump asked whether a
+  -- *forward* jump was possible.
+  if vim.snippet.active({ direction = -1 }) then
+    return "<cmd>lua vim.snippet.jump(-1)<cr>"
+  end
+  return "<S-tab>"
+end
+
+--- Esc with the completion menu open closes only the menu and stays in
+--- insert mode (Improvment.md): then Tab steps past the pair. A suggestion
+--- picked with Tab is kept (<C-y>); with none picked the typed text stays
+--- (<C-e>). A second Esc leaves insert mode as always.
+function M.insertEsc()
+  if vim.fn.pumvisible() == 0 then return "<Esc>" end
+  return vim.fn.complete_info({ 'selected' }).selected ~= -1 and "<C-y>" or "<C-e>"
+end
+
+--- <CR>: a Copilot suggestion on screen is accepted. With the completion menu
+--- open the suggestion is taken: the selected item, or the first one when
+--- none is (completeopt has noselect, so usually none is). Only when the
+--- word typed already is that first item (nothing left to complete) does
+--- <CR> close the menu and make the new line. Otherwise, in a markdown list,
+--- the next item starts (pure/lists.lua), else a plain new line.
+--- (expr map, replace_keycodes = false: the keys are returned already translated.)
+function M.insertEnter()
+  local ok, shown = pcall(vim.fn['copilot#GetDisplayedSuggestion'])
+  if ok and type(shown) == 'table' and (shown.text or '') ~= '' then
+    return vim.fn['copilot#Accept']('')
+  end
+  local cr = vim.keycode('<CR>')
+  if vim.fn.pumvisible() == 1 then
+    local info = vim.fn.complete_info({ 'selected', 'items' })
+    if info.selected ~= -1 then return vim.keycode('<C-y>') end
+    local first = info.items[1] and info.items[1].word or ''
+    local col = vim.api.nvim_win_get_cursor(0)[2]
+    local before = vim.api.nvim_get_current_line():sub(1, col)
+    if first ~= '' and before:sub(-#first) ~= first then
+      return vim.keycode('<C-n><C-y>')
+    end
+    local list = require('pure.lists').enter()
+    return vim.keycode('<C-e>') .. (list or cr)
+  end
+  return require('pure.lists').enter() or cr
+end
+
 return M

@@ -53,67 +53,8 @@ vim.g.pure_keyhint_groups = {
   ['<leader>z'] = 'Folds',
   }
 
-  local home = vim.uv.os_homedir():gsub("\\", "/") .. "/"
-
-  -- -----------------------------------------------------------------------------
-  --  Picker targets
-  -- -----------------------------------------------------------------------------
-  --  One table feeds explore (<leader>e_), find (<leader>f_) and new file
-  --  (<leader>n_), so each directory is written once instead of three times in
-  --  three near-identical blocks.
-  local dirs = {
-    ['~'] = home,
-    ['.'] = home .. '.config/',
-    n     = home .. '.config/nvim/',
-    -- The Flora vault (org), vim.g.flora_dir or ~/Flora (pure/flora.lua).
-    v     = function()
-      local vault = vim.fs.normalize(vim.fn.expand(vim.g.flora_dir or '~/Flora'))
-      return vault and (vault .. '/') or nil
-    end,
-  }
-
-  --- Directories relative to the current file. Functions, not strings: a string
-  --- would be expanded once at startup and keep pointing at the first file.
-  --- In the scratch note (which lives in the data folder) they count from the folder the
-  --- window was opened from: pure/scratch.lua, scratch.dir(levels up).
-  local function up(levels) return require('pure.scratch').dir(levels) .. '/' end
-  local file = {
-    p      = function() return up(0) end,
-    pp     = function() return up(1) end,
-    ["3p"] = function() return up(2) end,
-    ["4p"] = function() return up(3) end,
-  }
-
-  --- Run `picker` on `dir`, saying so when the directory simply is not there.
-  --- Without this the picker opens, the shell fails on a missing path, and the
-  --- floating window blinks shut with nothing explaining why.
-  local function inDir(picker, dir)
-    return function()
-      -- Not `type(dir) == 'function' and dir() or dir`: when dir() returns nil
-      -- (no vault yet) that idiom falls through to `or dir`, the function itself.
-      local path = dir
-      if type(dir) == 'function' then path = dir() end
-      if not path then
-        return vim.notify('No Obsidian vault set: run :ZettelVault', vim.log.levels.WARN)
-      end
-      if vim.fn.isdirectory(path) == 0 then
-        return vim.notify('Directory does not exist: ' .. path, vim.log.levels.WARN)
-      end
-      picker(path)
-    end
-  end
-
-  --- Toggle an oil float on `dir` (a path, or a function returning one).
-  ---
-  --- The same key closes the float again. That check comes first: inside oil the
-  --- buffer name is an oil:// URL, so here() would yield a path that isdirectory()
-  --- rejects and the key would warn instead of closing.
-  ---
-  --- oil is required lazily: plugins/oil.lua loads after this file, so the module
-  --- is not on the runtimepath yet when these mappings are defined.
-  ---
-
-  --- Directory of the current file, always with a trailing slash.
+  -- Picker targets (explore <leader>e_, find <leader>f_, new file <leader>n_) and their helpers: configs/functions.lua.
+  local dirs, file, up, here, inDir = func.dirs, func.fileDirs, func.up, func.here, func.inDir
 
   -- =============================================================================
   --  Motions and basics
@@ -148,24 +89,8 @@ vim.g.pure_keyhint_groups = {
   map('x', "<Tab>", ">gv", func.getOpts(opts, "Indent and reselect"))
   map('x', "<S-Tab>", "<gv", func.getOpts(opts, "Outdent and reselect"))
 
-  -- Move lines
-  --
-  -- Guarded by buffer type. The fuzzy pickers run fzf inside a terminal buffer,
-  -- and any moment spent in terminal-normal mode there (fuzzyLogic only calls
-  -- startinsert after a delay) meant the arrow keys fired this mapping instead of
-  -- reaching fzf -- failing with "E21: Cannot make changes, 'modifiable' is off"
-  -- and leaving the arrows apparently dead inside the picker.
-  --
-  -- Returning the key itself falls through to the builtin, because these mappings
-  -- are noremap: the returned key is not looked up again.
-  local function moveLine(keys, fallback)
-    return function()
-      if vim.bo.buftype ~= '' or not vim.bo.modifiable then
-        return fallback
-      end
-      return keys
-    end
-  end
+  -- Move lines (the guard by buffer type is explained in func.moveLine)
+  local moveLine = func.moveLine
 
   local move_opts = { expr = true, silent = true, noremap = true }
   map('n', "<up>", moveLine(":m .-2<CR>==", "<up>"), func.getOpts(move_opts, "Move line up"))
@@ -397,11 +322,7 @@ vim.g.pure_keyhint_groups = {
   map('n', '<leader>am', llm('selectModel'), func.getOpts(opts, "Select model (Ollama / Claude / agy)"))
   map('n', '<leader>at', llm('toggleThinking'), func.getOpts(opts, "Thinking of <leader>ai (show / hide)"))
   -- The file about you that every request reads (outside any git repository).
-  map('n', '<leader>au', function()
-    local path = require('pure.llm').userContextFile()
-    if not path then return vim.notify('User context is off (vim.g.pure_llm_user_context = false)') end
-    vim.cmd('edit ' .. vim.fn.fnameescape(path))
-  end, func.getOpts(opts, "User context file (what the LLMs know about you)"))
+  map('n', '<leader>au', func.openUserContext, func.getOpts(opts, "User context file (what the LLMs know about you)"))
   map({ 'n', 'x' }, '<leader>ax', llm('pickAction'), func.getOpts(opts, "Actions (claude/ folder of the vault)"))
   map('n', '<leader>ab', llm('runBlockAtCursor'), func.getOpts(opts, "Run the ```llm block under the cursor"))
   map('n', '<leader>ad', function() require('pure.llm').runNamed('Nota do dia') end,
@@ -436,27 +357,14 @@ vim.g.pure_keyhint_groups = {
   -- =============================================================================
   --  LSP
   -- =============================================================================
-  -- On a link, K follows it (pure/notes.lua): in markdown any link, elsewhere
-  -- only web links, since [[x]] in code is not a note. Else LSP hover.
-  map('n', 'K', function()
-    if require('pure.notes').follow(vim.bo.filetype ~= 'markdown') then return end
-    lsp.hover()
-  end, func.getOpts(opts, "Follow link, else LSP hover"))
+  map('n', 'K', func.followOrHover, func.getOpts(opts, "Follow link, else LSP hover"))
   map('n', 'gd', lsp.definition, func.getOpts(opts, "LSP definition"))
   -- No 'gr' here: it made the builtin grr/grn/gra/gri/grt/grx wait 500 ms, and
   -- grr already lists references.
   map('n', '<leader>la', lsp.code_action, func.getOpts(opts, "LSP code action"))
   map('n', '<leader>lr', lsp.rename, func.getOpts(opts, "LSP rename"))
   map('n', '<leader>ls', lsp.workspace_symbol, func.getOpts(opts, "LSP workspace symbols"))
-  -- Only where a language server can answer: in markdown (no such server) it
-  -- raised 'method "textDocument/signatureHelp" is not supported' on every
-  -- press (Improvment.md). Elsewhere <Up> moves up, as it would unmapped.
-  map('i', '<up>', function()
-    if #vim.lsp.get_clients({ bufnr = 0, method = 'textDocument/signatureHelp' }) > 0 then
-      return "<Cmd>lua vim.lsp.buf.signature_help()<CR>"
-    end
-    return "<Up>"
-  end, { expr = true, replace_keycodes = true, silent = true, desc = "LSP signature help, else up" })
+  map('i', '<up>', func.signatureHelpOrUp, { expr = true, replace_keycodes = true, silent = true, desc = "LSP signature help, else up" })
 
   -- =============================================================================
   --  Diagnostics
@@ -481,11 +389,7 @@ map('n', '<leader>tp', func.toggleCopilot, func.getOpts(opts, "Toggle Copilot"))
 map('n', '<leader>th', func.toggleWordHighlight, func.getOpts(opts, "Toggle word highlight"))
 map('n', '<leader>h', func.toggleWordHighlight, func.getOpts(opts, "Toggle word highlight (short form)"))
 map({ 'n', 'v' }, '<leader>tr', func.toggleRelativenumber, func.getOpts(opts, "Toggle relativenumber"))
--- One toggle for the notes: markdown (pure/render-md.lua) or org (pure/render-org.lua), by the buffer.
-map('n', '<leader>tm', function()
-  local module = vim.bo.filetype == 'org' and 'pure.render-org' or 'pure.render-md'
-  require(module).toggle()
-end, func.getOpts(opts, "Toggle note rendering (markdown, org)"))
+map('n', '<leader>tm', func.toggleNoteRendering, func.getOpts(opts, "Toggle note rendering (markdown, org)"))
 map('n', '<leader>tR', function() require('pure.reading').toggle() end, func.getOpts(opts, "Toggle reading mode (wide margins)"))
 map({ 'n', 'v' }, '<leader>tn', function()
   func.toggleNumber()
@@ -523,20 +427,10 @@ map('x', '<leader>zf', function()
   vim.wo.foldmethod = 'manual'
   vim.cmd('normal! zf')
 end, func.getOpts(opts, "Fold selection"))
-map('n', '<leader>zd', function()
-  local ok, err = pcall(vim.cmd, 'normal! zd')
-  if not ok then vim.notify(err:gsub('^.-E%d+: ', ''), vim.log.levels.WARN) end
-end, func.getOpts(opts, "Delete fold"))
+map('n', '<leader>zd', func.deleteFold, func.getOpts(opts, "Delete fold"))
 map('n', '<leader>zr', function() require('pure.folding').auto() end,
   func.getOpts(opts, "Reset folds to automatic"))
--- One key for zR / zM: opens everything if any fold is closed, otherwise
--- closes them all.
-map('n', '<leader>za', function()
-  for lnum = 1, vim.fn.line('$') do
-    if vim.fn.foldclosed(lnum) ~= -1 then return vim.cmd('normal! zR') end
-  end
-  vim.cmd('normal! zM')
-end, func.getOpts(opts, "Toggle all folds"))
+map('n', '<leader>za', func.toggleAllFolds, func.getOpts(opts, "Toggle all folds"))
 
 map('n', '<leader>u', function()
   vim.cmd('packadd nvim.undotree')
@@ -559,12 +453,7 @@ for _, char in ipairs(chars) do
 end
 
 -- Prevent overwriting the default register when deleting empty lines
-map("n", "dd", function()
-    if vim.api.nvim_get_current_line():match("^%s*$") then
-        return '"_dd'
-    end
-    return "dd"
-end, { expr = true, desc = "Smart dd" })
+map("n", "dd", func.smartDd, { expr = true, desc = "Smart dd" })
 
 -- =============================================================================
 -- Open 
@@ -593,99 +482,15 @@ map('v', '<leader>ldb', 'y:lua print(<C-r>")<cr>', func.getOpts(opts, "Print sel
 -- =============================================================================
 --  Deferred: the <CR> mapping needs copilot.vim's autoload on the runtimepath,
 vim.schedule(function()
-  --  Tab in insert mode (as asked in the vault's Improvment.md, second
-  --  round: Tab must not indent, and walks the suggestions). In order:
-  --    the completion menu open           next suggestion (<CR> takes it)
-  --    closers right after the cursor     step past all of them: "[[a|]]" -> "[[a]]|"
-  --    a snippet with a next field        jump to it
-  --    anything else                      a plain Tab, the one way left to
-  --                                       type one (<C-v><Tab> works too)
-  --  Tab never opens the menu itself ('autocomplete' opens it as you type):
-  --  returning <C-n> from this mapping with the menu closed crashed Neovim
-  --  0.12.5 (segfault) together with 'lazyredraw' and 'autocomplete'; it
-  --  reproduces with --clean, so it is Neovim's bug, not this config's.
-  --  The menu wins over a closer (third round, "option b"): inside [[...]]
-  --  the ]] is always there, so with the closer first Tab could never pick a
-  --  link. Esc closes the menu (below), then Tab steps past the pair.
-  --  The first version of this indented a markdown list item (<C-t>); that
-  --  was taken out on request. >> and << in normal mode still indent.
-  local closers = "[%)%]}>\"'`]"
-  local function closersAhead()
-    local col = vim.api.nvim_win_get_cursor(0)[2]
-    local ahead = vim.api.nvim_get_current_line():sub(col + 1)
-    return #(ahead:match('^' .. closers .. '+') or '')
-  end
-
-  -- Right after a list item's marker ("- [ ] |", "- |", "1. |"), where the
-  -- item is still empty: Tab / S-Tab make it a sub-item / take it back out
-  -- (Improvment.md, fourth round). Anywhere else Tab never indents.
-  local function atItemStart()
-    local it = require('pure.lists').item()
-    return it ~= nil and vim.api.nvim_win_get_cursor(0)[2] == it.start
-  end
-
-  map('i', '<tab>', function()
-    if atItemStart() then
-      return (vim.fn.pumvisible() == 1 and "<C-e>" or "") .. "<C-t>"
-    end
-    if vim.fn.pumvisible() == 1 then return "<C-n>" end
-    local n = closersAhead()
-    if n > 0 then return string.rep("<right>", n) end
-    if vim.snippet.active({ direction = 1 }) then
-      return "<cmd>lua vim.snippet.jump(1)<cr>"
-    end
-    return "<tab>"
-  end, { expr = true, replace_keycodes = true, desc = "Indent an empty list item / past closing pair / next suggestion / snippet jump" })
-
-  --  Mirrors Tab backwards: previous suggestion, snippet back; else the builtin.
-  map('i', '<S-tab>', function()
-    if atItemStart() then
-      return (vim.fn.pumvisible() == 1 and "<C-e>" or "") .. "<C-d>"
-    end
-    if vim.fn.pumvisible() == 1 then return "<C-p>" end
-    -- was `direction = 1` here too, so the backward jump asked whether a
-    -- *forward* jump was possible.
-    if vim.snippet.active({ direction = -1 }) then
-      return "<cmd>lua vim.snippet.jump(-1)<cr>"
-    end
-    return "<S-tab>"
-  end, { expr = true, replace_keycodes = true, desc = "Outdent an empty list item / previous suggestion / snippet jump back" })
-
-  --  Esc with the completion menu open closes only the menu and stays in
-  --  insert mode (Improvment.md): then Tab steps past the pair. A suggestion
-  --  picked with Tab is kept (<C-y>); with none picked the typed text stays
-  --  (<C-e>). A second Esc leaves insert mode as always.
-  map('i', '<Esc>', function()
-    if vim.fn.pumvisible() == 0 then return "<Esc>" end
-    return vim.fn.complete_info({ 'selected' }).selected ~= -1 and "<C-y>" or "<C-e>"
-  end, { expr = true, replace_keycodes = true, desc = "Close the completion menu, else leave insert mode" })
-
-  -- <CR>: a Copilot suggestion on screen is accepted. With the completion menu
-  -- open the suggestion is taken: the selected item, or the first one when
-  -- none is (completeopt has noselect, so usually none is). Only when the
-  -- word typed already is that first item (nothing left to complete) does
-  -- <CR> close the menu and make the new line. Otherwise, in a markdown list,
-  -- the next item starts (pure/lists.lua), else a plain new line.
-  map('i', '<CR>', function()
-    local ok, shown = pcall(vim.fn['copilot#GetDisplayedSuggestion'])
-    if ok and type(shown) == 'table' and (shown.text or '') ~= '' then
-      return vim.fn['copilot#Accept']('')
-    end
-    local cr = vim.keycode('<CR>')
-    if vim.fn.pumvisible() == 1 then
-      local info = vim.fn.complete_info({ 'selected', 'items' })
-      if info.selected ~= -1 then return vim.keycode('<C-y>') end
-      local first = info.items[1] and info.items[1].word or ''
-      local col = vim.api.nvim_win_get_cursor(0)[2]
-      local before = vim.api.nvim_get_current_line():sub(1, col)
-      if first ~= '' and before:sub(-#first) ~= first then
-        return vim.keycode('<C-n><C-y>')
-      end
-      local list = require('pure.lists').enter()
-      return vim.keycode('<C-e>') .. (list or cr)
-    end
-    return require('pure.lists').enter() or cr
-  end, {
+  --  The behaviour of each key (completion menu, closing pairs, snippets, list items, Copilot) is explained
+  --  in configs/functions.lua, next to the functions.
+  map('i', '<tab>', func.insertTab,
+    { expr = true, replace_keycodes = true, desc = "Indent an empty list item / past closing pair / next suggestion / snippet jump" })
+  map('i', '<S-tab>', func.insertShiftTab,
+    { expr = true, replace_keycodes = true, desc = "Outdent an empty list item / previous suggestion / snippet jump back" })
+  map('i', '<Esc>', func.insertEsc,
+    { expr = true, replace_keycodes = true, desc = "Close the completion menu, else leave insert mode" })
+  map('i', '<CR>', func.insertEnter, {
     expr = true,
     replace_keycodes = false,
     desc = "Accept Copilot suggestion / next list item / new line",
