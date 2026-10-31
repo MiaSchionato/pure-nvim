@@ -17,6 +17,7 @@ local servers = {
   'scls',
   'pyright', -- Python (npm install -g pyright)
   'bashls', -- bash and sh (npm install -g bash-language-server)
+  'orgls', -- org notes of the vault: hover on links (in-process, no executable; lua/lsp/orgls.lua)
 }
 
 local isWindows = vim.fn.has('win32') == 1
@@ -137,3 +138,26 @@ for _, server_name in ipairs(servers) do
     configureServer(server_name, lsp_config, bin, cmd)
   end
 end
+
+-- Automatic hover: once the cursor rests on a spot ('updatetime', CursorHold), the hover of whichever server
+-- has one shows by itself; nothing is said when there is nothing to show. K does the same on demand.
+-- vim.g.lsp_auto_hover = false turns it off.
+local hoverAsked = {} -- buffer -> "row:col" of the last automatic hover, so one rest asks once
+vim.api.nvim_create_autocmd('CursorMoved', {
+  group = lang_settings_group,
+  callback = function(args) hoverAsked[args.buf] = nil end,
+})
+vim.api.nvim_create_autocmd('CursorHold', {
+  group = lang_settings_group,
+  callback = function(args)
+    local buf = args.buf
+    if vim.g.lsp_auto_hover == false or vim.bo[buf].buftype ~= '' then return end
+    if vim.api.nvim_win_get_config(0).relative ~= '' or vim.fn.pumvisible() == 1 then return end
+    if #vim.lsp.get_clients({ bufnr = buf, method = 'textDocument/hover' }) == 0 then return end
+    local pos = vim.api.nvim_win_get_cursor(0)
+    local key = pos[1] .. ':' .. pos[2]
+    if hoverAsked[buf] == key then return end
+    hoverAsked[buf] = key
+    vim.lsp.buf.hover({ silent = true })
+  end,
+})
