@@ -211,11 +211,20 @@ exactly: note `#4f8a96`, alias `#c89dc1`, separators and path `#6d7db6`, heading
 level colours. It lists every note and heading, not only the ones with an `:ID:`
 (org-roam's `roam_node_find` is still `<leader>mmf`).
 
-## `lua/lsp/orgls.lua` (merged copy, not loaded yet)
+## `lua/lsp/orgls.lua`: the org language server (in-process)
 
-The vault reading of `pure/flora.lua` (path, `parseFile`, `findEntries`) and all of `pure/links.lua`
-(search, ids and aliases, the `[[` menu, resolving a link, reconcile and its diagnostics, `omnifunc`, attach)
-in one file, the code as it was, as the base of the org language server. The picker (`flora.find`,
-`links.pick`) and the other Flora commands stay where they are. `pure/links.lua` and `pure/flora.lua` are
-untouched and remain the ones in use; nothing requires `lsp.orgls` yet, and the two must not be loaded
-together (same buffer variable, autocmd groups and namespaces). Plan: Flora note `projects/setup/Org LSP.org`.
+One file with the vault reading of `pure/flora.lua` and all of `pure/links.lua` (merged, code as it was), plus
+a small language server that needs no executable: its config is returned to `configs/lspConfigs.lua`
+(`'orgls'` is in its list), and it attaches to the org notes **inside the vault** only. Plan, steps and what was
+copied and why: Flora note `projects/setup/Org LSP.org`.
+
+| What | How |
+|---|---|
+| `K` on a link | `textDocument/hover` (the `K` map falls through to `lsp.hover()` when it is not a web link): the note, or the section for a heading link, as an org block (properties drawer left out, 40 lines at most); a link that names nothing says so (`No single note or heading named "x"`, `No note or heading with the id ...`). Links read: `[[id:ID][text]]`, `[[Note]]`, `[[Note#Heading]]` (with or without `\|\|alias`), `[[file:path]]`; web links give nothing. The server reads the open buffers, so unsaved text shows. |
+| Automatic hover | `configs/lspConfigs.lua`: after the cursor rests (`updatetime`, `CursorHold`) the hover of **any** attached server shows by itself, silent when there is nothing. `vim.g.lsp_auto_hover = false` turns it off. |
+| `<leader>vp` | unchanged: still `flora.preview`, not the LSP. |
+
+The module has no side effects when loaded, so it can be required next to `pure.links`; the editor side that
+`pure/links.lua` runs at load (the `[[` menu, alias saving) is `require('lsp.orgls')._module.setup()`, **not
+called yet**: `pure.links` stays the one in use for it. Settings: `vim.g.orgls_vault` (the vault folder; the
+personal default lives in one function, `vaultDir`), `vim.g.orgls_inbox`, `vim.g.orgls_new_keyword`.

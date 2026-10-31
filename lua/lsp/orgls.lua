@@ -1,5 +1,5 @@
 -- =============================================================================
---  orgls: what the org notes of the Flora vault know about each other
+--  orgls: what the org notes of a vault know about each other
 -- =============================================================================
 --  One file for the part of the setup that answers "what is in the vault, where does this link go, is it
 --  right". It was spread over pure/flora.lua (reading the vault) and pure/links.lua (finding, linking,
@@ -9,21 +9,27 @@
 --    1. The vault    path, parsing a note, the entries (notes, headings, aliases)   (from pure/flora.lua)
 --    2. The rest     pure/links.lua in its own order: text helpers, search, IDs and aliases, writing the
 --                    link, the [[ menu, resolving a spec, reconcile (diagnostics), the alias of a link,
---                    omnifunc, <CR>/<Tab>, attach and autocmds
+--                    omnifunc, <CR>/<Tab>, attach
+--    3. M.setup()    the autocmds that used to run when pure/links.lua was loaded (not called yet)
+--    4. The server   an in-process language server (textDocument/hover); the file returns its config,
+--                    which configs/lspConfigs.lua loads ('orgls' is in its list)
 --
---  NOT moved: the fzf picker (flora.find, links.pick: <leader>vf and <leader>vi) and the other Flora
---  commands (rename, delete, sync, backlinks...). They are the picker's, not the vault's.
---  The original modules are untouched and still the ones in use; nothing loads this file yet. Do not load it
---  together with pure.links: both use the same buffer variable, autocmd groups and namespaces.
+--  NOT moved: the fzf picker (flora.find, links.pick: <leader>vf and <leader>vi) and the other vault
+--  commands (rename, delete, sync, backlinks, preview, quick edit). They are the picker's, not the vault's.
+--  The original modules are untouched and still the ones in use for the [[ menu and the checks. Do not call
+--  M.setup() while pure.links is loaded: both use the same buffer variable, autocmd groups and namespaces.
 --
---  Changes from the originals, only what merging needed: completefunc/omnifunc point to this module,
---  `pure.flora.path()` and `_find.entries` became the local M.path / findEntries, the duplicate M and
---  header were dropped, and the exports for tests lost `pick`.
+--  Changes from the originals: completefunc/omnifunc point to this module; `pure.flora.path()` and
+--  `_find.entries` became the local M.path / findEntries; the load-time autocmds went into M.setup(); the
+--  entries carry the :ID: of the note or heading (`id`); the duplicate M and header were dropped; the exports
+--  for tests lost `pick`.
 --
 --  Settings (configs.lua):
 --    vim.g.pure_links_complete   false turns the [[ menu off (default on)
 --    vim.g.pure_links_reconcile  false turns the check of hand-written links off
---    vim.g.flora_dir             the vault folder (default ~/Flora)
+--    vim.g.orgls_vault           the vault folder (see vaultDir; the personal default is in that one function)
+--    vim.g.orgls_inbox           the file new notes are made in, relative to the vault (default inbox.org)
+--    vim.g.orgls_new_keyword     the todo keyword of a new note (default SEED)
 -- =============================================================================
 
 local M = {}
@@ -34,11 +40,17 @@ local style = require('pure.pickerstyle')
 -- =============================================================================
 --  1. The vault (from pure/flora.lua)
 -- =============================================================================
-local function warn(msg) vim.notify('Flora: ' .. msg, vim.log.levels.WARN) end
+local function warn(msg) vim.notify('orgls: ' .. msg, vim.log.levels.WARN) end
+
+--- The vault folder, normalized. The one place that names a default: vim.g.orgls_vault, else the setting this
+--- config already had (vim.g.flora_dir), else the personal default. A separate project drops the last two.
+local function vaultDir()
+  return vim.fs.normalize(vim.fn.expand(vim.g.orgls_vault or vim.g.flora_dir or '~/Flora'))
+end
 
 --- The vault folder, or nil (with a warning) when it is not there.
 function M.path()
-  local dir = vim.fs.normalize(vim.fn.expand(vim.g.flora_dir or '~/Flora'))
+  local dir = vaultDir()
   if vim.fn.isdirectory(dir) == 0 then
     warn('folder not found: ' .. dir)
     return nil
@@ -64,6 +76,7 @@ local function parseFile(path)
   local info = { mtime = stat and stat.mtime.sec or 0, title = nil, aliases = {}, headings = {} }
   if not ok then return info end
   local current, block
+  local owner = 'note' -- who a following :ID: belongs to: 'note', a heading (table) or 'deep' (below FIND_MAX_LEVEL: not indexed)
   local db = roamDb()
   for i, line in ipairs(lines) do
     local name = line:match('^%s*#%+[Bb][Ee][Gg][Ii][Nn]_(%w+)')
@@ -76,15 +89,20 @@ local function parseFile(path)
       local title = line:match('^#%+[Tt][Ii][Tt][Ll][Ee]:%s*(.-)%s*$')
       local stars, rest = line:match('^(%*+)%s+(.*)$')
       local aliases = line:match('^%s*:ROAM_ALIASES:%s+(.-)%s*$')
+      local id = line:match('^%s*:ID:%s+(%S+)')
       if title and not info.title and title ~= '' then
         info.title = title
+      elseif id then
+        if owner == 'note' then info.id = info.id or id elseif owner ~= 'deep' then owner.id = owner.id or id end
       elseif stars then
         current = nil
+        owner = 'deep'
         local text = rest:gsub('^%u%u+%s+', ''):gsub('^%[#%u%]%s+', ''):gsub('%s+:[%w_@#%%:]+:%s*$', '')
         text = vim.trim(text)
         if #stars <= FIND_MAX_LEVEL and text ~= '' then
           current = { level = #stars, text = text, lnum = i, aliases = {} }
           info.headings[#info.headings + 1] = current
+          owner = current
         end
       elseif aliases then
         local names = db and db.split_quoted(aliases) or vim.split(aliases, '%s+', { trimempty = true })
@@ -119,13 +137,13 @@ local function findEntries(root)
     local note = info.title or vim.fn.fnamemodify(f.rel, ':t:r')
     local base = { file = f.path, path = f.rel, mtime = info.mtime, archive = archive, note = note }
     -- What is in the name of the note (the note and its aliases) apart from what is inside it (headings).
-    local top = { vim.tbl_extend('force', base, { kind = 'note', title = note, lnum = 1 }) }
+    local top = { vim.tbl_extend('force', base, { kind = 'note', title = note, lnum = 1, id = info.id }) }
     for _, a in ipairs(info.aliases) do
       top[#top + 1] = vim.tbl_extend('force', base, { kind = 'alias', title = a, target = note, lnum = 1 })
     end
     local inside = {}
     for _, h in ipairs(info.headings) do
-      inside[#inside + 1] = vim.tbl_extend('force', base, { kind = 'heading', title = h.text, level = h.level, lnum = h.lnum })
+      inside[#inside + 1] = vim.tbl_extend('force', base, { kind = 'heading', title = h.text, level = h.level, lnum = h.lnum, id = h.id })
       for _, a in ipairs(h.aliases) do
         inside[#inside + 1] = vim.tbl_extend('force', base,
           { kind = 'alias', title = a, target = h.text, level = h.level, lnum = h.lnum, heading = true })
@@ -375,11 +393,11 @@ local function headingLine(file, lnum, title)
   return nil
 end
 
---- A SEED called `title` at the end of the inbox, without opening it: (file, lnum).
+--- A new note (a headline with the new-note keyword) called `title` at the end of the inbox, without opening it: (file, lnum).
 local function createSeed(title)
   local root = M.path()
   if not root then return nil end
-  local inbox = root .. '/inbox.org'
+  local inbox = root .. '/' .. (vim.g.orgls_inbox or 'inbox.org')
   local buf = vim.fn.bufnr(inbox)
   local lines
   if buf ~= -1 and api.nvim_buf_is_loaded(buf) then
@@ -389,7 +407,7 @@ local function createSeed(title)
   end
   if #lines > 0 and lines[#lines] ~= '' then lines[#lines + 1] = '' end
   local first = #lines + 1
-  vim.list_extend(lines, { '* SEED ' .. title, ':PROPERTIES:', ':CREATED:  [' .. os.date('%Y-%m-%d %a %H:%M') .. ']', ':END:' })
+  vim.list_extend(lines, { '* ' .. (vim.g.orgls_new_keyword or 'SEED') .. ' ' .. title, ':PROPERTIES:', ':CREATED:  [' .. os.date('%Y-%m-%d %a %H:%M') .. ']', ':END:' })
   if buf ~= -1 and api.nvim_buf_is_loaded(buf) then
     api.nvim_buf_set_lines(buf, 0, -1, false, lines)
     api.nvim_buf_call(buf, function() vim.cmd('silent! write') end)
@@ -1129,30 +1147,189 @@ local function attach(buf)
   vim.keymap.set('i', '<S-Tab>', function() return vim.fn.pumvisible() == 1 and '<C-p>' or '<S-Tab>' end, { buffer = buf, expr = true })
 end
 
-api.nvim_create_autocmd('CompleteDone', {
-  group = api.nvim_create_augroup('PureLinksDone', { clear = true }),
-  callback = function()
-    local item = vim.v.completed_item
-    if type(item) ~= 'table' or type(item.user_data) ~= 'table' or item.user_data.pure_link == nil then return end
-    -- The text the completion wrote (the title of the item) must not open the menu again, and the
-    -- state is kept now: the next menu would overwrite it.
-    state.quietUntil = vim.uv.hrtime() + 600e6
-    local snap = {
-      mode = state.mode, linkstart = state.linkstart, input = state.input, items = state.items,
-      idfrom = state.idfrom, idto = state.idto, sepcol = state.sepcol,
-    }
-    -- After the completion has finished writing its own text.
-    vim.schedule(function() accept(item, snap) end)
-  end,
-})
 
-api.nvim_create_autocmd('FileType', {
-  group = api.nvim_create_augroup('PureLinksAttach', { clear = true }),
-  pattern = 'org',
-  callback = function(args) attach(args.buf) end,
-})
-for _, b in ipairs(api.nvim_list_bufs()) do
-  if api.nvim_buf_is_loaded(b) and vim.bo[b].filetype == 'org' then attach(b) end
+-- =============================================================================
+--  3. The editor side, started by M.setup()
+-- =============================================================================
+--  What ran when pure/links.lua was loaded: the autocmds that attach the [[ menu, the alias saving and the
+--  rest to org buffers. Nothing calls setup() yet (pure.links is the one in use); loading this module does not
+--  start any of it, so the language server below can be loaded alone.
+local setupDone = false
+
+function M.setup()
+  if setupDone then return end
+  setupDone = true
+  api.nvim_create_autocmd('CompleteDone', {
+    group = api.nvim_create_augroup('PureLinksDone', { clear = true }),
+    callback = function()
+      local item = vim.v.completed_item
+      if type(item) ~= 'table' or type(item.user_data) ~= 'table' or item.user_data.pure_link == nil then return end
+      -- The text the completion wrote (the title of the item) must not open the menu again, and the
+      -- state is kept now: the next menu would overwrite it.
+      state.quietUntil = vim.uv.hrtime() + 600e6
+      local snap = {
+        mode = state.mode, linkstart = state.linkstart, input = state.input, items = state.items,
+        idfrom = state.idfrom, idto = state.idto, sepcol = state.sepcol,
+      }
+      -- After the completion has finished writing its own text.
+      vim.schedule(function() accept(item, snap) end)
+    end,
+  })
+
+  api.nvim_create_autocmd('FileType', {
+    group = api.nvim_create_augroup('PureLinksAttach', { clear = true }),
+    pattern = 'org',
+    callback = function(args) attach(args.buf) end,
+  })
+  for _, b in ipairs(api.nvim_list_bufs()) do
+    if api.nvim_buf_is_loaded(b) and vim.bo[b].filetype == 'org' then attach(b) end
+  end
+end
+
+-- =============================================================================
+--  4. The language server (in-process): textDocument/hover
+-- =============================================================================
+--  No executable: `cmd` is a function that returns the server object the client talks to. The server runs
+--  in this Neovim, so it reads the buffers themselves (what is not saved yet shows) and needs no didChange.
+--  Hover is on the link under the cursor: the note (or the section) it points to, as an org block; a link
+--  that names nothing says so. K (lsp.hover) and the automatic hover (configs/lspConfigs.lua) show it.
+local HOVER_MAX_LINES = 40
+
+--- The link of `line` that covers the 0-based byte column `col`: { s, e (1-based, inclusive), inner } or nil.
+local function linkAt(line, col)
+  local pos = 1
+  while true do
+    local s, e, inner = line:find('%[%[(.-)%]%]', pos)
+    if not s then return nil end
+    if col >= s - 1 and col < e then return { s = s, e = e, inner = inner } end
+    pos = e + 1
+  end
+end
+
+--- Where a link points: { file, lnum, label }, or nil and a message when it names nothing, or nil alone when it
+--- is not a link to a note (a web link).
+local function linkTarget(bufnr, inner)
+  local id = inner:match('^id:([^%]]+)')
+  if id then
+    for _, e in ipairs(allEntries()) do
+      if e.id == id and (e.kind == 'note' or e.kind == 'heading') then
+        return { file = e.file, lnum = e.lnum, label = e.note .. (e.kind == 'heading' and (' › ' .. e.title) or '') }
+      end
+    end
+    -- A heading below the indexed levels: org.nvim's roam knows every level.
+    local ok, ids = pcall(require, 'org.id')
+    local loc = ok and ids.find(id) or nil
+    if loc and loc.filename then
+      return { file = vim.fs.normalize(loc.filename), lnum = loc.lnum or 1, label = vim.fn.fnamemodify(loc.filename, ':t:r') }
+    end
+    return nil, 'No note or heading with the id ' .. id
+  end
+  local scheme = inner:match('^(%a[%w+.-]*):')
+  if scheme and scheme:lower() == 'file' then
+    local file = inner:sub(#scheme + 2):gsub('::.*$', ''):gsub('%]%[.*$', '')
+    if vim.fn.isabsolutepath(file) == 0 then file = vim.fs.dirname(api.nvim_buf_get_name(bufnr)) .. '/' .. file end
+    file = vim.fs.normalize(file)
+    if vim.uv.fs_stat(file) then return { file = file, lnum = 1, label = vim.fn.fnamemodify(file, ':t:r') } end
+    return nil, 'File not found: ' .. file
+  end
+  if scheme and SCHEMES[scheme:lower()] then return nil end
+  local spec = vim.trim((inner:match('^([^%]]*)') or ''):gsub('||.*$', ''))
+  if spec == '' then return nil end
+  local r = resolveSpec(allEntries(), spec)
+  if r then return { file = r.file, lnum = r.lnum, label = (r.text:gsub('#', ' › ')) } end
+  return nil, 'No single note or heading named "' .. spec .. '"'
+end
+
+--- The lines of a node: its subtree when `row` is a headline, else the whole file; the properties drawer at the
+--- top is left out.
+local function nodeLines(path, row)
+  local nr = vim.fn.bufnr(path)
+  local lines
+  if nr ~= -1 and api.nvim_buf_is_loaded(nr) then
+    lines = api.nvim_buf_get_lines(nr, 0, -1, false)
+  else
+    local ok, read = pcall(vim.fn.readfile, path)
+    lines = ok and read or {}
+  end
+  local stars = (lines[row] or ''):match('^(%*+)%s')
+  if stars then
+    local last = #lines
+    for i = row + 1, #lines do
+      local s = lines[i]:match('^(%*+)%s')
+      if s and #s <= #stars then last = i - 1 break end
+    end
+    lines = vim.list_slice(lines, row, last)
+  end
+  for i = 1, math.min(2, #lines) do
+    if lines[i]:match('^%s*:PROPERTIES:%s*$') then
+      for j = i + 1, #lines do
+        if lines[j]:match('^%s*:END:%s*$') then
+          lines = vim.list_extend(vim.list_slice(lines, 1, i - 1), vim.list_slice(lines, j + 1))
+          break
+        end
+      end
+      break
+    end
+  end
+  if #lines > HOVER_MAX_LINES then
+    lines = vim.list_slice(lines, 1, HOVER_MAX_LINES)
+    lines[#lines + 1] = '…'
+  end
+  return lines
+end
+
+--- textDocument/hover: nil when the cursor is not on a link to a note.
+local function hover(params)
+  local bufnr = vim.uri_to_bufnr(params.textDocument.uri)
+  local line = api.nvim_buf_get_lines(bufnr, params.position.line, params.position.line + 1, false)[1]
+  if not line then return nil end
+  local okCol, col = pcall(vim.str_byteindex, line, 'utf-16', params.position.character, false)
+  local L = linkAt(line, okCol and col or params.position.character)
+  if not L then return nil end
+  local target, missing = linkTarget(bufnr, L.inner)
+  if not target then
+    if not missing then return nil end
+    return { contents = { kind = 'markdown', value = missing } }
+  end
+  -- Four backticks: a note may hold three.
+  local body = table.concat(nodeLines(target.file, target.lnum), '\n')
+  return { contents = { kind = 'markdown', value = '**' .. target.label .. '**\n\n````org\n' .. body .. '\n````' } }
+end
+
+local function inVault(path)
+  local dir = vaultDir()
+  if path == '' or vim.fn.isdirectory(dir) == 0 then return nil end
+  local p = vim.fs.normalize(vim.uv.fs_realpath(path) or path)
+  local d = vim.fs.normalize(vim.uv.fs_realpath(dir) or dir)
+  if vim.fn.has('win32') == 1 then p, d = p:lower(), d:lower() end
+  return p:sub(1, #d + 1) == d .. '/' and dir or nil
+end
+
+--- The server object for vim.lsp: request, notify, is_closing, terminate.
+local function server()
+  local closing, nextId = false, 0
+  local srv = {}
+  function srv.request(method, params, callback)
+    nextId = nextId + 1
+    local err, result
+    if method == 'initialize' then
+      result = {
+        capabilities = { hoverProvider = true, textDocumentSync = { openClose = true, change = 0 } },
+        serverInfo = { name = 'orgls' },
+      }
+    elseif method == 'textDocument/hover' then
+      local ok, res = pcall(hover, params)
+      if ok then result = res else err = { code = -32603, message = 'orgls: ' .. tostring(res) } end
+    elseif method ~= 'shutdown' then
+      err = { code = -32601, message = 'orgls: method not supported: ' .. method }
+    end
+    vim.schedule(function() callback(err, result) end)
+    return true, nextId
+  end
+  function srv.notify() return true end
+  function srv.is_closing() return closing end
+  function srv.terminate() closing = true end
+  return srv
 end
 
 -- Exposed for tests.
@@ -1161,5 +1338,16 @@ M._resolve = resolveAliasLinks
 M._reconcile, M._resolveSpec = reconcile, resolveSpec
 M._state = state
 M._entries = findEntries
+M._hover, M._linkAt, M._linkTarget, M._nodeLines = hover, linkAt, linkTarget, nodeLines
 
-return M
+--- What configs/lspConfigs.lua loads: the config of the server (the module itself is `_module`, for tests).
+return {
+  cmd = server,
+  filetypes = { 'org' },
+  -- Only the notes of the vault (other .org files have no server).
+  root_dir = function(bufnr, on_dir)
+    local root = inVault(api.nvim_buf_get_name(bufnr))
+    if root then on_dir(root) end
+  end,
+  _module = M,
+}
