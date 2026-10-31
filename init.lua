@@ -46,6 +46,16 @@ if vim.fn.has("win32") == 1 then
     vim.o.shell, vim.o.shellcmdflag, vim.o.shellquote, vim.o.shellxquote, vim.o.shellslash =
       saved[1], saved[2], saved[3], saved[4], saved[5]
   end
+
+-- A C/C++ compiler for clangd (which asks the compiler for its system headers) and for org-babel's C
+-- blocks. MSYS2 is installed on this machine but its compiler is not on the system PATH; it is added to
+-- Neovim's own PATH (nothing outside Neovim changes). Nothing happens when a compiler is already found.
+  if vim.fn.executable('gcc') == 0 and vim.fn.executable('clang') == 0 then
+    local msys = 'C:/msys64/ucrt64/bin'
+    if vim.fn.isdirectory(msys) == 1 then
+      vim.env.PATH = (msys:gsub('/', '\\')) .. ';' .. vim.env.PATH
+    end
+  end
 end
 
 -- =============================================================================

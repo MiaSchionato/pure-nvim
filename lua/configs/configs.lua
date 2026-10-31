@@ -4,11 +4,11 @@
 --  The one file to change this configuration to your taste. It is split in
 --  two parts, each in sections with a header:
 --
---    1. Neovim         the editor's own options (vim.opt / vim.g)
+--    1. Neovim         the editor's own options (vim.opt / g)
 --                        Interface · Editing · Search · Completion · Files
 --                        · Windows · Folds · Netrw · Performance
 --    2. Plugins        the settings of this configuration's modules (lua/pure/,
---                      all vim.g.pure_*), one section per plugin
+--                      all g.pure_*), one section per plugin
 --                        Vault · New files · Markdown · Todoist · Calendar
 --                        · Proton Pass · LLMs · Dashboard · Key hints · Indent guide
 --                        · Terminal · Neovide · Advanced
@@ -26,6 +26,7 @@
 -- =============================================================================
 
 local o = vim.opt
+local g = vim.g
 
 -- #############################################################################
 --  1. NEOVIM
@@ -153,9 +154,9 @@ o.foldmethod = "indent"
 -- -----------------------------------------------------------------------------
 --  Netrw (the built-in file explorer; oil.nvim is the one mapped to keys)
 -- -----------------------------------------------------------------------------
-vim.g.netrw_winsize = 25    -- width in %, as a split
-vim.g.netrw_banner = 0      -- no help banner
-vim.g.netrw_keepdir = 0     -- the working directory follows netrw's
+g.netrw_winsize = 25    -- width in %, as a split
+g.netrw_banner = 0      -- no help banner
+g.netrw_keepdir = 0     -- the working directory follows netrw's
 
 -- -----------------------------------------------------------------------------
 --  Performance
@@ -171,22 +172,32 @@ o.maxmempattern = 20000     -- memory (KB) a search pattern may use
 --  2. PLUGINS (lua/pure/)
 -- #############################################################################
 
+g.pure_reading_width = 120
+
+-- -----------------------------------------------------------------------------
+--  Org links  (pure/links.lua)
+-- -----------------------------------------------------------------------------
+-- The menu that opens by itself when you type [[ in an org note (notes, aliases and headings of the
+-- vault; taking one writes [[id:ID][Title]]). Default: true. Changed: off. <leader>vi still inserts a
+-- link with the picker, and <C-x><C-u> after a [[ opens the menu by hand.
+g.pure_links_complete = true
+
 -- -----------------------------------------------------------------------------
 --  Vault and notes  (pure/zettelkasten.lua, pure/notes.lua, <leader>v)
 -- -----------------------------------------------------------------------------
 -- The Obsidian vault. Unset (default): asked for on a fresh install and
 -- remembered in stdpath('data'); :ZettelVault changes it. Setting it here
 -- overrides that.
--- vim.g.pure_vault = '~/Atlas'
+-- g.pure_vault = '~/Atlas'
 
 -- Folder of the templates, inside the vault. Default: 'Templates'.
-vim.g.pure_templates = '7-Templates'
+g.pure_templates = '7-Templates'
 
 -- Folders whose new notes are born with a template: a link to a note that
 -- does not exist yet, created there (Yes), gets it at once. Folder inside
 -- the vault = template name; a template not in the templates folder yet is
 -- skipped. Default: {}. Changed: the diary, linked from the daily note.
-vim.g.pure_folder_templates = { ['6-Private/Diary'] = 'Diary' }
+g.pure_folder_templates = { ['6-Private/Diary'] = 'Diary' }
 
 -- Folders that live OUTSIDE the vault, under a name links can use: name = real
 -- folder. [[6-Private/Diary/2026-10-16]] opens ~/Private/Diary/2026-10-16.md (and
@@ -198,23 +209,23 @@ vim.g.pure_folder_templates = { ['6-Private/Diary'] = 'Diary' }
 -- the files, `dir` shows them in the clear once mounted with the FIDO2 key (a
 -- touch), and it unmounts itself after `idle` without use. pure_fido2_id is the
 -- key's USB vendor:product: attached to WSL only while mounting.
-vim.g.pure_outside_folders = {
+g.pure_outside_folders = {
   ['6-Private'] = { dir = '~/Private', cipher = '~/Private.enc', idle = '5m', fido2 = true },
 }
-vim.g.pure_fido2_id = '1ea8:fe29'
+g.pure_fido2_id = '1ea8:fe29'
 
 -- Language of day and month names in template dates: 'en' (default) or 'pt'.
-vim.g.pure_templates_locale = 'en'
+g.pure_templates_locale = 'en'
 
 -- Where new notes go (<leader>vn / <leader>nv), inside the vault.
 -- Default: '0-Inbox'.
-vim.g.pure_inbox = '0-Inbox'
+g.pure_inbox = '0-Inbox'
 
 -- Folders of the periodic notes (Daily, Weekly, Monthly templates), inside
 -- the vault. Only the periods listed change; the others keep their default.
 -- Default: 6-Archive/Periodic/Daily, .../Weekly, .../Monthly.
 -- Changed: nothing now (the vault was reorganised on 2026-10-16, the defaults follow it).
-vim.g.pure_periodic_folders = {
+g.pure_periodic_folders = {
   Daily   = '6-Archive/Periodic/Daily',
   Weekly  = '6-Archive/Periodic/Weekly',
   Monthly = '6-Archive/Periodic/Monthly',
@@ -222,15 +233,15 @@ vim.g.pure_periodic_folders = {
 
 -- The list the daily note's quote of the day comes from ({{quote}}).
 -- Default: '6-Archive/Periodic/Quotes.md'.
-vim.g.pure_quotes = '6-Archive/Periodic/Quotes.md'
+g.pure_quotes = '6-Archive/Periodic/Quotes.md'
 
 -- Folder each template moves its note to (<leader>vt), by template name.
 -- {{title}} becomes the note's title. Only the names listed change; false
 -- leaves that template's note where it is. Delete is also the trash
--- (<leader>vd, vim.g.pure_trash_cleanup) and Permanent is where the daily
+-- (<leader>vd, g.pure_trash_cleanup) and Permanent is where the daily
 -- note's resurfaced notes come from, so those two always keep a folder.
 -- Default:
--- vim.g.pure_template_destinations = {
+-- g.pure_template_destinations = {
 --   Decupagem  = '2-Permanent',
 --   Delete     = '0-Inbox/Trash',
 --   Literature = '1-Literature/{{browse}}',
@@ -247,15 +258,15 @@ vim.g.pure_quotes = '6-Archive/Periodic/Quotes.md'
 -- did. true: everything; a number: only what was not modified for that many
 -- days; false: never. Deleted for good, not moved to the recycle bin.
 -- Default: false. Changed: true.
-vim.g.pure_trash_cleanup = true
+g.pure_trash_cleanup = true
 
 -- Make the current periodic notes (from their templates) each time Neovim
 -- starts, without opening them, so they are there before they are first
 -- opened: today's daily, this week's, this month's (the current one, so a
 -- week whose Monday Neovim was not opened still gets its note). Periods
--- left out are made only when opened. (vim.g.pure_daily_on_start = true, the
+-- left out are made only when opened. (g.pure_daily_on_start = true, the
 -- older option, makes the daily alone.) Default: none. Changed: all three.
-vim.g.pure_periodic_on_start = { 'Daily', 'Weekly', 'Monthly' }
+g.pure_periodic_on_start = { 'Daily', 'Weekly', 'Monthly' }
 
 -- -----------------------------------------------------------------------------
 --  New files and pickers  (pure/fuzzyUtils.lua, <leader>n, <leader>f)
@@ -263,10 +274,10 @@ vim.g.pure_periodic_on_start = { 'Daily', 'Weekly', 'Monthly' }
 -- <leader>n. / nn / nh / ne ask for the new file's name. false: an unnamed
 -- buffer working in that folder instead (":w name" saves it there).
 -- Default: true.
-vim.g.pure_new_file_ask_name = true
+g.pure_new_file_ask_name = true
 
 -- Folders the fuzzy pickers never list. Default: { '.git', '.obsidian' }.
-vim.g.pure_fuzzy_ignore = { '.git', '.obsidian' }
+g.pure_fuzzy_ignore = { '.git', '.obsidian' }
 
 -- -----------------------------------------------------------------------------
 --  Markdown  (pure/render-md.lua, pure/mdview.lua, pure/lists.lua,
@@ -275,15 +286,15 @@ vim.g.pure_fuzzy_ignore = { '.git', '.obsidian' }
 -- Spell checking languages; only those with a word list installed are used.
 -- Default: { 'pt_br', 'en', 'it' }. <C-l> in insert mode fixes the last
 -- misspelled word.
-vim.g.pure_spelllang = { 'pt_br', 'en', 'it' }
+g.pure_spelllang = { 'pt_br', 'en', 'it' }
 
 -- The bullet drawn for each nesting level, repeating after the last.
 -- Default: { '•', '◦', '▪', '▫' }.
-vim.g.pure_md_bullets = { '•', '◦', '▪', '▫' }
+g.pure_md_bullets = { '•', '◦', '▪', '▫' }
 
 -- Checkbox states that count as done for zt / zT (fold the done / the open
 -- tasks); every other state ([ ], [~], [!], [>]...) is open. Default: 'xX-'.
-vim.g.pure_tasks_done = 'xX-'
+g.pure_tasks_done = 'xX-'
 
 -- -----------------------------------------------------------------------------
 --  Remote  (pure/remote.lua)
@@ -291,7 +302,7 @@ vim.g.pure_tasks_done = 'xX-'
 -- The first Neovim started listens at this address, so the Flow Launcher
 -- plugin (or `nvim --server ADDRESS --remote FILE`) opens a file in it.
 -- '' or false: do not listen. Default: '/tmp/nvim-atlas.sock'.
-vim.g.remote_socket = '/tmp/nvim-atlas.sock'
+g.remote_socket = '/tmp/nvim-atlas.sock'
 
 -- -----------------------------------------------------------------------------
 --  Link view  (pure/linkview.lua, <leader>vp preview, <leader>vq quick edit)
@@ -299,17 +310,17 @@ vim.g.remote_socket = '/tmp/nvim-atlas.sock'
 -- 'auto': the preview of the linked note shows when the cursor rests on a
 -- link, like the suggestion menu (and on its key). 'key': only on the key.
 -- 'off': no preview and no quick edit. Default: 'auto'.
-vim.g.linkview_preview = 'auto'
+g.linkview_preview = 'auto'
 
 -- With 'auto': milliseconds the cursor rests on a link before the preview
 -- shows. Default: 300.
-vim.g.linkview_delay = 300
+g.linkview_delay = 300
 
 -- The most the preview takes: columns and rows. Default below.
-vim.g.linkview_size = { width = 64, rows = 12 }
+g.linkview_size = { width = 64, rows = 12 }
 
 -- The keys (give only the one you change). Default below.
-vim.g.linkview_keys = { preview = '<leader>vp', edit = '<leader>vq' }
+g.linkview_keys = { preview = '<leader>vp', edit = '<leader>vq' }
 
 -- -----------------------------------------------------------------------------
 --  Todoist  (pure/todoist.lua, <leader>td; the token: :TodoistToken)
@@ -317,45 +328,45 @@ vim.g.linkview_keys = { preview = '<leader>vp', edit = '<leader>vq' }
 -- When :w in the task list asks before sending: 'all' (every save), 'delete'
 -- (only when tasks would be deleted) or 'never'. Default: 'all'.
 -- Changed: 'never'.
-vim.g.pure_todoist_confirm = 'never'
+g.pure_todoist_confirm = 'never'
 
 -- Folder where the task list and a timestamped history of every change are
 -- kept (tasks.md, history.md, tasks.json), relative to the vault so it moves
 -- with it. Unset or '' (default): no archive. Changed: set (6-Archive since
 -- the vault was reorganised on 2026-10-16).
-vim.g.pure_todoist_archive = '6-Archive/Todoist/'
+g.pure_todoist_archive = '6-Archive/Todoist/'
 
 -- Write the tasks of each ```todoist block into its note as text, refreshed
 -- every `interval` minutes. false (default): drawn, not written.
 -- Changed: every 10 minutes.
-vim.g.pure_todoist_sync = { interval = 10 }
+g.pure_todoist_sync = { interval = 10 }
 
 -- A synced list starts folded: 'subtasks' (each task with subtasks as one
 -- line), 'list' (the whole list as one line) or false (nothing folded).
 -- Default: 'subtasks'.
-vim.g.pure_todoist_fold = 'subtasks'
+g.pure_todoist_fold = 'subtasks'
 
 -- -----------------------------------------------------------------------------
 --  Google Calendar  (pure/calendar.lua, pure/gcal.lua, ```calendar blocks)
 -- -----------------------------------------------------------------------------
 -- Width of a day's box in the month grid, in columns. Default: 25.
-vim.g.pure_calendar_cell_width = 25
+g.pure_calendar_cell_width = 25
 
 -- Length of an appointment written with only its start time, in minutes.
 -- Default: 60.
-vim.g.pure_calendar_duration = 60
+g.pure_calendar_duration = 60
 
 -- Language of the grid's day names: 'pt' (default) or 'en'.
-vim.g.pure_calendar_locale = 'pt'
+g.pure_calendar_locale = 'pt'
 
 -- When a save asks before sending to Google: 'delete' (only before deleting,
 -- default), 'all' (every save) or 'never'.
-vim.g.pure_calendar_confirm = 'delete'
+g.pure_calendar_confirm = 'delete'
 
 -- Sync every `interval` minutes, besides at start, when a note with a block
 -- is opened or saved, and on :CalendarSync. false: never on a timer.
 -- Default: { interval = 15 }.
-vim.g.pure_calendar_sync = { interval = 15 }
+g.pure_calendar_sync = { interval = 15 }
 
 -- -----------------------------------------------------------------------------
 --  Proton Pass  (pure/protonpass.lua: reads the Todoist and Calendar secrets
@@ -363,17 +374,17 @@ vim.g.pure_calendar_sync = { interval = 15 }
 --  fallback)
 -- -----------------------------------------------------------------------------
 -- false turns it off. Default true.
-vim.g.pure_protonpass = true
+g.pure_protonpass = true
 
 -- Vault holding the items. Default 'Personal'. Changed.
-vim.g.pure_protonpass_vault = 'APIs'
+g.pure_protonpass_vault = 'APIs'
 
 -- Item title and field of each secret (add `vault` to one to override the vault
--- above). Defaults: title 'nvim-todoist' / 'nvim-google-calendar', field 'note'.
+-- above). Defaults: title 'nvim-todoist' / 'ngoogle-calendar', field 'note'.
 -- The Calendar field holds {"client_id","client_secret","refresh_token"} as JSON.
-vim.g.pure_protonpass_items = {
+g.pure_protonpass_items = {
   todoist = { title = 'nvim-todoist', field = 'Chave API' },
-  calendar = { title = 'nvim-google-calendar', field = 'Chave API' },
+  calendar = { title = 'ngoogle-calendar', field = 'Chave API' },
 }
 
 -- Read both secrets in the background at startup, so pass-cli (about half a
@@ -386,18 +397,18 @@ require('pure.protonpass').prefetch()
 -- The model when none was picked with <leader>am (a pick is remembered and
 -- wins): 'claude:default', 'claude:sonnet', 'ollama:qwen3.5:9b', 'agy:', ...
 -- Unset (default): 'claude:default'.
--- vim.g.pure_llm_model = 'ollama:gemma4:e4b'
+-- g.pure_llm_model = 'ollama:gemma4:e4b'
 
 -- Claude's command (Claude Code). Default: 'claude'.
-vim.g.pure_claude_cmd = 'claude'
+g.pure_claude_cmd = 'claude'
 
 -- ```claude blocks in notes run by themselves when due. false: only with
 -- <leader>ab. Default: true.
-vim.g.pure_llm_blocks = true
+g.pure_llm_blocks = true
 
 -- Folder of the actions (<leader>ax), inside the vault. Default: 'claude'.
 -- Changed: '8-AI' (the vault's Claude/ folder became AI/ on 2026-10-01, 8-AI on 2026-10-16).
-vim.g.pure_llm_actions = '8-AI'
+g.pure_llm_actions = '8-AI'
 
 -- Folders (inside the vault, or absolute) no cloud model (Claude, agy) may
 -- see; local models (Ollama) may. A request holding a note from one, or whose
@@ -405,111 +416,178 @@ vim.g.pure_llm_actions = '8-AI'
 -- vault's root when the vault's .claude/settings.json denies Read(<folder>/**).
 -- Default: none. Changed: the private folder, outside the vault (see
 -- pure_outside_folders).
-vim.g.pure_llm_private = { '~/Private' }
+g.pure_llm_private = { '~/Private' }
 
 -- Folder of the personas (/name), inside the actions folder. Default: 'Personas'.
--- vim.g.pure_llm_personas = 'Personas'
+-- g.pure_llm_personas = 'Personas'
 
 -- A model's thinking: 'show' (dimmed while it thinks, folded after: t in the
 -- chat, <leader>at for <leader>ai) or 'hide'. Default: 'show'.
-vim.g.pure_llm_thinking = 'show'
+g.pure_llm_thinking = 'show'
 
 -- The file about you that every request reads (<leader>au opens it).
 -- Unset (default): stdpath('data')/llm_user.md, outside every git
 -- repository. false: no such file.
--- vim.g.pure_llm_user_context = '~/notes/about-me.md'
+-- g.pure_llm_user_context = '~/notes/about-me.md'
 
 -- Models may add what they learn about you to that file (<remember>); a fact
 -- already there is not written again. false: read only. Default: true.
-vim.g.pure_llm_memory = true
+g.pure_llm_memory = true
 
 -- Ollama's address. Default: 'http://localhost:11434'.
-vim.g.pure_ollama_url = 'http://localhost:11434'
+g.pure_ollama_url = 'http://localhost:11434'
 
 -- The largest context an Ollama request may get, in tokens. Each request is
 -- sized as small as it allows (8192, doubled as needed): on an 8 GB card a
 -- 9B model with a 32K context runs half as fast. Default: 32768.
-vim.g.pure_ollama_num_ctx = 32768
+g.pure_ollama_num_ctx = 32768
 
 -- Let Ollama models think before answering (qwen3.5, deepseek-r1...).
 -- false (default): they answer straight away, which on an 8 GB card was 5 to
 -- 30 times faster with answers as good for everyday requests. true: for hard
 -- problems; models that cannot think just answer.
-vim.g.pure_ollama_think = false
+g.pure_ollama_think = false
 
 -- Ollama found down when a request needs it: 'ask' to start it (default),
 -- true to start it without asking, false never. Started from here, it stops
 -- when Neovim quits.
-vim.g.pure_ollama_autostart = 'ask'
+g.pure_ollama_autostart = 'ask'
 
 -- Start Ollama in the background when Neovim opens (with a UI), without
 -- asking, if it is not running already. Default: false.
-vim.g.pure_ollama_start_with_nvim = false
+g.pure_ollama_start_with_nvim = false
 
 -- Minutes without any Ollama request after which the models used here are
 -- unloaded from the GPU and the Ollama started here is closed (as <leader>aq
 -- does). The next request starts it again (see pure_ollama_autostart).
 -- false or 0: never. Default: 15.
-vim.g.pure_ollama_idle_minutes = 15
+g.pure_ollama_idle_minutes = 15
 
 -- Models folder for the Ollama started from here. Unset (default):
 -- OLLAMA_MODELS, or ~/.ollama/models when OLLAMA_MODELS holds no models.
--- vim.g.pure_ollama_models = 'D:/Models'
+-- g.pure_ollama_models = 'D:/Models'
 
 -- -----------------------------------------------------------------------------
 --  Dashboard  (pure/dashboard.lua)
 -- -----------------------------------------------------------------------------
 -- Size of the drawing: 'auto' (as large as the window fits, default) or a
 -- fixed scale (1, 2, ...).
-vim.g.pure_dashboard_scale = 'auto'
+g.pure_dashboard_scale = 'auto'
 
 -- -----------------------------------------------------------------------------
 --  Key hints  (pure/keyhint.lua: the window listing the keys after <leader>)
 -- -----------------------------------------------------------------------------
 -- false: off. Default: true.
-vim.g.pure_keyhint = true
+g.pure_keyhint = true
 
 -- Milliseconds before it shows. Default: 1000.
-vim.g.pure_keyhint_delay = 1000
+g.pure_keyhint_delay = 1000
 
 -- The prefixes it shows for, as { mode, keys } pairs.
 -- Default: { { 'n', '<leader>' }, { 'x', '<leader>' } }.
--- (Its group names, vim.g.pure_keyhint_groups, are in configs/keymaps.lua,
+-- (Its group names, g.pure_keyhint_groups, are in configs/keymaps.lua,
 -- next to the keys.)
-vim.g.pure_keyhint_triggers = { { 'n', '<leader>' }, { 'x', '<leader>' } }
+g.pure_keyhint_triggers = { { 'n', '<leader>' }, { 'x', '<leader>' } }
+
+-- Group names shown by the key hint window (pure/keyhint.lua) after <leader>.
+g.pure_keyhint_groups = {
+  ['<leader>a'] = 'AI (LLMs)',
+  ['<leader>b'] = 'Buffers',
+  ['<leader>c'] = 'Code',
+  ['<leader>d'] = 'Diagnostics',
+  ['<leader>e'] = 'Explore',
+  ['<leader>f'] = 'Find',
+  ['<leader>g'] = 'Git',
+  ['<leader>j'] = 'Jumps',
+  ['<leader>l'] = 'LSP',
+  ['<leader>m'] = 'Org notes',
+  ['<leader>M'] = 'Manim',
+  ['<leader>n'] = 'New file / folder',
+  ['<leader>o'] = 'Open',
+  ['<leader>s'] = 'Split',
+  ['<leader>t'] = 'Toggles',
+  ['<leader>v'] = 'Vault',
+  ['<leader>w'] = 'Tabs',
+  -- TODO: Trocar window focus para tab (?)
+  ['<leader>wv'] = 'Window focus',
+  ['<leader>x'] = 'Checkbox state',
+  ['<leader>z'] = 'Folds',
+  }
 
 -- -----------------------------------------------------------------------------
 --  Indent guide  (pure/indentscope.lua)
 -- -----------------------------------------------------------------------------
 -- true: off everywhere (vim.b.pure_indentscope_disable turns it off in one
 -- buffer). Default: false.
-vim.g.pure_indentscope_disable = false
+g.pure_indentscope_disable = false
 
 -- -----------------------------------------------------------------------------
---  Terminal  (pure/terms.lua, <leader>tt)
+--  Terminal
 -- -----------------------------------------------------------------------------
 -- The shell. Unset (default): on Windows the first of nu, pwsh, powershell
 -- found; elsewhere 'shell'.
--- vim.g.pure_terminal_shell = 'cmd.exe'
+-- g.pure_terminal_shell = 'cmd.exe'
 
--- The bare floating terminal (<leader>tt): <Esc> leaves terminal mode at once,
+-- The bare floating terminal (<leader>ot): <Esc> leaves terminal mode at once,
 -- and a second <Esc> within this many milliseconds closes it. <A-Esc> sends a
 -- real <Esc> to the shell. 0 or false: only <Esc><Esc> closes (and <Esc>
 -- reaches the shell). Terminals running a command (<leader>tc) always use
 -- <Esc><Esc>. Default: 250.
-vim.g.terminal_esc_ms = 250
+g.terminal_esc_ms = 250
 
 -- -----------------------------------------------------------------------------
---  Neovide (the GUI)
+--  neovide (the gui)
 -- -----------------------------------------------------------------------------
-vim.g.neovide_normal_opacity = 1 -- window opacity (0 to 1)
--- vim.g.neovide_transparency = 1
+g.transparencyAmount = 0.9
+if g.neovide then
+   g.neovide_floating_blur_amount_x = 5.0
+   g.neovide_floating_blur_amount_y = 5.0
+   g.neovide_floating_corner_radius = 0.6
+
+   g.neovide_window_blurred = false -- Disable blur when window is unfocused
+   g.neovide_floating_shadow = false
+  -- Opaque on startup; <leader>oxc goes to vim.g.transparencyAmount (configs/functions.lua).
+   g.neovide_opacity = 1.0
+   g.neovide_normal_opacity = 1.0
+end
 
 -- -----------------------------------------------------------------------------
 --  Advanced: tests and the one-file version (no need to set)
 -- -----------------------------------------------------------------------------
--- vim.g.pure_calendar_source = 'mock'         a sample month instead of Google
--- vim.g.pure_calendar_api_url / _auth_url / _token_url   Google's endpoints
--- vim.g.pure_todoist_url                      Todoist's API endpoint
--- vim.g.pure_bundle_dir, vim.g.pure_portable  set by the single-file build
+-- g.pure_calendar_source = 'mock'         a sample month instead of Google
+-- g.pure_calendar_api_url / _auth_url / _token_url   Google's endpoints
+-- g.pure_todoist_url                      Todoist's API endpoint
+-- g.pure_bundle_dir, g.pure_portable  set by the single-file build
 --                                             (scripts/bundle.lua)
+--
+-- -----------------------------------------------------------------------------
+--  Lsp
+-- -----------------------------------------------------------------------------
+-- Default auto hover 500 ms
+g.lsp_auto_hover = 1500
+
+-- Remote-plugin providers nothing here uses. Neither a plugin nor this configuration talks to Neovim
+-- through Node, Perl, Python or Ruby hosts (copilot.vim runs its own node server), so the providers
+-- are off instead of being reported as missing at every :checkhealth.
+g.loaded_node_provider = 0
+g.loaded_perl_provider = 0
+g.loaded_python3_provider = 0
+g.loaded_ruby_provider = 0
+
+
+
+g.copilot_no_tab_map = true
+-- copilot.vim defaults to launching its server through `npx`, but on Windows
+-- `npx` is an extensionless npm shim: executable() reports 1 while the spawn
+-- fails with ENOENT, which is where the second "Spawning language server ...
+-- failed" popup came from. Disabling the npx path makes it use the server it
+-- already bundles, run through node.exe, which spawns fine.
+g.copilot_npx_command = 0
+-- vim.g.copilot_filetypes = {
+--   ['*'] = true,
+--   ['markdown'] = false,
+--   ['help'] = false,
+--   ['TelescopePrompt'] = false,
+--   ['NvimTree'] = false,
+-- }
+

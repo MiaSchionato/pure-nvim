@@ -653,6 +653,8 @@ end
 --- One table feeds explore (<leader>e_), find (<leader>f_) and new file
 --- (<leader>n_), so each directory is written once instead of three times in
 --- three near-identical blocks.
+---
+--TODO:Make those global variables and put it on configs.lua
 M.dirs = {
   ['~'] = home,
   ['.'] = home .. '.config/',
