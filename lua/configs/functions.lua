@@ -601,31 +601,54 @@ end, {
 })
 
 
-  function M.explore(dir)
-    return function()
-      local oil = require('oil')
-      if vim.w.is_oil_win then
-        return oil.close()
-      end
-      -- Not `type(dir) == 'function' and dir() or dir`: when dir() returns nil
-      -- (no vault yet) that idiom falls through to `or dir`, the function itself.
-      local path = dir
-      if type(dir) == 'function' then path = dir() end
-      if not path then
-        return vim.notify('No Obsidian vault set: run :ZettelVault', vim.log.levels.WARN)
-      end
-      if vim.fn.isdirectory(path) == 0 then
-        return vim.notify('Directory does not exist: ' .. path, vim.log.levels.WARN)
-      end
-      oil.open_float(path)
-    end
+--- The directory `dir` names (a path, or a function returning one) when it exists; else nil, saying why.
+--- Used by explore and inDir.
+local function checkedDir(dir)
+  -- Not `type(dir) == 'function' and dir() or dir`: when dir() returns nil
+  -- (no vault yet) that idiom falls through to `or dir`, the function itself.
+  local path = dir
+  if type(dir) == 'function' then path = dir() end
+  if not path then
+    vim.notify('No Obsidian vault set: run :ZettelVault', vim.log.levels.WARN)
+    return nil
   end
+  if vim.fn.isdirectory(path) == 0 then
+    vim.notify('Directory does not exist: ' .. path, vim.log.levels.WARN)
+    return nil
+  end
+  return path
+end
+
+--- Toggle an oil float on `dir` (a path, or a function returning one).
+---
+--- The same key closes the float again. That check comes first: inside oil the
+--- buffer name is an oil:// URL, so here() would yield a path that isdirectory()
+--- rejects and the key would warn instead of closing.
+---
+--- oil is required on use: plugins/oil.lua loads after the keymaps, so the module
+--- is not on the runtimepath yet when they are defined.
+function M.explore(dir)
+  return function()
+    local oil = require('oil')
+    if vim.w.is_oil_win then
+      return oil.close()
+    end
+    local path = checkedDir(dir)
+    if path then oil.open_float(path) end
+  end
+end
 
 -- =============================================================================
 --  Helpers of the keymaps (moved from keymaps.lua, the logic as it was)
 -- =============================================================================
 
 local home = vim.uv.os_homedir():gsub("\\", "/") .. "/"
+
+--- The vault folder with a trailing slash.
+local function vaultDir()
+  local vault = vim.fs.normalize(vim.fn.expand(vim.g.flora_dir or '~/Flora'))
+  return vault and (vault .. '/') or nil
+end
 
 --- One table feeds explore (<leader>e_), find (<leader>f_) and new file
 --- (<leader>n_), so each directory is written once instead of three times in
@@ -634,10 +657,12 @@ M.dirs = {
   ['~'] = home,
   ['.'] = home .. '.config/',
   n     = home .. '.config/nvim/',
-  -- The Flora vault (org), vim.g.flora_dir or ~/Flora (pure/flora.lua).
-  v     = function()
-    local vault = vim.fs.normalize(vim.fn.expand(vim.g.flora_dir or '~/Flora'))
-    return vault and (vault .. '/') or nil
+  -- The vault (org), vim.g.flora_dir or ~/Flora (pure/flora.lua).
+  v     = vaultDir,
+  -- The file new notes go to (<leader>oi opens it): vim.g.orgls_inbox, as in lsp/orgls.lua, or inbox.org.
+  inbox = function()
+    local vault = vaultDir()
+    return vault and (vault .. (vim.g.orgls_inbox or 'inbox.org')) or nil
   end,
 }
 
@@ -666,17 +691,8 @@ M.fileDirs = {
 --- floating window blinks shut with nothing explaining why.
 function M.inDir(picker, dir)
   return function()
-    -- Not `type(dir) == 'function' and dir() or dir`: when dir() returns nil
-    -- (no vault yet) that idiom falls through to `or dir`, the function itself.
-    local path = dir
-    if type(dir) == 'function' then path = dir() end
-    if not path then
-      return vim.notify('No Obsidian vault set: run :ZettelVault', vim.log.levels.WARN)
-    end
-    if vim.fn.isdirectory(path) == 0 then
-      return vim.notify('Directory does not exist: ' .. path, vim.log.levels.WARN)
-    end
-    picker(path)
+    local path = checkedDir(dir)
+    if path then picker(path) end
   end
 end
 

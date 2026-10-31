@@ -22,17 +22,15 @@ local term = require('pure.terms')
 local lsp = vim.lsp.buf
 local diag = vim.diagnostic
 local flora = require('pure.flora')
-local oil = require('oil')
+-- Picker targets (explore <leader>e_, find <leader>f_, new file <leader>n_) and their helpers: configs/functions.lua.
 local dirs = func.dirs
 local file = func.fileDirs
-local up   = func.up 
+local up = func.up
 local here = func.here
 local inDir = func.inDir
 local opts = { noremap = true, silent = true }
 
 vim.g.mapleader = ' '
-
--- Picker targets (explore <leader>e_, find <leader>f_, new file <leader>n_) and their helpers: configs/functions.lua.
 
 -- =============================================================================
 --  Motions and basics
@@ -155,7 +153,7 @@ map('n', "<leader>wvh", "<C-w>h", func.getOpts(opts, "Focus window left"))
 map('n', "<leader>wvj", "<C-w>j", func.getOpts(opts, "Focus window below"))
 map('n', "<leader>wvk", "<C-w>k", func.getOpts(opts, "Focus window above"))
 map('n', "<leader>wvl", "<C-w>l", func.getOpts(opts, "Focus window right"))
-map('n', "<leader>wvq", "<C-w>q", func.getOpts(opts, "Focus window right"))
+map('n', "<leader>wvq", "<C-w>q", func.getOpts(opts, "Close window"))
 
 map('n', "<leader>sv", "<cmd>vsplit<CR>", func.getOpts(opts, "Split vertically"))
 map('n', "<leader>sh", "<cmd>split<CR>", func.getOpts(opts, "Split horizontally"))
@@ -186,18 +184,19 @@ map('n', '<leader>ee', func.explore(here), func.getOpts(opts, "Explore current d
 map('n', '<leader>E' , func.explore(dirs['~']), func.getOpts(opts, "Explore home"))
 map('n', '<leader>e.', func.explore(dirs['.']), func.getOpts(opts, "Explore ~/.config"))
 map('n', '<leader>en', func.explore(dirs.n), func.getOpts(opts, "Explore nvim config"))
-map('n', '<leader>ev', func.explore(dirs.v), func.getOpts(opts, "Explore Flora, the vault"))
-map('n', '<leader>eo', oil.toggle_float, func.getOpts(opts, "Oil Float"))
+map('n', '<leader>ev', func.explore(dirs.v), func.getOpts(opts, "Explore the vault"))
+-- oil is required on use: plugins/oil.lua loads after this file, so the module is not there yet.
+map('n', '<leader>eo', function() require('oil').toggle_float() end, func.getOpts(opts, "Oil Float"))
 
 -- =============================================================================
 --  Find  (<leader>f)
 -- =============================================================================
-map('n', '<leader>ff', fzf.fuzzySearch(file["4p"]()), func.getOpts(opts, "Find files, four levels up"))
-map('n', '<leader><leader>', fzf.fuzzySearch(file.pp()), func.getOpts(opts, "Find files, two levels up"))
+map('n', '<leader>ff', function() fzf.fuzzySearch(file["4p"]()) end, func.getOpts(opts, "Find files, four levels up"))
+map('n', '<leader><leader>', function() fzf.fuzzySearch(file.pp()) end, func.getOpts(opts, "Find files, two levels up"))
 map('n', '<leader>f~', inDir(fzf.fuzzySearch, dirs['~']), func.getOpts(opts, "Find in home"))
 map('n', '<leader>f.', inDir(fzf.fuzzySearch, dirs['.']), func.getOpts(opts, "Find in ~/.config"))
 map('n', '<leader>fn', inDir(fzf.fuzzySearch, dirs.n), func.getOpts(opts, "Find in nvim config"))
--- <leader>fv is the same picker as <leader>vf (defined with the Flora keys below).
+-- <leader>fv is the same picker as <leader>vf (defined with the vault keys below).
 
 map('n', "<leader>fe", function() inDir(fzf.fuzzyExplorer, here())() end,
 func.getOpts(opts, "fzf explorer, current directory"))
@@ -227,7 +226,7 @@ map("n", "<leader>nh", inDir(fzf.NewFileIn, dirs['~']), func.getOpts(opts, "New 
 map("n", "<leader>n.", inDir(fzf.NewFileIn, dirs['.']), func.getOpts(opts, "New file in ~/.config"))
 map("n", "<leader>nn", inDir(fzf.NewFileIn, dirs.n), func.getOpts(opts, "New file in nvim config"))
 -- The same as <leader>vn: a note in the vault's inbox, asking only its name.
-map("n", "<leader>nv", function() require('pure.flora').newSeed() end, func.getOpts(opts, "New seed in Flora's inbox"))
+map("n", "<leader>nv", function() require('pure.flora').newSeed() end, func.getOpts(opts, "New seed in the vault's inbox"))
 map("n", "<leader>nd", function() fzf.NewFolder(here()) end, func.getOpts(opts, "New folder here"))
 -- <leader>nt (template) and <leader>nr (rename note) moved to <leader>vt and
 -- <leader>vr: they act on a note, they do not make a new file.
@@ -245,9 +244,9 @@ map('n', '<leader>Mi', function() require('pure.manim').interactive() end,
 func.getOpts(opts, "Live window at this line: mouse camera, Python shell (toggle)"))
 
 -- =============================================================================
---  Flora  (<leader>v, pure/flora.lua)
+--  Vault  (<leader>v, pure/flora.lua)
 -- =============================================================================
---  Everything that works on the Flora vault (org), in one group, as Doom's
+--  Everything that works on the vault (org), in one group, as Doom's
 --  `SPC v`. It replaced the group of the Atlas vault (Markdown), which is no
 --  longer used: its functions are still in pure/zettelkasten.lua and
 --  pure/notes.lua, as commands only. <leader>ev, <leader>fv and <leader>gv
@@ -325,7 +324,7 @@ map('n', "<leader>gp", git('push'), func.getOpts(opts, "Git push"))
 map('n', "<leader>gP", git('pull'), func.getOpts(opts, "Git pull"))
 map('n', "<leader>gb", git('blameLine'), func.getOpts(opts, "Git blame current line"))
 map('n', "<leader>gB", git('switchBranch'), func.getOpts(opts, "Git switch branch"))
-map('n', "<leader>gv", function() require('pure.flora').sync() end, func.getOpts(opts, "Flora: save the notes and commit"))
+map('n', "<leader>gv", function() require('pure.flora').sync() end, func.getOpts(opts, "Vault: save the notes and commit"))
 
 -- =============================================================================
 --  LSP
@@ -347,7 +346,7 @@ map('n', '[d', diag.get_prev, func.getOpts(opts, "Previous diagnostic"))
 map('n', ']d', diag.get_next, func.getOpts(opts, "Next diagnostic"))
 
 -- =============================================================================
---  Toggles 
+--  Toggles
 -- =============================================================================
 map('n', '<leader>tx', func.toggleTransparency, func.getOpts(opts, "Toggle transparency"))
 map('n', '<leader>td', func.toggleDiagnostics, func.getOpts(opts, "Toggle diagnostics"))
@@ -429,20 +428,20 @@ end
 map("n", "dd", func.smartDd, { expr = true, desc = "Smart dd" })
 
 -- =============================================================================
--- Open 
+-- Open
 -- =============================================================================
 -- Terminal
 map('n', '<leader>ot', term.toggleTerminal, func.getOpts(opts, "Toggle terminal"))
 map('n', '<leader>oc', function() term.toggleTerminal("claude") end, func.getOpts(opts, "Toggle terminal Claude"))
 map('n', '<leader>om', "<CMD>tabnew | terminal<CR>i", func.getOpts(opts, "New tab on terminal mode"))
-map('t', '<S-Del>', [[<C-\><C-n>]], func.getOpts(opts, "Leave terminal mode")) 
+map('t', '<S-Del>', [[<C-\><C-n>]], func.getOpts(opts, "Leave terminal mode"))
 
 --  Todoist
 map('n', '<leader>od', '<cmd>Todoist<cr>', func.getOpts(opts, "Todoist all tasks"))
 map('n', '<leader>oD', '<cmd>Todoist today | overdue<cr>', func.getOpts(opts, "Todoist today and overdue"))
 
 -- Vault
-map('n', '<leader>oi', ':e ~/Flora/inbox.org<cr>', func.getOpts(opts, "Open inbox note"))
+map('n', '<leader>oi', function() vim.cmd('edit ' .. vim.fn.fnameescape(dirs.inbox())) end, func.getOpts(opts, "Open the vault's inbox"))
 
 -- =============================================================================
 --  Debug
