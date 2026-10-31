@@ -14,6 +14,7 @@
 --    <leader>oc        signcolumn         <leader>ow   wrap
 --    <leader>on / or   number, relativenumber
 --    <leader>oi        inlay_hints        <leader>op   copilot
+--    <leader>tk        lsp_auto_hover (the automatic hover of configs/lspConfigs.lua)
 --    reading mode      reading (pure/reading.lua: a centred column between wide margins)
 --
 --  Not saved on purpose: zen mode (a temporary state; it puts things back as
@@ -86,6 +87,20 @@ function M.toggleHeadingBand()
 end
 
 -- -----------------------------------------------------------------------------
+--  The automatic hover (configs/lspConfigs.lua): <leader>tk
+-- -----------------------------------------------------------------------------
+--  On unless vim.g.lsp_auto_hover is false; the choice is saved like the other toggles.
+function M.toggleAutoHover()
+  local on = vim.g.lsp_auto_hover == false
+  vim.g.lsp_auto_hover = on
+  M.set('lsp_auto_hover', on)
+  vim.notify('Automatic hover ' .. (on and 'on' or 'off'))
+end
+
+-- The key lives here until the <leader>t group of keymaps.lua is settled; move this line there then.
+vim.keymap.set('n', '<leader>tk', M.toggleAutoHover, { desc = 'Toggle the automatic hover (LSP)' })
+
+-- -----------------------------------------------------------------------------
 --  Put the saved state back
 -- -----------------------------------------------------------------------------
 local function restore()
@@ -102,6 +117,7 @@ local function restore()
   saved('showtabline', function(v) vim.o.showtabline = v end)
   saved('diagnostics_virtual_text', function(v) vim.diagnostic.config({ virtual_text = v }) end)
   saved('copilot', function(v) vim.g.copilot_enabled = v end)
+  saved('lsp_auto_hover', function(v) vim.g.lsp_auto_hover = v end)
   saved('transparent', function(v) require('configs.functions').transparent = v end)
 end
 
