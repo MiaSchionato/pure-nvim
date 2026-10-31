@@ -1,4 +1,4 @@
--- =================================================================
+-- =============================================================================
 --  Keymaps
 -- =============================================================================
 --  Leader is <Space>. The second key groups the action:
@@ -23,355 +23,331 @@ local lsp = vim.lsp.buf
 local diag = vim.diagnostic
 local flora = require('pure.flora')
 local oil = require('oil')
-
+local dirs = func.dirs
+local file = func.fileDirs
+local up   = func.up 
+local here = func.here
+local inDir = func.inDir
 local opts = { noremap = true, silent = true }
 
 vim.g.mapleader = ' '
 
--- Group names shown by the key hint window (pure/keyhint.lua) after <leader>.
-vim.g.pure_keyhint_groups = {
-  ['<leader>a'] = 'AI (LLMs)',
-  ['<leader>b'] = 'Buffers',
-  ['<leader>c'] = 'Code',
-  ['<leader>d'] = 'Diagnostics',
-  ['<leader>e'] = 'Explore',
-  ['<leader>f'] = 'Find',
-  ['<leader>g'] = 'Git',
-  ['<leader>j'] = 'Jumps',
-  ['<leader>l'] = 'LSP',
-  ['<leader>m'] = 'Org notes',
-  ['<leader>M'] = 'Manim',
-  ['<leader>n'] = 'New file / folder',
-  ['<leader>o'] = 'Open',
-  ['<leader>s'] = 'Split',
-  ['<leader>t'] = 'Toggles',
-  ['<leader>v'] = 'Flora (vault)',
-  ['<leader>w'] = 'Tabs',
-  -- TODO: Trocar window focus para tab (?)
-  ['<leader>wv'] = 'Window focus',
-  ['<leader>x'] = 'Checkbox state',
-  ['<leader>z'] = 'Folds',
-  }
+-- Picker targets (explore <leader>e_, find <leader>f_, new file <leader>n_) and their helpers: configs/functions.lua.
 
-  -- Picker targets (explore <leader>e_, find <leader>f_, new file <leader>n_) and their helpers: configs/functions.lua.
-  local dirs, file, up, here, inDir = func.dirs, func.fileDirs, func.up, func.here, func.inDir
+-- =============================================================================
+--  Motions and basics
+-- =============================================================================
+map({ 'n', 'v', 'o' }, "gl", "$", func.getOpts(opts, "End of line"))
+map({ 'n', 'v', 'o' }, "gh", "^", func.getOpts(opts, "First non-blank"))
+map('n', "ge", "G", func.getOpts(opts, "Last line"))
+map('n', "gj", "<C-d>", func.getOpts(opts, "Half page down"))
+map('n', "gk", "<C-u>", func.getOpts(opts, "Half page up"))
+map('n', '<C-f>', '<C-d>', func.getOpts(opts, "Half page down"))
+map('n', '<C-p>', [[%]], func.getOpts(opts, "Jump to matching pair"))
 
-  -- =============================================================================
-  --  Motions and basics
-  -- =============================================================================
-  map({ 'n', 'v', 'o' }, "gl", "$", func.getOpts(opts, "End of line"))
-  map({ 'n', 'v', 'o' }, "gh", "^", func.getOpts(opts, "First non-blank"))
-  map('n', "ge", "G", func.getOpts(opts, "Last line"))
-  map('n', "gj", "<C-d>", func.getOpts(opts, "Half page down"))
-  map('n', "gk", "<C-u>", func.getOpts(opts, "Half page up"))
-  map('n', '<C-f>', '<C-d>', func.getOpts(opts, "Half page down"))
-  map('n', '<C-p>', [[%]], func.getOpts(opts, "Jump to matching pair"))
+map('n', "Y", "y$", func.getOpts(opts, "Yank to end of line"))
+map('n', "U", "<C-r>", func.getOpts(opts, "Redo"))
+map('n', "J", "mzJ`z", func.getOpts(opts, "Join lines, keep cursor"))
+map('n', "vv", 'viw', func.getOpts(opts, "Select word"))
 
-  map('n', "Y", "y$", func.getOpts(opts, "Yank to end of line"))
-  map('n', "U", "<C-r>", func.getOpts(opts, "Redo"))
-  map('n', "J", "mzJ`z", func.getOpts(opts, "Join lines, keep cursor"))
-  map('n', "vv", 'viw', func.getOpts(opts, "Select word"))
+-- '=', '+', '<' and '>' are deliberately left unmapped: in normal mode they are
+-- operators (=ip, gg=G, >}, <ip), and mapping them to fold / single-line
+-- actions threw those away. Folds live under <leader>z and za; a single line is
+-- indented with the builtin << and >>.
 
-  -- '=', '+', '<' and '>' are deliberately left unmapped: in normal mode they are
-  -- operators (=ip, gg=G, >}, <ip), and mapping them to fold / single-line
-  -- actions threw those away. Folds live under <leader>z and za; a single line is
-  -- indented with the builtin << and >>.
+-- Visual
+map('v', "J", '5j', func.getOpts(opts, "Down 5 lines"))
+map('v', "K", '5k', func.getOpts(opts, "Up 5 lines"))
+map('v', "<", "<gv", func.getOpts(opts, "Outdent and reselect"))
+map('v', ">", ">gv", func.getOpts(opts, "Indent and reselect"))
+-- Tab indents in visual mode only (Improvment.md: indenting belongs to
+-- normal / visual, never insert). Not in normal mode: a terminal sends the
+-- same key for <Tab> and <C-i>, so it would take away "jump forward". There
+-- >> and << indent.
+map('x', "<Tab>", ">gv", func.getOpts(opts, "Indent and reselect"))
+map('x', "<S-Tab>", "<gv", func.getOpts(opts, "Outdent and reselect"))
 
-  -- Visual
-  map('v', "J", '5j', func.getOpts(opts, "Down 5 lines"))
-  map('v', "K", '5k', func.getOpts(opts, "Up 5 lines"))
-  map('v', "<", "<gv", func.getOpts(opts, "Outdent and reselect"))
-  map('v', ">", ">gv", func.getOpts(opts, "Indent and reselect"))
-  -- Tab indents in visual mode only (Improvment.md: indenting belongs to
-  -- normal / visual, never insert). Not in normal mode: a terminal sends the
-  -- same key for <Tab> and <C-i>, so it would take away "jump forward". There
-  -- >> and << indent.
-  map('x', "<Tab>", ">gv", func.getOpts(opts, "Indent and reselect"))
-  map('x', "<S-Tab>", "<gv", func.getOpts(opts, "Outdent and reselect"))
+-- Move lines (the guard by buffer type is explained in func.moveLine)
+local moveLine = func.moveLine
 
-  -- Move lines (the guard by buffer type is explained in func.moveLine)
-  local moveLine = func.moveLine
+local move_opts = { expr = true, silent = true, noremap = true }
+map('n', "<up>", moveLine(":m .-2<CR>==", "<up>"), func.getOpts(move_opts, "Move line up"))
+map('n', "<down>", moveLine(":m .+1<CR>==", "<down>"), func.getOpts(move_opts, "Move line down"))
+map('v', "<up>", moveLine(":m '<-2<CR>gv=gv", "<up>"), func.getOpts(move_opts, "Move selection up"))
+map('v', "<down>", moveLine(":m '>+1<CR>gv=gv", "<down>"), func.getOpts(move_opts, "Move selection down"))
 
-  local move_opts = { expr = true, silent = true, noremap = true }
-  map('n', "<up>", moveLine(":m .-2<CR>==", "<up>"), func.getOpts(move_opts, "Move line up"))
-  map('n', "<down>", moveLine(":m .+1<CR>==", "<down>"), func.getOpts(move_opts, "Move line down"))
-  map('v', "<up>", moveLine(":m '<-2<CR>gv=gv", "<up>"), func.getOpts(move_opts, "Move selection up"))
-  map('v', "<down>", moveLine(":m '>+1<CR>gv=gv", "<down>"), func.getOpts(move_opts, "Move selection down"))
+-- =============================================================================
+--  Text objects
+-- =============================================================================
+--  No expr here: with expr the rhs is evaluated as a Vimscript *expression*, so
+--  'i[' parsed as the variable `i` and raised "E121: Undefined variable: i".
+--  They stay noremap so 'i.' reaches the builtin 'is' (sentence) rather than the
+--  'is' remapped just above it.
+map({ 'x', 'o' }, 'is', 'i[', { desc = "Inner square brackets" })
+map({ 'x', 'o' }, 'as', 'a[', { desc = "Outer square brackets" })
+map({ 'x', 'o' }, 'ic', [[i{]], { desc = "Inner curly brackets" })
+map({ 'x', 'o' }, 'ac', [[a}]], { desc = "Outer curly brackets" })
+-- p is for parentheses, not paragraphs: dip deletes inside (...). The
+-- paragraph is still there as i} / a}.
+map({ 'x', 'o' }, 'ip', [[i(]], { desc = "Inner parentheses" })
+map({ 'x', 'o' }, 'ap', [[a(]], { desc = "Outer parentheses" })
+map({ 'x', 'o' }, 'i.', [[is]], { desc = "Inner sentence" })
+map({ 'x', 'o' }, 'a.', [[as]], { desc = "Outer sentence" })
 
-  -- =============================================================================
-  --  Text objects
-  -- =============================================================================
-  --  No expr here: with expr the rhs is evaluated as a Vimscript *expression*, so
-  --  'i[' parsed as the variable `i` and raised "E121: Undefined variable: i".
-  --  They stay noremap so 'i.' reaches the builtin 'is' (sentence) rather than the
-  --  'is' remapped just above it.
-  map({ 'x', 'o' }, 'is', 'i[', { desc = "Inner square brackets" })
-  map({ 'x', 'o' }, 'as', 'a[', { desc = "Outer square brackets" })
-  map({ 'x', 'o' }, 'ic', [[i{]], { desc = "Inner curly brackets" })
-  map({ 'x', 'o' }, 'ac', [[a}]], { desc = "Outer curly brackets" })
-  -- p is for parentheses, not paragraphs: dip deletes inside (...). The
-  -- paragraph is still there as i} / a}.
-  map({ 'x', 'o' }, 'ip', [[i(]], { desc = "Inner parentheses" })
-  map({ 'x', 'o' }, 'ap', [[a(]], { desc = "Outer parentheses" })
-  map({ 'x', 'o' }, 'i.', [[is]], { desc = "Inner sentence" })
-  map({ 'x', 'o' }, 'a.', [[as]], { desc = "Outer sentence" })
+map({ 'x', 'o' }, 'iq', function()
+  return "i" .. func.smartQuote()
+end, { expr = true, desc = "Smart inner quotes" })
 
-  map({ 'x', 'o' }, 'iq', function()
-    return "i" .. func.smartQuote()
-  end, { expr = true, desc = "Smart inner quotes" })
+map({ 'x', 'o' }, 'aq', function()
+  return "a" .. func.smartQuote()
+end, { expr = true, desc = "Smart outer quotes" })
 
-  map({ 'x', 'o' }, 'aq', function()
-    return "a" .. func.smartQuote()
-  end, { expr = true, desc = "Smart outer quotes" })
+-- =============================================================================
+--  Surround
+-- =============================================================================
+map("n", "s", function() sur.applySurround(false) end, { desc = "Surround word" })
+map("v", "s", function() sur.applySurround(true) end, { desc = "Surround selection" })
+-- Function surround is on S, not sf: sf made every s wait 500 ms. The builtin
+-- S is a synonym for cc, so nothing is lost.
+map("n", "S", function() sur.surroundFunction(false) end, { desc = "Surround with function" })
+map("v", "S", function() sur.surroundFunction(true) end, { desc = "Surround with function" })
+map("n", "ds", sur.deleteSurround, { desc = "Delete surround" })
+map("n", "cs", sur.changeSurround, { desc = "Change surround" })
 
-  -- =============================================================================
-  --  Surround
-  -- =============================================================================
-  map("n", "s", function() sur.applySurround(false) end, { desc = "Surround word" })
-  map("v", "s", function() sur.applySurround(true) end, { desc = "Surround selection" })
-  -- Function surround is on S, not sf: sf made every s wait 500 ms. The builtin
-  -- S is a synonym for cc, so nothing is lost.
-  map("n", "S", function() sur.surroundFunction(false) end, { desc = "Surround with function" })
-  map("v", "S", function() sur.surroundFunction(true) end, { desc = "Surround with function" })
-  map("n", "ds", sur.deleteSurround, { desc = "Delete surround" })
-  map("n", "cs", sur.changeSurround, { desc = "Change surround" })
+-- =============================================================================
+--  Editing
+-- =============================================================================
+-- "+ is the system clipboard everywhere; "* is only the same on Windows (on
+-- Linux it is the primary selection, not Ctrl+C / Ctrl+V).
+map('n', "<leader>p", '"+p', func.getOpts(opts, "Paste from clipboard"))
+map("x", "<leader>p", [["_dP]], func.getOpts(opts, "Paste over without yanking"))
+map({ 'n', 'v' }, "<leader>y", '"+y', func.getOpts(opts, "Yank to clipboard"))
+-- Win+C / Win+V reach nvim as F16 / F15 (kanata layer term + WezTerm), which leaves
+-- Ctrl+C (interrupt) and Ctrl+V (visual block) alone.
+map({ 'n', 'v' }, "<F16>", '"+y', func.getOpts(opts, "Yank to clipboard"))
+map({ 'n', 'v' }, "<F15>", '"+p', func.getOpts(opts, "Paste from clipboard"))
+map({ 'i', 'c' }, "<F15>", "<C-r>+", func.getOpts(opts, "Paste from clipboard"))
 
-  -- =============================================================================
-  --  Editing
-  -- =============================================================================
-  -- "+ is the system clipboard everywhere; "* is only the same on Windows (on
-  -- Linux it is the primary selection, not Ctrl+C / Ctrl+V).
-  map('n', "<leader>p", '"+p', func.getOpts(opts, "Paste from clipboard"))
-  map("x", "<leader>p", [["_dP]], func.getOpts(opts, "Paste over without yanking"))
-  map({ 'n', 'v' }, "<leader>y", '"+y', func.getOpts(opts, "Yank to clipboard"))
-  -- Win+C / Win+V reach nvim as F16 / F15 (kanata layer term + WezTerm), which leaves
-  -- Ctrl+C (interrupt) and Ctrl+V (visual block) alone.
-  map({ 'n', 'v' }, "<F16>", '"+y', func.getOpts(opts, "Yank to clipboard"))
-  map({ 'n', 'v' }, "<F15>", '"+p', func.getOpts(opts, "Paste from clipboard"))
-  map({ 'i', 'c' }, "<F15>", "<C-r>+", func.getOpts(opts, "Paste from clipboard"))
+map({ 'n', 'v' }, "<leader>D", '"_d', func.getOpts(opts, "Delete without yanking"))
 
-  map({ 'n', 'v' }, "<leader>D", '"_d', func.getOpts(opts, "Delete without yanking"))
+map('v', "<leader>s", [[:s/\%V]], { desc = "Substitute inside selection" })
+map('v', "<leader>n", [[:norm]], func.getOpts(opts, "Run normal command on selection"))
+map('v', "<leader>v", [[:s/\v]], func.getOpts(opts, "Substitute, very magic"))
 
-  map('v', "<leader>s", [[:s/\%V]], { desc = "Substitute inside selection" })
-  map('v', "<leader>n", [[:norm]], func.getOpts(opts, "Run normal command on selection"))
-  map('v', "<leader>v", [[:s/\v]], func.getOpts(opts, "Substitute, very magic"))
+-- =============================================================================
+--  Code
+-- =============================================================================
+map('n', "<leader>cc", fzf.CompilerCommand, func.getOpts(opts, "Run compiler command"))
+map('n', "<leader>ct", 'oTODO:<esc>:normal gcc<cr>A', func.getOpts(opts, "Insert TODO comment"))
+map('n', "<leader>cl", func.toggleHighlightSearch, func.getOpts(opts, "Clear search highlight"))
+-- Under code rather than <leader>x, which cycles checkbox states in notes;
+-- a bare <leader>x next to xs / xx would wait for the second key.
+map("n", "<leader>cs", "<cmd>so<cr>", func.getOpts(opts, "Source current file"))
+map("n", "<leader>cx", "<cmd>!chmod +x %<CR>", func.getOpts(opts, "Make file executable"))
 
-  -- =============================================================================
-  --  Code
-  -- =============================================================================
-  map('n', "<leader>cc", fzf.CompilerCommand, func.getOpts(opts, "Run compiler command"))
-  map('n', "<leader>ct", 'oTODO:<esc>:normal gcc<cr>A', func.getOpts(opts, "Insert TODO comment"))
-  map('n', "<leader>cl", func.toggleHighlightSearch, func.getOpts(opts, "Clear search highlight"))
-  -- Under code rather than <leader>x, which cycles checkbox states in notes;
-  -- a bare <leader>x next to xs / xx would wait for the second key.
-  map("n", "<leader>cs", "<cmd>so<cr>", func.getOpts(opts, "Source current file"))
-  map("n", "<leader>cx", "<cmd>!chmod +x %<CR>", func.getOpts(opts, "Make file executable"))
+-- =============================================================================
+--  Windows, splits and tabs
+-- =============================================================================
+-- Window view: <leader>wv + direction. Moved from <leader>v_, which is now the
+-- vault's group. Under <leader>w beside the tabs; no bare <leader>wv mapping,
+-- so wvh/wvj/... never wait on a shorter key.
+map('n', "<leader>wvh", "<C-w>h", func.getOpts(opts, "Focus window left"))
+map('n', "<leader>wvj", "<C-w>j", func.getOpts(opts, "Focus window below"))
+map('n', "<leader>wvk", "<C-w>k", func.getOpts(opts, "Focus window above"))
+map('n', "<leader>wvl", "<C-w>l", func.getOpts(opts, "Focus window right"))
+map('n', "<leader>wvq", "<C-w>q", func.getOpts(opts, "Focus window right"))
 
-  -- =============================================================================
-  --  Windows, splits and tabs
-  -- =============================================================================
-  -- Window view: <leader>wv + direction. Moved from <leader>v_, which is now the
-  -- vault's group. Under <leader>w beside the tabs; no bare <leader>wv mapping,
-  -- so wvh/wvj/... never wait on a shorter key.
-  map('n', "<leader>wvh", "<C-w>h", func.getOpts(opts, "Focus window left"))
-  map('n', "<leader>wvj", "<C-w>j", func.getOpts(opts, "Focus window below"))
-  map('n', "<leader>wvk", "<C-w>k", func.getOpts(opts, "Focus window above"))
-  map('n', "<leader>wvl", "<C-w>l", func.getOpts(opts, "Focus window right"))
-  map('n', "<leader>wvq", "<C-w>q", func.getOpts(opts, "Focus window right"))
+map('n', "<leader>sv", "<cmd>vsplit<CR>", func.getOpts(opts, "Split vertically"))
+map('n', "<leader>sh", "<cmd>split<CR>", func.getOpts(opts, "Split horizontally"))
+map('n', "<leader>+", "<cmd>resize +5<CR>", func.getOpts(opts, "Taller window"))
+map('n', "<leader>-", "<cmd>resize -5<CR>", func.getOpts(opts, "Shorter window"))
+map('n', "<leader>,", "<cmd>vertical resize +5<CR>", func.getOpts(opts, "Wider window"))
+map('n', "<leader>.", "<cmd>vertical resize -5<CR>", func.getOpts(opts, "Narrower window"))
 
-  map('n', "<leader>sv", "<cmd>vsplit<CR>", func.getOpts(opts, "Split vertically"))
-  map('n', "<leader>sh", "<cmd>split<CR>", func.getOpts(opts, "Split horizontally"))
-  map('n', "<leader>+", "<cmd>resize +5<CR>", func.getOpts(opts, "Taller window"))
-  map('n', "<leader>-", "<cmd>resize -5<CR>", func.getOpts(opts, "Shorter window"))
-  map('n', "<leader>,", "<cmd>vertical resize +5<CR>", func.getOpts(opts, "Wider window"))
-  map('n', "<leader>.", "<cmd>vertical resize -5<CR>", func.getOpts(opts, "Narrower window"))
+map('n', "<leader>wn", "<cmd>tabnew<CR>", func.getOpts(opts, "New tab"))
+map('n', "<leader>wl", "<cmd>tabnext<CR>", func.getOpts(opts, "Next tab"))
+map('n', "<leader>wh", "<cmd>tabprevious<CR>", func.getOpts(opts, "Previous tab"))
+map('n', "<leader>wq", "<cmd>tabclose<CR>", func.getOpts(opts, "Close tab"))
+map('n', "<leader>wo", "<cmd>tabonly<CR>", func.getOpts(opts, "Close other tabs"))
 
-  map('n', "<leader>wn", "<cmd>tabnew<CR>", func.getOpts(opts, "New tab"))
-  map('n', "<leader>wl", "<cmd>tabnext<CR>", func.getOpts(opts, "Next tab"))
-  map('n', "<leader>wh", "<cmd>tabprevious<CR>", func.getOpts(opts, "Previous tab"))
-  map('n', "<leader>wq", "<cmd>tabclose<CR>", func.getOpts(opts, "Close tab"))
-  map('n', "<leader>wo", "<cmd>tabonly<CR>", func.getOpts(opts, "Close other tabs"))
+-- =============================================================================
+--  Buffers
+-- =============================================================================
+map('n', "<leader>bn", "<cmd>bnext<CR>", func.getOpts(opts, "Next buffer"))
+map('n', "<leader>bp", "<cmd>bprevious<CR>", func.getOpts(opts, "Previous buffer"))
+map('n', "<leader>bq", "<cmd>bdelete<CR>", func.getOpts(opts, "Delete buffer"))
+map('n', "<leader>bv", "<cmd>buffers<CR>", func.getOpts(opts, "List buffers"))
+map('n', "<leader>bo", "<cmd>%bd|e#<cr>", func.getOpts(opts, "Close all but current"))
 
-  -- =============================================================================
-  --  Buffers
-  -- =============================================================================
-  map('n', "<leader>bn", "<cmd>bnext<CR>", func.getOpts(opts, "Next buffer"))
-  map('n', "<leader>bp", "<cmd>bprevious<CR>", func.getOpts(opts, "Previous buffer"))
-  map('n', "<leader>bq", "<cmd>bdelete<CR>", func.getOpts(opts, "Delete buffer"))
-  map('n', "<leader>bv", "<cmd>buffers<CR>", func.getOpts(opts, "List buffers"))
-  map('n', "<leader>bo", "<cmd>%bd|e#<cr>", func.getOpts(opts, "Close all but current"))
+-- =============================================================================
+--  Explore  (<leader>e)
+-- =============================================================================
+map('n', '<leader>ee', func.explore(here), func.getOpts(opts, "Explore current directory"))
+map('n', '<leader>E' , func.explore(dirs['~']), func.getOpts(opts, "Explore home"))
+map('n', '<leader>e.', func.explore(dirs['.']), func.getOpts(opts, "Explore ~/.config"))
+map('n', '<leader>en', func.explore(dirs.n), func.getOpts(opts, "Explore nvim config"))
+map('n', '<leader>ev', func.explore(dirs.v), func.getOpts(opts, "Explore Flora, the vault"))
+map('n', '<leader>eo', oil.toggle_float, func.getOpts(opts, "Oil Float"))
 
-  -- =============================================================================
-  --  Explore  (<leader>e)
-  -- =============================================================================
-  map('n', '<leader>ee', func.explore(here), func.getOpts(opts, "Explore current directory"))
-  map('n', '<leader>E' , func.explore(dirs['~']), func.getOpts(opts, "Explore home"))
-  map('n', '<leader>e.', func.explore(dirs['.']), func.getOpts(opts, "Explore ~/.config"))
-  map('n', '<leader>en', func.explore(dirs.n), func.getOpts(opts, "Explore nvim config"))
-  map('n', '<leader>ev', func.explore(dirs.v), func.getOpts(opts, "Explore Flora, the vault"))
-  map('n', '<leader>eo', oil.toggle_float, func.getOpts(opts, "Oil Float"))
+-- =============================================================================
+--  Find  (<leader>f)
+-- =============================================================================
+map('n', '<leader>ff', fzf.fuzzySearch(file["4p"]()), func.getOpts(opts, "Find files, four levels up"))
+map('n', '<leader><leader>', fzf.fuzzySearch(file.pp()), func.getOpts(opts, "Find files, two levels up"))
+map('n', '<leader>f~', inDir(fzf.fuzzySearch, dirs['~']), func.getOpts(opts, "Find in home"))
+map('n', '<leader>f.', inDir(fzf.fuzzySearch, dirs['.']), func.getOpts(opts, "Find in ~/.config"))
+map('n', '<leader>fn', inDir(fzf.fuzzySearch, dirs.n), func.getOpts(opts, "Find in nvim config"))
+-- <leader>fv is the same picker as <leader>vf (defined with the Flora keys below).
 
-  -- =============================================================================
-  --  Find  (<leader>f)
-  -- =============================================================================
-  map('n', '<leader>ff', function() fzf.fuzzySearch(file["4p"]()) end,
-    func.getOpts(opts, "Find files, four levels up"))
-  map('n', '<leader><leader>', function() fzf.fuzzySearch(file.pp()) end,
-    func.getOpts(opts, "Find files, two levels up"))
-  map('n', '<leader>f~', inDir(fzf.fuzzySearch, dirs['~']), func.getOpts(opts, "Find in home"))
-  map('n', '<leader>f.', inDir(fzf.fuzzySearch, dirs['.']), func.getOpts(opts, "Find in ~/.config"))
-  map('n', '<leader>fn', inDir(fzf.fuzzySearch, dirs.n), func.getOpts(opts, "Find in nvim config"))
-  -- <leader>fv is the same picker as <leader>vf (defined with the Flora keys below).
+map('n', "<leader>fe", function() inDir(fzf.fuzzyExplorer, here())() end,
+func.getOpts(opts, "fzf explorer, current directory"))
+map('n', "<leader>fg", function() fzf.fuzzyGrep(require('pure.scratch').dir(1)) end, func.getOpts(opts, "Grep"))
+map('n', "<leader>f/", fzf.fuzzyOldfiles, func.getOpts(opts, "Recent files"))
+map('n', "<leader>fh", fzf.fuzzyHelp, func.getOpts(opts, "Help tags"))
+map('n', "<leader>fb", fzf.fuzzyBuffers, func.getOpts(opts, "Buffers"))
+map('n', "<leader>fj", fzf.fuzzyJump, func.getOpts(opts, "Jump list"))
+map('n', "<leader>ft", fzf.fuzzyTodo, func.getOpts(opts, "TODO: of the repo (or the folder)"))
+map('n', '<leader>f"', fzf.fuzzyRegisters, func.getOpts(opts, "Registers (Enter: make it the register p pastes)"))
+map('n', "<leader>f'", fzf.fuzzyRegisters, func.getOpts(opts, "Registers (Enter: make it the register p pastes)"))
+map('n', '<leader>fl', function() require('pure.notes').backlinks() end, func.getOpts(opts, "Notes linking here (backlinks, also <leader>vb)"))
+map('n', '<leader>fc', fzf.fuzzyColorscheme, func.getOpts(opts, "Colorschemes"))
 
-  map('n', "<leader>fe", function() inDir(fzf.fuzzyExplorer, here())() end,
-    func.getOpts(opts, "fzf explorer, current directory"))
-  map('n', "<leader>fg", function() fzf.fuzzyGrep(require('pure.scratch').dir(1)) end, func.getOpts(opts, "Grep"))
-  map('n', "<leader>f/", fzf.fuzzyOldfiles, func.getOpts(opts, "Recent files"))
-  map('n', "<leader>fh", fzf.fuzzyHelp, func.getOpts(opts, "Help tags"))
-  map('n', "<leader>fb", fzf.fuzzyBuffers, func.getOpts(opts, "Buffers"))
-  map('n', "<leader>fj", fzf.fuzzyJump, func.getOpts(opts, "Jump list"))
-  map('n', "<leader>ft", fzf.fuzzyTodo, func.getOpts(opts, "TODO: of the repo (or the folder)"))
-  map('n', '<leader>f"', fzf.fuzzyRegisters, func.getOpts(opts, "Registers (Enter: make it the register p pastes)"))
-  map('n', "<leader>f'", fzf.fuzzyRegisters, func.getOpts(opts, "Registers (Enter: make it the register p pastes)"))
-  map('n', '<leader>fl', function() require('pure.notes').backlinks() end, func.getOpts(opts, "Notes linking here (backlinks, also <leader>vb)"))
-  map('n', '<leader>fc', fzf.fuzzyColorscheme, func.getOpts(opts, "Colorschemes"))
+-- =============================================================================
+--  New file / folder  (<leader>n)
+-- =============================================================================
+--  Only <leader>nf asks for a folder. The others already name it, so they
+--  go straight there: they ask for the file name, or, with
+--  vim.g.pure_new_file_ask_name = false (configs.lua), open an unnamed buffer
+--  working in that folder. They used to open a folder picker every time.
+map("n", "<leader>nf", function() fzf.NewFile(up(1)) end,
+func.getOpts(opts, "New file, pick the folder (from two levels up)"))
+map("n", "<leader>ne", function() fzf.NewFileIn(here()) end, func.getOpts(opts, "New file here"))
+map("n", "<leader>ns", function() require('pure.scratch').open() end, func.getOpts(opts, "Scratch note"))
+map("n", "<leader>nh", inDir(fzf.NewFileIn, dirs['~']), func.getOpts(opts, "New file in home"))
+map("n", "<leader>n.", inDir(fzf.NewFileIn, dirs['.']), func.getOpts(opts, "New file in ~/.config"))
+map("n", "<leader>nn", inDir(fzf.NewFileIn, dirs.n), func.getOpts(opts, "New file in nvim config"))
+-- The same as <leader>vn: a note in the vault's inbox, asking only its name.
+map("n", "<leader>nv", function() require('pure.flora').newSeed() end, func.getOpts(opts, "New seed in Flora's inbox"))
+map("n", "<leader>nd", function() fzf.NewFolder(here()) end, func.getOpts(opts, "New folder here"))
+-- <leader>nt (template) and <leader>nr (rename note) moved to <leader>vt and
+-- <leader>vr: they act on a note, they do not make a new file.
 
-  -- =============================================================================
-  --  New file / folder  (<leader>n)
-  -- =============================================================================
-  --  Only <leader>nf asks for a folder. The others already name it, so they
-  --  go straight there: they ask for the file name, or, with
-  --  vim.g.pure_new_file_ask_name = false (configs.lua), open an unnamed buffer
-  --  working in that folder. They used to open a folder picker every time.
-  map("n", "<leader>nf", function() fzf.NewFile(up(1)) end,
-    func.getOpts(opts, "New file, pick the folder (from two levels up)"))
-  map("n", "<leader>ne", function() fzf.NewFileIn(here()) end, func.getOpts(opts, "New file here"))
-  map("n", "<leader>ns", function() require('pure.scratch').open() end, func.getOpts(opts, "Scratch note"))
-  map("n", "<leader>nh", inDir(fzf.NewFileIn, dirs['~']), func.getOpts(opts, "New file in home"))
-  map("n", "<leader>n.", inDir(fzf.NewFileIn, dirs['.']), func.getOpts(opts, "New file in ~/.config"))
-  map("n", "<leader>nn", inDir(fzf.NewFileIn, dirs.n), func.getOpts(opts, "New file in nvim config"))
-  -- The same as <leader>vn: a note in the vault's inbox, asking only its name.
-  map("n", "<leader>nv", function() require('pure.flora').newSeed() end, func.getOpts(opts, "New seed in Flora's inbox"))
-  map("n", "<leader>nd", function() fzf.NewFolder(here()) end, func.getOpts(opts, "New folder here"))
-  -- <leader>nt (template) and <leader>nr (rename note) moved to <leader>vt and
-  -- <leader>vr: they act on a note, they do not make a new file.
+-- =============================================================================
+--  Manim  (<leader>M, pure/manim.lua)
+-- =============================================================================
+map('n', '<leader>Mm', function() require('pure.manim').toggle() end,
+func.getOpts(opts, "Preview the scene, again on every save (toggle)"))
+map('n', '<leader>Ms', function() require('pure.manim').pick() end, func.getOpts(opts, "Preview another scene"))
+map({ 'n', 'x' }, '<leader>Mp', function() require('pure.manim').part() end,
+func.getOpts(opts, "Preview only this part (selection, or the block under the cursor)"))
+map('n', '<leader>Mf', function() require('pure.manim').frame() end, func.getOpts(opts, "Picture of the scene at this line"))
+map('n', '<leader>Mi', function() require('pure.manim').interactive() end,
+func.getOpts(opts, "Live window at this line: mouse camera, Python shell (toggle)"))
 
-  -- =============================================================================
-  --  Manim  (<leader>M, pure/manim.lua)
-  -- =============================================================================
-  map('n', '<leader>Mm', function() require('pure.manim').toggle() end,
-    func.getOpts(opts, "Preview the scene, again on every save (toggle)"))
-  map('n', '<leader>Ms', function() require('pure.manim').pick() end, func.getOpts(opts, "Preview another scene"))
-  map({ 'n', 'x' }, '<leader>Mp', function() require('pure.manim').part() end,
-    func.getOpts(opts, "Preview only this part (selection, or the block under the cursor)"))
-  map('n', '<leader>Mf', function() require('pure.manim').frame() end, func.getOpts(opts, "Picture of the scene at this line"))
-  map('n', '<leader>Mi', function() require('pure.manim').interactive() end,
-    func.getOpts(opts, "Live window at this line: mouse camera, Python shell (toggle)"))
+-- =============================================================================
+--  Flora  (<leader>v, pure/flora.lua)
+-- =============================================================================
+--  Everything that works on the Flora vault (org), in one group, as Doom's
+--  `SPC v`. It replaced the group of the Atlas vault (Markdown), which is no
+--  longer used: its functions are still in pure/zettelkasten.lua and
+--  pure/notes.lua, as commands only. <leader>ev, <leader>fv and <leader>gv
+--  follow, beside the other folders of their group.
+map('n', '<leader>vf', flora.find, func.getOpts(opts, "Find a note, heading or alias (a title that matches nothing makes a seed)"))
+map('n', '<leader>fv', flora.find, func.getOpts(opts, "Find a note, heading or alias (same as <leader>vf)"))
+map('n', '<leader>vF', flora.findFile, func.getOpts(opts, "Find a file of the vault"))
+map('n', '<leader>vg', flora.grep, func.getOpts(opts, "Grep the vault"))
+map('n', '<leader>vn', flora.newSeed, func.getOpts(opts, "New seed (inbox)"))
+map('n', '<leader>vN', flora.newNote, func.getOpts(opts, "New note in its own file"))
+map('n', '<leader>vt', flora.template, func.getOpts(opts, "Capture: pick a template"))
+map('n', '<leader>vi', flora.insertLink, func.getOpts(opts, "Insert a link to a node"))
+map('n', '<leader>vb', flora.backlinks, func.getOpts(opts, "Backlinks (notes linking here)"))
+map('n', '<leader>vr', flora.rename, func.getOpts(opts, "Rename this note (title and file)"))
+map('n', '<leader>vd', flora.delete, func.getOpts(opts, "Delete this note (to archive/trash/)"))
+map('n', '<leader>vj', flora.journalLine, func.getOpts(opts, "Journal line (today)"))
+map('n', '<leader>vJ', flora.journalToday, func.getOpts(opts, "Today in the journal"))
+map('n', '<leader>ve', flora.explore, func.getOpts(opts, "Explore the vault"))
+map('n', '<leader>vs', flora.sync, func.getOpts(opts, "Save the notes and commit (sync if there is an upstream)"))
+-- <leader>vp / <leader>vq: the linked note, preview and quick edit. Markdown
+-- notes keep pure/linkview.lua's global keys; in org notes these two win.
+vim.api.nvim_create_autocmd('FileType', {
+  pattern = 'org',
+  group = vim.api.nvim_create_augroup('FloraKeys', { clear = true }),
+  callback = function(args)
+    map('n', '<leader>vp', flora.preview, { buffer = args.buf, desc = 'Preview the linked note' })
+    map('n', '<leader>vq', flora.quickEdit, { buffer = args.buf, desc = 'Quick edit the linked note' })
+  end,
+})
 
-  -- =============================================================================
-  --  Flora  (<leader>v, pure/flora.lua)
-  -- =============================================================================
-  --  Everything that works on the Flora vault (org), in one group, as Doom's
-  --  `SPC v`. It replaced the group of the Atlas vault (Markdown), which is no
-  --  longer used: its functions are still in pure/zettelkasten.lua and
-  --  pure/notes.lua, as commands only. <leader>ev, <leader>fv and <leader>gv
-  --  follow, beside the other folders of their group.
-  map('n', '<leader>vf', flora.find, func.getOpts(opts, "Find a note, heading or alias (a title that matches nothing makes a seed)"))
-  map('n', '<leader>fv', flora.find, func.getOpts(opts, "Find a note, heading or alias (same as <leader>vf)"))
-  map('n', '<leader>vF', flora.findFile, func.getOpts(opts, "Find a file of the vault"))
-  map('n', '<leader>vg', flora.grep, func.getOpts(opts, "Grep the vault"))
-  map('n', '<leader>vn', flora.newSeed, func.getOpts(opts, "New seed (inbox)"))
-  map('n', '<leader>vN', flora.newNote, func.getOpts(opts, "New note in its own file"))
-  map('n', '<leader>vt', flora.template, func.getOpts(opts, "Capture: pick a template"))
-  map('n', '<leader>vi', flora.insertLink, func.getOpts(opts, "Insert a link to a node"))
-  map('n', '<leader>vb', flora.backlinks, func.getOpts(opts, "Backlinks (notes linking here)"))
-  map('n', '<leader>vr', flora.rename, func.getOpts(opts, "Rename this note (title and file)"))
-  map('n', '<leader>vd', flora.delete, func.getOpts(opts, "Delete this note (to archive/trash/)"))
-  map('n', '<leader>vj', flora.journalLine, func.getOpts(opts, "Journal line (today)"))
-  map('n', '<leader>vJ', flora.journalToday, func.getOpts(opts, "Today in the journal"))
-  map('n', '<leader>ve', flora.explore, func.getOpts(opts, "Explore the vault"))
-  map('n', '<leader>vs', flora.sync, func.getOpts(opts, "Save the notes and commit (sync if there is an upstream)"))
-  -- <leader>vp / <leader>vq: the linked note, preview and quick edit. Markdown
-  -- notes keep pure/linkview.lua's global keys; in org notes these two win.
-  vim.api.nvim_create_autocmd('FileType', {
-    pattern = 'org',
-    group = vim.api.nvim_create_augroup('FloraKeys', { clear = true }),
-    callback = function(args)
-      map('n', '<leader>vp', flora.preview, { buffer = args.buf, desc = 'Preview the linked note' })
-      map('n', '<leader>vq', flora.quickEdit, { buffer = args.buf, desc = 'Quick edit the linked note' })
-    end,
-  })
+-- =============================================================================
+--  LLMs: Claude, Ollama, agy  (<leader>a, pure/llm.lua)
+-- =============================================================================
+local function llm(fn)
+  return function() require('pure.llm')[fn]() end
+end
+map({ 'n', 'x' }, '<leader>ai', llm('write'), func.getOpts(opts, "Write here (visual: rewrite)"))
+map({ 'n', 'x' }, '<leader>aa', llm('ask'), func.getOpts(opts, "Chat: show / hide"))
+map({ 'n', 'x' }, '<leader>ac', llm('review'), func.getOpts(opts, "Review the code"))
+map({ 'n', 'x' }, '<leader>ar', llm('repeatLast'), func.getOpts(opts, "Repeat the last request"))
+map('n', '<leader>ah', llm('history'), func.getOpts(opts, "Past answers"))
+map('n', '<leader>as', llm('stop'), func.getOpts(opts, "Stop"))
+-- Frees the GPU without quitting (Improvment.md): what quitting does.
+map('n', '<leader>aq', llm('shutdown'), func.getOpts(opts, "Quit the AI: stop, unload models, close Ollama"))
+map('n', '<leader>am', llm('selectModel'), func.getOpts(opts, "Select model (Ollama / Claude / agy)"))
+map('n', '<leader>at', llm('toggleThinking'), func.getOpts(opts, "Thinking of <leader>ai (show / hide)"))
+-- The file about you that every request reads (outside any git repository).
+map('n', '<leader>au', func.openUserContext, func.getOpts(opts, "User context file (what the LLMs know about you)"))
+map({ 'n', 'x' }, '<leader>ax', llm('pickAction'), func.getOpts(opts, "Actions (claude/ folder of the vault)"))
+map('n', '<leader>ab', llm('runBlockAtCursor'), func.getOpts(opts, "Run the ```llm block under the cursor"))
+map('n', '<leader>ad', function() require('pure.llm').runNamed('Nota do dia') end,
+func.getOpts(opts, "Daily note: next step and the measured day"))
+map('n', '<leader>aw', function() require('pure.llm').runNamed('Nota da semana') end,
+func.getOpts(opts, "Weekly note: the week in one place"))
+map('n', '<leader>ap', llm('pickPersona'), func.getOpts(opts, "Personas: pick one, open its chat"))
+map('n', '<leader>aj', function() require('pure.llm').chatWith('job') end,
+func.getOpts(opts, "Job assistant: the chat with the /job persona"))
 
-  -- =============================================================================
-  --  LLMs: Claude, Ollama, agy  (<leader>a, pure/llm.lua)
-  -- =============================================================================
-  local function llm(fn)
-    return function() require('pure.llm')[fn]() end
-  end
-  map({ 'n', 'x' }, '<leader>ai', llm('write'), func.getOpts(opts, "Write here (visual: rewrite)"))
-  map({ 'n', 'x' }, '<leader>aa', llm('ask'), func.getOpts(opts, "Chat: show / hide"))
-  map({ 'n', 'x' }, '<leader>ac', llm('review'), func.getOpts(opts, "Review the code"))
-  map({ 'n', 'x' }, '<leader>ar', llm('repeatLast'), func.getOpts(opts, "Repeat the last request"))
-  map('n', '<leader>ah', llm('history'), func.getOpts(opts, "Past answers"))
-  map('n', '<leader>as', llm('stop'), func.getOpts(opts, "Stop"))
-  -- Frees the GPU without quitting (Improvment.md): what quitting does.
-  map('n', '<leader>aq', llm('shutdown'), func.getOpts(opts, "Quit the AI: stop, unload models, close Ollama"))
-  map('n', '<leader>am', llm('selectModel'), func.getOpts(opts, "Select model (Ollama / Claude / agy)"))
-  map('n', '<leader>at', llm('toggleThinking'), func.getOpts(opts, "Thinking of <leader>ai (show / hide)"))
-  -- The file about you that every request reads (outside any git repository).
-  map('n', '<leader>au', func.openUserContext, func.getOpts(opts, "User context file (what the LLMs know about you)"))
-  map({ 'n', 'x' }, '<leader>ax', llm('pickAction'), func.getOpts(opts, "Actions (claude/ folder of the vault)"))
-  map('n', '<leader>ab', llm('runBlockAtCursor'), func.getOpts(opts, "Run the ```llm block under the cursor"))
-  map('n', '<leader>ad', function() require('pure.llm').runNamed('Nota do dia') end,
-    func.getOpts(opts, "Daily note: next step and the measured day"))
-  map('n', '<leader>aw', function() require('pure.llm').runNamed('Nota da semana') end,
-    func.getOpts(opts, "Weekly note: the week in one place"))
-  map('n', '<leader>ap', llm('pickPersona'), func.getOpts(opts, "Personas: pick one, open its chat"))
-  map('n', '<leader>aj', function() require('pure.llm').chatWith('job') end,
-    func.getOpts(opts, "Job assistant: the chat with the /job persona"))
+-- =============================================================================
+--  Git
+-- =============================================================================
+-- pure/git.lua: required on use, like the other pure modules' keys.
+local git = function(fn) return function(...) return require('pure.git')[fn](...) end end
 
-  -- =============================================================================
-  --  Git
-  -- =============================================================================
-  -- pure/git.lua: required on use, like the other pure modules' keys.
-  local git = function(fn) return function(...) return require('pure.git')[fn](...) end end
+map('n', "<leader>gl", fzf.fuzzyGit, func.getOpts(opts, "Git log"))
+map('n', "<leader>gg", fzf.fuzzyGitGrep, func.getOpts(opts, "Git grep"))
+map('n', "<leader>gd", func.gitDiffToggle, func.getOpts(opts, "Toggle git diff"))
+map('n', "<leader>gs", git('status'), func.getOpts(opts, "Git status (interactive)"))
+map('n', "<leader>ga", git('addFile'), func.getOpts(opts, "Git add current file"))
+map('n', "<leader>gA", git('addAll'), func.getOpts(opts, "Git add all"))
+map('n', "<leader>gu", git('unstageFile'), func.getOpts(opts, "Git unstage current file"))
+map('n', "<leader>gr", git('restoreFile'), func.getOpts(opts, "Git discard changes to current file"))
+map('n', "<leader>gc", git('commit'), func.getOpts(opts, "Git commit"))
+map('n', "<leader>gp", git('push'), func.getOpts(opts, "Git push"))
+map('n', "<leader>gP", git('pull'), func.getOpts(opts, "Git pull"))
+map('n', "<leader>gb", git('blameLine'), func.getOpts(opts, "Git blame current line"))
+map('n', "<leader>gB", git('switchBranch'), func.getOpts(opts, "Git switch branch"))
+map('n', "<leader>gv", function() require('pure.flora').sync() end, func.getOpts(opts, "Flora: save the notes and commit"))
 
-  map('n', "<leader>gl", fzf.fuzzyGit, func.getOpts(opts, "Git log"))
-  map('n', "<leader>gg", fzf.fuzzyGitGrep, func.getOpts(opts, "Git grep"))
-  map('n', "<leader>gd", func.gitDiffToggle, func.getOpts(opts, "Toggle git diff"))
-  map('n', "<leader>gs", git('status'), func.getOpts(opts, "Git status (interactive)"))
-  map('n', "<leader>ga", git('addFile'), func.getOpts(opts, "Git add current file"))
-  map('n', "<leader>gA", git('addAll'), func.getOpts(opts, "Git add all"))
-  map('n', "<leader>gu", git('unstageFile'), func.getOpts(opts, "Git unstage current file"))
-  map('n', "<leader>gr", git('restoreFile'), func.getOpts(opts, "Git discard changes to current file"))
-  map('n', "<leader>gc", git('commit'), func.getOpts(opts, "Git commit"))
-  map('n', "<leader>gp", git('push'), func.getOpts(opts, "Git push"))
-  map('n', "<leader>gP", git('pull'), func.getOpts(opts, "Git pull"))
-  map('n', "<leader>gb", git('blameLine'), func.getOpts(opts, "Git blame current line"))
-  map('n', "<leader>gB", git('switchBranch'), func.getOpts(opts, "Git switch branch"))
-  map('n', "<leader>gv", function() require('pure.flora').sync() end, func.getOpts(opts, "Flora: save the notes and commit"))
+-- =============================================================================
+--  LSP
+-- =============================================================================
+map('n', 'K', func.followOrHover, func.getOpts(opts, "Follow link, else LSP hover"))
+map('n', 'gd', lsp.definition, func.getOpts(opts, "LSP definition"))
+-- No 'gr' here: it made the builtin grr/grn/gra/gri/grt/grx wait 500 ms, and
+-- grr already lists references.
+map('n', '<leader>la', lsp.code_action, func.getOpts(opts, "LSP code action"))
+map('n', '<leader>lr', lsp.rename, func.getOpts(opts, "LSP rename"))
+map('n', '<leader>ls', lsp.workspace_symbol, func.getOpts(opts, "LSP workspace symbols"))
+map('i', '<up>', func.signatureHelpOrUp, { expr = true, replace_keycodes = true, silent = true, desc = "LSP signature help, else up" })
 
-  -- =============================================================================
-  --  LSP
-  -- =============================================================================
-  map('n', 'K', func.followOrHover, func.getOpts(opts, "Follow link, else LSP hover"))
-  map('n', 'gd', lsp.definition, func.getOpts(opts, "LSP definition"))
-  -- No 'gr' here: it made the builtin grr/grn/gra/gri/grt/grx wait 500 ms, and
-  -- grr already lists references.
-  map('n', '<leader>la', lsp.code_action, func.getOpts(opts, "LSP code action"))
-  map('n', '<leader>lr', lsp.rename, func.getOpts(opts, "LSP rename"))
-  map('n', '<leader>ls', lsp.workspace_symbol, func.getOpts(opts, "LSP workspace symbols"))
-  map('i', '<up>', func.signatureHelpOrUp, { expr = true, replace_keycodes = true, silent = true, desc = "LSP signature help, else up" })
+-- =============================================================================
+--  Diagnostics
+-- =============================================================================
+map('n', '<leader>dd', diag.open_float, func.getOpts(opts, "Show diagnostic"))
+map('n', '[d', diag.get_prev, func.getOpts(opts, "Previous diagnostic"))
+map('n', ']d', diag.get_next, func.getOpts(opts, "Next diagnostic"))
 
-  -- =============================================================================
-  --  Diagnostics
-  -- =============================================================================
-  map('n', '<leader>dd', diag.open_float, func.getOpts(opts, "Show diagnostic"))
-  map('n', '[d', diag.get_prev, func.getOpts(opts, "Previous diagnostic"))
-  map('n', ']d', diag.get_next, func.getOpts(opts, "Next diagnostic"))
-
-  -- =============================================================================
-  --  Toggles 
+-- =============================================================================
+--  Toggles 
 -- =============================================================================
 map('n', '<leader>tx', func.toggleTransparency, func.getOpts(opts, "Toggle transparency"))
 map('n', '<leader>td', func.toggleDiagnostics, func.getOpts(opts, "Toggle diagnostics"))
@@ -380,7 +356,7 @@ map('n', '<leader>ts', func.toggleStatusline, func.getOpts(opts, "Toggle statusl
 map('n', '<leader>tt', func.toggleTabline, func.getOpts(opts, "Toggle tabline"))
 map('n', '<leader>tc', func.toggleSigncolumn, func.getOpts(opts, "Toggle signcolumn"))
 map('n', '<leader>tw', func.toggleWrap, func.getOpts(opts, "Toggle wrap"))
-map('n', '<leader>tw', func.toggleHeadingBand, func.getOpts(opts, "Toggle the heading background bar"))
+map('n', '<leader>tH', func.toggleHeadingBand, func.getOpts(opts, "Toggle the heading background bar"))
 map('n', '<leader>ti', func.toggleInlayHints, func.getOpts(opts, "Toggle inlay hints"))
 map('n', '<leader>tp', func.toggleCopilot, func.getOpts(opts, "Toggle Copilot"))
 map('n', '<leader>th', func.toggleWordHighlight, func.getOpts(opts, "Toggle word highlight"))
@@ -402,21 +378,21 @@ map('n', '<leader>jh', '<C-o>', func.getOpts(opts, "Jump back"))
 -- Only a fold that starts on this line (pure/folding.lua): za closed the fold
 -- around the line, which in a markdown list was the whole section.
 map('n', '<leader>zz', function() require('pure.folding').toggleHere() end,
-  func.getOpts(opts, "Toggle the fold starting here"))
+func.getOpts(opts, "Toggle the fold starting here"))
 -- Tasks by state (Improvment.md); the same key again, or <leader>zr, goes back.
 map('n', '<leader>zt', function() require('pure.folding').tasks('done') end,
-  func.getOpts(opts, "Fold done tasks (see what is left)"))
+func.getOpts(opts, "Fold done tasks (see what is left)"))
 map('n', '<leader>zT', function() require('pure.folding').tasks('open') end,
-  func.getOpts(opts, "Fold open tasks (see what is done)"))
+func.getOpts(opts, "Fold open tasks (see what is done)"))
 -- The same on Vim's own z prefix, without <leader> (Improvment.md). They
 -- replace Vim's zt / zz ("scroll this line to the top / middle"), which the
 -- owner of this configuration does not use and asked to give up.
 map('n', 'zt', function() require('pure.folding').tasks('done') end,
-  func.getOpts(opts, "Fold done tasks (see what is left)"))
+func.getOpts(opts, "Fold done tasks (see what is left)"))
 map('n', 'zT', function() require('pure.folding').tasks('open') end,
-  func.getOpts(opts, "Fold open tasks (see what is done)"))
+func.getOpts(opts, "Fold open tasks (see what is done)"))
 map('n', 'zz', function() require('pure.folding').toggleHere() end,
-  func.getOpts(opts, "Toggle the fold starting here"))
+func.getOpts(opts, "Toggle the fold starting here"))
 -- Folds are made automatically (treesitter, or indentation), and those
 -- methods refuse zf. Folding a selection by hand switches the window to manual
 -- folds -- the automatic ones stay -- and <leader>zr goes back to automatic.
@@ -426,7 +402,7 @@ map('x', '<leader>zf', function()
 end, func.getOpts(opts, "Fold selection"))
 map('n', '<leader>zd', func.deleteFold, func.getOpts(opts, "Delete fold"))
 map('n', '<leader>zr', function() require('pure.folding').auto() end,
-  func.getOpts(opts, "Reset folds to automatic"))
+func.getOpts(opts, "Reset folds to automatic"))
 map('n', '<leader>za', func.toggleAllFolds, func.getOpts(opts, "Toggle all folds"))
 
 map('n', '<leader>u', function()
@@ -446,7 +422,7 @@ map('v', "<leader>r", [["hy:%s/<C-r>h/<C-r>h/gI<Left><Left><Left>]], func.getOpt
 -- -- Add undo break-points for punctuation in insert mode
 local chars = { ",", ".", "!", "?", ";" }
 for _, char in ipairs(chars) do
-    vim.keymap.set("i", char, char .. "<c-g>u", { desc = "Undo breakpoint" })
+  vim.keymap.set("i", char, char .. "<c-g>u", { desc = "Undo breakpoint" })
 end
 
 -- Prevent overwriting the default register when deleting empty lines
@@ -482,14 +458,15 @@ vim.schedule(function()
   --  The behaviour of each key (completion menu, closing pairs, snippets, list items, Copilot) is explained
   --  in configs/functions.lua, next to the functions.
   map('i', '<tab>', func.insertTab,
-    { expr = true, replace_keycodes = true, desc = "Indent an empty list item / past closing pair / next suggestion / snippet jump" })
+  { expr = true, replace_keycodes = true, desc = "Indent an empty list item / past closing pair / next suggestion / snippet jump" })
   map('i', '<S-tab>', func.insertShiftTab,
-    { expr = true, replace_keycodes = true, desc = "Outdent an empty list item / previous suggestion / snippet jump back" })
+  { expr = true, replace_keycodes = true, desc = "Outdent an empty list item / previous suggestion / snippet jump back" })
   map('i', '<Esc>', func.insertEsc,
-    { expr = true, replace_keycodes = true, desc = "Close the completion menu, else leave insert mode" })
+  { expr = true, replace_keycodes = true, desc = "Close the completion menu, else leave insert mode" })
   map('i', '<CR>', func.insertEnter, {
     expr = true,
     replace_keycodes = false,
     desc = "Accept Copilot suggestion / next list item / new line",
   })
 end)
+

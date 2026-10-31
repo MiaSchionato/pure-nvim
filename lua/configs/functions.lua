@@ -552,9 +552,6 @@ function M.toggleAutoHover()
   vim.notify('Automatic hover ' .. (on and 'on' or 'off'))
 end
 
--- The key lives here until the <leader>t group of keymaps.lua is settled; move this line there then.
-vim.keymap.set('n', '<leader>tk', M.toggleAutoHover, { desc = 'Toggle the automatic hover (LSP)' })
-
 -- -----------------------------------------------------------------------------
 --  Put the saved state back
 -- -----------------------------------------------------------------------------
