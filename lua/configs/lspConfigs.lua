@@ -139,25 +139,32 @@ for _, server_name in ipairs(servers) do
   end
 end
 
--- Automatic hover: once the cursor rests on a spot ('updatetime', CursorHold), the hover of whichever server
--- has one shows by itself; nothing is said when there is nothing to show. K does the same on demand.
--- vim.g.lsp_auto_hover = false turns it off.
-local hoverAsked = {} -- buffer -> "row:col" of the last automatic hover, so one rest asks once
-vim.api.nvim_create_autocmd('CursorMoved', {
-  group = lang_settings_group,
-  callback = function(args) hoverAsked[args.buf] = nil end,
-})
-vim.api.nvim_create_autocmd('CursorHold', {
+-- Automatic hover: once the cursor has rested on a spot for vim.g.lsp_auto_hover_delay ms (default 500), the hover
+-- of whichever server has one shows by itself; nothing is said when there is nothing to show. K does the same on
+-- demand. vim.g.lsp_auto_hover = false turns it off. A timer of its own, so 'updatetime' (which other things
+-- use) stays as it is.
+local hoverTimer = assert(vim.uv.new_timer())
+
+local function autoHoverNow(buf, win, row, col)
+  if vim.g.lsp_auto_hover == false or vim.api.nvim_get_current_win() ~= win or vim.api.nvim_get_current_buf() ~= buf then return end
+  if vim.api.nvim_get_mode().mode ~= 'n' or vim.fn.pumvisible() == 1 then return end
+  if vim.bo[buf].buftype ~= '' or vim.api.nvim_win_get_config(win).relative ~= '' then return end
+  local pos = vim.api.nvim_win_get_cursor(win)
+  if pos[1] ~= row or pos[2] ~= col then return end
+  if #vim.lsp.get_clients({ bufnr = buf, method = 'textDocument/hover' }) == 0 then return end
+  vim.lsp.buf.hover({ silent = true })
+end
+
+vim.api.nvim_create_autocmd({ 'CursorMoved', 'BufEnter' }, {
   group = lang_settings_group,
   callback = function(args)
-    local buf = args.buf
-    if vim.g.lsp_auto_hover == false or vim.bo[buf].buftype ~= '' then return end
-    if vim.api.nvim_win_get_config(0).relative ~= '' or vim.fn.pumvisible() == 1 then return end
-    if #vim.lsp.get_clients({ bufnr = buf, method = 'textDocument/hover' }) == 0 then return end
-    local pos = vim.api.nvim_win_get_cursor(0)
-    local key = pos[1] .. ':' .. pos[2]
-    if hoverAsked[buf] == key then return end
-    hoverAsked[buf] = key
-    vim.lsp.buf.hover({ silent = true })
+    hoverTimer:stop()
+    if vim.g.lsp_auto_hover == false then return end
+    local win = vim.api.nvim_get_current_win()
+    local pos = vim.api.nvim_win_get_cursor(win)
+    hoverTimer:start(vim.g.lsp_auto_hover_delay or 500, 0, vim.schedule_wrap(function()
+      autoHoverNow(args.buf, win, pos[1], pos[2])
+    end))
   end,
 })
+vim.api.nvim_create_autocmd('InsertEnter', { group = lang_settings_group, callback = function() hoverTimer:stop() end })
