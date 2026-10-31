@@ -204,9 +204,6 @@ vim.g.pure_keyhint_groups = {
   -- =============================================================================
   --  Explore  (<leader>e)
   -- =============================================================================
-  local function here()
-    return up(0)
-  end
   map('n', '<leader>ee', func.explore(here), func.getOpts(opts, "Explore current directory"))
   map('n', '<leader>E' , func.explore(dirs['~']), func.getOpts(opts, "Explore home"))
   map('n', '<leader>e.', func.explore(dirs['.']), func.getOpts(opts, "Explore ~/.config"))
