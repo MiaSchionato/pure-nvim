@@ -13,9 +13,9 @@
 local M = {}
 local View, Headings -- the sections below; the settings and the headings call into them
 
--- The toggles stay as left (configs/toggles.lua): the saved value, or `default` when none.
+-- The toggles stay as left (configs/functions.lua): the saved value, or `default` when none.
 local function saved(key, default)
-  local ok, toggles = pcall(require, 'configs.toggles')
+  local ok, toggles = pcall(require, 'configs.functions')
   if ok then return toggles.get(key, default) end
   return default
 end
@@ -237,7 +237,7 @@ local ns = vim.api.nvim_create_namespace('pure_md_headings')
 
 local state = {
   mode = nil,      -- 'osc66' | 'decdhl' | nil (off)
-  enabled = saved('render_md', true) ~= false,  -- mdview's toggle
+  enabled = (saved('render_md', 'full') == 'full' or saved('render_md', 'full') == true),  -- big headings: only in the full level
   cursor = nil,    -- lnum of the heading under the cursor
   drawn = {},      -- blocks written by the last render: { row, col, width, height }
   setup = false,
@@ -738,7 +738,11 @@ View = (function()
 local M = {}
 
 local ns = vim.api.nvim_create_namespace('pure_mdview')
-local enabled = saved('render_md', true) ~= false
+local startLevel = saved('render_md', 'full')
+if startLevel == true then startLevel = 'full' elseif startLevel == false then startLevel = 'off' end
+if startLevel ~= 'partial' and startLevel ~= 'off' then startLevel = 'full' end
+local level = startLevel -- 'full' | 'partial' (no terminal big headings) | 'off'
+local enabled = level ~= 'off'
 
 local heading_icons = { '󰲡 ', '󰲣 ', '󰲥 ', '󰲧 ', '󰲩 ', '󰲫 ' }
 -- Smaller glyphs than the old ● ○ ◆ ◇, which looked heavy next to the text
@@ -1456,13 +1460,28 @@ function M.refresh(force)
   vim.b[buf].pure_md_link = cursorLink()
 end
 
+local NEXT = { full = 'partial', partial = 'off', off = 'full' }
+local LABEL = {
+  full = 'on',
+  partial = 'on, without the big headings (OSC 66 / DECDHL)',
+  off = 'off',
+}
+
+function M.set_level(want)
+  if not NEXT[want] then return end
+  level = want
+  enabled = want ~= 'off'
+  local ok, toggles = pcall(require, 'configs.functions')
+  if ok then toggles.set('render_md', want) end
+  Headings.set_enabled(want == 'full')
+  M.refresh(true)
+  vim.notify('Markdown rendering ' .. LABEL[want])
+end
+
+function M.level() return level end
+
 function M.toggle()
-  enabled = not enabled
-  local ok, toggles = pcall(require, 'configs.toggles')
-  if ok then toggles.set('render_md', enabled) end
-  Headings.set_enabled(enabled)
-  M.refresh()
-  vim.notify('Markdown rendering ' .. (enabled and 'on' or 'off'))
+  M.set_level(NEXT[level])
 end
 
 local group = vim.api.nvim_create_augroup('PureMdview', { clear = true })
@@ -1515,6 +1534,8 @@ Headings.setup()
 
 M.refresh = View.refresh
 M.toggle = View.toggle
+M.set_level = View.set_level
+M.level = View.level
 M.setHighlights = View.setHighlights
 M.headings = Headings
 

@@ -12,7 +12,7 @@
 --    :PureReading width +8 / -8  wider / narrower by 8
 --    :PureReading width          shows it
 --
---  It is saved (configs/toggles.lua keys `reading`, `reading_width`) and applied again at the
+--  It is saved (configs/functions.lua keys `reading`, `reading_width`) and applied again at the
 --  next start and in new tabs that open on a file.
 --
 --  Settings (configs.lua):
@@ -41,12 +41,12 @@ local function setting(name, default)
 end
 
 local function save(on)
-  local ok, toggles = pcall(require, 'configs.toggles')
+  local ok, toggles = pcall(require, 'configs.functions')
   if ok then toggles.set('reading', on) end
 end
 
 local function saved()
-  local ok, toggles = pcall(require, 'configs.toggles')
+  local ok, toggles = pcall(require, 'configs.functions')
   return ok and toggles.get('reading', false) == true
 end
 
@@ -58,7 +58,7 @@ local MIN_WIDTH, MAX_WIDTH = 30, 400
 
 --- The width of the text column: what :PureReading width chose (saved), else vim.g.pure_reading_width, else 84.
 function M.width()
-  local ok, toggles = pcall(require, 'configs.toggles')
+  local ok, toggles = pcall(require, 'configs.functions')
   local chosen = ok and toggles.get('reading_width')
   if type(chosen) == 'number' then return chosen end
   return setting('width', 84)
@@ -157,7 +157,7 @@ function M.set_width(spec)
     return vim.notify('Reading width: ' .. current .. ' (use a number, +N or -N)')
   end
   width = math.min(math.max(width, MIN_WIDTH), MAX_WIDTH)
-  local ok, toggles = pcall(require, 'configs.toggles')
+  local ok, toggles = pcall(require, 'configs.functions')
   if ok then toggles.set('reading_width', width) end
   for _, state in pairs(tabs) do sizes(state) end
   vim.notify('Reading width ' .. width)

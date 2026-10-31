@@ -1,9 +1,8 @@
 local M = {}
 
---- Remember a toggle across restarts (configs/toggles.lua). Never raises.
+--- Remember a toggle across restarts (configs/functions.lua). Never raises.
 local function save(key, value)
-  local ok, toggles = pcall(require, 'configs.toggles')
-  if ok then toggles.set(key, value) end
+  M.set(key, value)
 end
 
 function M.ConfigHighlightByColorscheme(colorscheme, highlightGroups)
@@ -509,6 +508,9 @@ end
 
 --- Save a value (nil forgets it). Never raises: a read-only data folder must not break a toggle.
 function M.set(key, value)
+  -- Read the file again and change only this key: another Neovim (or an older
+  -- run) may have saved other toggles since this one started.
+  data = nil
   load()[key] = value
   vim.fn.mkdir(vim.fn.stdpath('data'), 'p')
   local ok, text = pcall(vim.json.encode, data)

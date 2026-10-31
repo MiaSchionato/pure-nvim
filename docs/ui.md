@@ -197,7 +197,7 @@ every tab, and saved: it is still 100 the next time), `:PureReading width +8` / 
 narrower by 8, `:PureReading width` shows it. It is kept between 30 and 400. A width chosen with the
 command wins over `vim.g.pure_reading_width`, which is only the starting value (84).
 
-The toggles stay as you left them (`lua/configs/toggles.lua`): a toggle you press is saved in
+The toggles stay as you left them (`lua/configs/functions.lua`): a toggle you press is saved in
 `stdpath('data')/toggles.json` and applied again on the next start. That covers the note
 rendering (markdown on/off, org full / no big headlines / off), the heading bar, transparency,
 diagnostics, statusline, tabline, sign column, wrap, line numbers, inlay hints and Copilot. Until a

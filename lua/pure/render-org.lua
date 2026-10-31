@@ -39,9 +39,9 @@ local M = {}
 local View, Headings -- the sections below; they call into each other
 View = M
 
--- The toggles stay as left (configs/toggles.lua): the saved value, or `default` when none.
+-- The toggles stay as left (configs/functions.lua): the saved value, or `default` when none.
 local function saved(key, default)
-  local ok, toggles = pcall(require, 'configs.toggles')
+  local ok, toggles = pcall(require, 'configs.functions')
   if ok then return toggles.get(key, default) end
   return default
 end
@@ -1047,7 +1047,7 @@ function M.set_level(want)
   if not NEXT[want] then return end
   level = want
   enabled = want ~= 'off'
-  local ok, toggles = pcall(require, 'configs.toggles')
+  local ok, toggles = pcall(require, 'configs.functions')
   if ok then toggles.set('render_org', want) end
   Headings.set_enabled(want == 'full')
   M.refresh()

@@ -221,7 +221,7 @@ copied and why: Flora note `projects/setup/Org LSP.org`.
 | What | How |
 |---|---|
 | `K` on a link | `textDocument/hover` (the `K` map falls through to `lsp.hover()` when it is not a web link): the note, or the section for a heading link, as an org block (properties drawer left out, 40 lines at most); a link that names nothing says so (`No single note or heading named "x"`, `No note or heading with the id ...`). Links read: `[[id:ID][text]]`, `[[Note]]`, `[[Note#Heading]]` (with or without `\|\|alias`), `[[file:path]]`; web links give nothing. The server reads the open buffers, so unsaved text shows. |
-| Automatic hover | `configs/lspConfigs.lua`, for **every** attached server that has a hover (not only this one): once the cursor has rested `vim.g.lsp_auto_hover_delay` ms (default 500) the hover shows by itself, silent when there is nothing. A timer of its own, so `updatetime` is untouched. `vim.g.lsp_auto_hover = false` turns it off; `<leader>tk` toggles it (saved across restarts, `configs/toggles.lua`). |
+| Automatic hover | `configs/lspConfigs.lua`, for **every** attached server that has a hover (not only this one): once the cursor has rested `vim.g.lsp_auto_hover_delay` ms (default 500) the hover shows by itself, silent when there is nothing. A timer of its own, so `updatetime` is untouched. `vim.g.lsp_auto_hover = false` turns it off; `<leader>tk` toggles it (saved across restarts, `configs/functions.lua`). |
 | `<leader>vp` | unchanged: still `flora.preview`, not the LSP. |
 
 The module has no side effects when loaded, so it can be required next to `pure.links`; the editor side that
