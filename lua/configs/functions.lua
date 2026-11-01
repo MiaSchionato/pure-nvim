@@ -229,7 +229,24 @@ end
 local namespace_id =vim.api.nvim_create_namespace("git-diff")
 -- Per buffer (b:pure_git_diff): one global flag meant toggling in a second
 -- buffer "deactivated" it there, while the first kept its marks.
-function M.gitDiffToggle()
+--- The `git diff` arguments for two commit ids: (from, to) compares the two
+--- commits, (from) compares `from` with the working tree, () is the working
+--- tree against the index.
+local function diffArgs(from, to)
+  local args = {}
+  if from and from ~= '' then args[#args + 1] = vim.fn.shellescape(from) end
+  if to and to ~= '' then args[#args + 1] = vim.fn.shellescape(to) end
+  return table.concat(args, ' ')
+end
+
+--- Toggle the diff marks of the current file.
+---
+--- gitDiffToggle(from, to)  commit ids: the diff between those two commits
+--- gitDiffToggle(from)      `from` against the working tree
+--- gitDiffToggle()          automatic: the working tree against HEAD when the
+---                          file has changes; when it is clean, HEAD~ against
+---                          HEAD (the last commit), and it says so.
+function M.gitDiffToggle(from, to)
   if vim.b.pure_git_diff then
     vim.api.nvim_buf_clear_namespace(0,namespace_id,0,-1)
     vim.b.pure_git_diff = false
@@ -242,12 +259,37 @@ function M.gitDiffToggle()
   local file_path = vim.fn.fnamemodify(buf_path, ":h")
 
 
-  local cmd = string.format("git -C %s diff -U0 --no-color -- %s",
-  vim.fn.shellescape(file_path), -- buff parent dir
-  vim.fn.shellescape(vim.fn.fnamemodify(buf_path, ":t"))
-  )
+  local dir = vim.fn.shellescape(file_path) -- buff parent dir
+  local name = vim.fn.shellescape(vim.fn.fnamemodify(buf_path, ":t"))
+  local function run(args)
+    return vim.fn.systemlist(string.format("git -C %s diff -U0 --no-color %s -- %s", dir, args, name))
+  end
 
-  local output = vim.fn.systemlist(cmd)
+  local output
+  if from and from ~= '' then
+    output = run(diffArgs(from, to))
+  else
+    -- Automatic: HEAD when the file has changes, otherwise the last commit.
+    output = run('HEAD')
+    if vim.v.shell_error ~= 0 then
+      vim.notify("Git diff: not a repository, or no commits yet", vim.log.levels.WARN)
+      return
+    end
+    if #output == 0 then
+      output = run(diffArgs('HEAD~', 'HEAD'))
+      if vim.v.shell_error ~= 0 then
+        vim.notify("Git diff: nothing to show (no previous commit)")
+        return
+      end
+      if #output > 0 then
+        vim.notify("Already at HEAD with nothing to commit: showing HEAD compared with the previous commit (HEAD~)")
+      end
+    end
+  end
+  if vim.v.shell_error ~= 0 then
+    vim.notify("Git diff failed: " .. table.concat(output, ' '), vim.log.levels.WARN)
+    return
+  end
 
   if not output or #output == 0 then
     vim.notify("Git diff: nothing to show")

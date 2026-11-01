@@ -315,7 +315,8 @@ local git = function(fn) return function(...) return require('pure.git')[fn](...
 
 map('n', "<leader>gl", fzf.fuzzyGit, func.getOpts(opts, "Git log"))
 map('n', "<leader>gg", fzf.fuzzyGitGrep, func.getOpts(opts, "Git grep"))
-map('n', "<leader>gd", func.gitDiffToggle, func.getOpts(opts, "Toggle git diff"))
+-- No arguments: map must not hand its own to gitDiffToggle(from, to).
+map('n', "<leader>gd", function() func.gitDiffToggle() end, func.getOpts(opts, "Toggle git diff (HEAD~ when everything is committed)"))
 map('n', "<leader>gs", git('status'), func.getOpts(opts, "Git status (interactive)"))
 map('n', "<leader>ga", git('addFile'), func.getOpts(opts, "Git add current file"))
 map('n', "<leader>gA", git('addAll'), func.getOpts(opts, "Git add all"))

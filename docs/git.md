@@ -16,7 +16,7 @@ reports the result as a notification.
 | `<leader>gB` | pick a local branch and switch to it |
 | `<leader>gl` | log picker; `Enter` shows the commit |
 | `<leader>gg` | grep in the repository's files |
-| `<leader>gd` | toggle the diff of the current file in the buffer: `+` in the sign column for added lines, removed lines shown in red above where they were |
+| `<leader>gd` | toggle the diff of the current file in the buffer: `+` in the sign column for added lines, removed lines shown in red above where they were. Against `HEAD` when the file has changes; when it is clean, against the previous commit (`HEAD~`), and it says so. `func.gitDiffToggle(from, to)` takes two commit ids for any other pair |
 
 Before a push, check the branch: `:!git branch --show-current`.
 
