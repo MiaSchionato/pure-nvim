@@ -787,6 +787,18 @@ function M.signatureHelpOrUp()
   return "<Up>"
 end
 
+--- <leader>tM: the big headings (OSC 66 / DECDHL) of markdown and org, off by default.
+--- Saved as `big_headings`; they only show while the rendering itself is on.
+function M.toggleBigHeadings()
+  local on = not M.get('big_headings', false)
+  M.set('big_headings', on)
+  for _, name in ipairs({ 'pure.render-md', 'pure.render-org' }) do
+    local module = package.loaded[name]
+    if type(module) == 'table' and module.applyBigHeadings then pcall(module.applyBigHeadings) end
+  end
+  vim.notify('Big headings ' .. (on and 'on' or 'off'))
+end
+
 --- One toggle for the notes: markdown (pure/render-md.lua) or org (pure/render-org.lua), by the buffer.
 function M.toggleNoteRendering()
   local module = vim.bo.filetype == 'org' and 'pure.render-org' or 'pure.render-md'

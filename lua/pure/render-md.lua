@@ -237,7 +237,7 @@ local ns = vim.api.nvim_create_namespace('pure_md_headings')
 
 local state = {
   mode = nil,      -- 'osc66' | 'decdhl' | nil (off)
-  enabled = (saved('render_md', 'full') == 'full' or saved('render_md', 'full') == true),  -- big headings: only in the full level
+  enabled = saved('render_md', 'full') ~= 'off' and saved('render_md', 'full') ~= false and saved('big_headings', false) == true,  -- big headings: <leader>tM, off by default
   cursor = nil,    -- lnum of the heading under the cursor
   drawn = {},      -- blocks written by the last render: { row, col, width, height }
   setup = false,
@@ -739,9 +739,9 @@ local M = {}
 
 local ns = vim.api.nvim_create_namespace('pure_mdview')
 local startLevel = saved('render_md', 'full')
-if startLevel == true then startLevel = 'full' elseif startLevel == false then startLevel = 'off' end
-if startLevel ~= 'partial' and startLevel ~= 'off' then startLevel = 'full' end
-local level = startLevel -- 'full' | 'partial' (no terminal big headings) | 'off'
+if startLevel == false then startLevel = 'off' end
+if startLevel ~= 'off' then startLevel = 'full' end
+local level = startLevel -- 'full' | 'off' (the big headings are separate: <leader>tM)
 local enabled = level ~= 'off'
 
 local heading_icons = { '󰲡 ', '󰲣 ', '󰲥 ', '󰲧 ', '󰲩 ', '󰲫 ' }
@@ -1460,12 +1460,14 @@ function M.refresh(force)
   vim.b[buf].pure_md_link = cursorLink()
 end
 
-local NEXT = { full = 'partial', partial = 'off', off = 'full' }
-local LABEL = {
-  full = 'on',
-  partial = 'on, without the big headings (OSC 66 / DECDHL)',
-  off = 'off',
-}
+local NEXT = { full = 'off', off = 'full' }
+local LABEL = { full = 'on', off = 'off' }
+
+--- The big headings (OSC 66 / DECDHL, <leader>tM) need the rendering on too.
+local function bigHeadings(on)
+  local ok, toggles = pcall(require, 'configs.functions')
+  return on and ok and toggles.get('big_headings', false) == true
+end
 
 function M.set_level(want)
   if not NEXT[want] then return end
@@ -1473,9 +1475,15 @@ function M.set_level(want)
   enabled = want ~= 'off'
   local ok, toggles = pcall(require, 'configs.functions')
   if ok then toggles.set('render_md', want) end
-  Headings.set_enabled(want == 'full')
+  Headings.set_enabled(bigHeadings(enabled))
   M.refresh(true)
   vim.notify('Markdown rendering ' .. LABEL[want])
+end
+
+--- <leader>tM changed: draw or stop drawing the big headings.
+function M.applyBigHeadings()
+  Headings.set_enabled(bigHeadings(enabled))
+  M.refresh(true)
 end
 
 function M.level() return level end
@@ -1536,6 +1544,7 @@ M.refresh = View.refresh
 M.toggle = View.toggle
 M.set_level = View.set_level
 M.level = View.level
+M.applyBigHeadings = View.applyBigHeadings
 M.setHighlights = View.setHighlights
 M.headings = Headings
 

@@ -55,7 +55,7 @@ Its syntax colours stay. The file is the org twin of `render-md.lua` (settings,
 view, bigger headlines) and uses the same colours (`pure/notecolors.lua`, which
 follow the colorscheme). The text is never changed; marks are drawn over it.
 
-`<leader>om` (Toggles) turns the drawing on and off, in markdown and in org notes.
+`<leader>tm` turns the drawing on and off, in markdown and in org notes; `<leader>tM` turns the big headlines on (off by default).
 
 | In the note | On screen |
 |---|---|
@@ -91,9 +91,9 @@ draw the icon and band. Same checks as the markdown headings: `vim.g.pure_org_he
 `:PureOrgHeadings [auto|osc66|decdhl|off]` changes it while Neovim runs. In WSL set it to
 `decdhl` for WezTerm, as for markdown. The terminal code is a copy of `render-md.lua`'s.
 
-`<leader>om` cycles the rendering through three states: full, without the big headlines
-(everything else stays rendered; only the OSC 66 / DECDHL headlines go) and off.
-`require('pure.render-org').set_level('full'|'partial'|'off')` sets one directly.
+`<leader>tm` turns the rendering on and off; `<leader>tM` turns the big headlines (OSC 66 / DECDHL) on or off,
+off by default (saved as `big_headings`; they show only while the rendering is on).
+`require('pure.render-org').set_level('full'|'off')` sets the rendering directly.
 
 Tested in Kitsu (kitty for Windows) on the right monitor, with the real config, on a copy of the
 Flora garden notes: scrolling by lines and pages, fast `Ctrl-D/U/E/Y`, folds, inserting, toggling.

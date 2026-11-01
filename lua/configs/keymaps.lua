@@ -365,6 +365,7 @@ map('n', '<leader>th', func.toggleWordHighlight, func.getOpts(opts, "Toggle word
 map('n', '<leader>h', func.toggleWordHighlight, func.getOpts(opts, "Toggle word highlight (short form)"))
 map({ 'n', 'v' }, '<leader>tr', func.toggleRelativenumber, func.getOpts(opts, "Toggle relativenumber"))
 map('n', '<leader>tm', func.toggleNoteRendering, func.getOpts(opts, "Toggle note rendering (markdown, org)"))
+map('n', '<leader>tM', func.toggleBigHeadings, func.getOpts(opts, "Toggle big headings (OSC 66 / DECDHL; off by default)"))
 map('n', '<leader>tR', function() require('pure.reading').toggle() end, func.getOpts(opts, "Toggle reading mode (wide margins)"))
 map({ 'n', 'v' }, '<leader>tn', function()
   func.toggleNumber()
