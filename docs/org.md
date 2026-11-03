@@ -55,7 +55,7 @@ Its syntax colours stay. The file is the org twin of `render-md.lua` (settings,
 view, bigger headlines) and uses the same colours (`pure/notecolors.lua`, which
 follow the colorscheme). The text is never changed; marks are drawn over it.
 
-`<leader>om` (Toggles) turns the drawing on and off, in markdown and in org notes.
+`<leader>tm` turns the drawing on and off, in markdown and in org notes; `<leader>tM` turns the big headlines on (off by default).
 
 | In the note | On screen |
 |---|---|
@@ -72,6 +72,40 @@ follow the colorscheme). The text is never changed; marks are drawn over it.
 | `#+title: Name` | drawn as a first-level title |
 
 Blocks and drawers are read first, so a `*` or a link inside a src block is plain text.
+
+**Tables.** org.nvim aligns a table by the width the buffer *shows* (a link counts as its text,
+hidden emphasis marks as nothing, like Emacs' `org-string-width`), but only when its own conceal
+options are on, and they are off in `lua/plugins/org.lua`. `render-org.lua` sets the per-buffer
+flags `b:org_link_descriptive` and `b:org_hide_emphasis_markers` to follow the rendering
+(`<leader>tm`) and `vim.g.pure_org_emphasis`, so `|` columns line up on screen. With the
+rendering off the raw width is used. `startup_align_all_tables = true` (`lua/plugins/org.lua`)
+aligns every table when a note is opened (like `#+STARTUP: align`), so tables written by scripts
+show straight at once; the buffer then counts as modified.
+
+**Shrinking wide tables (`<leader>tT`).** org.nvim can shrink a column: a column with a width cookie
+`<W>` shows the first W characters of each cell and a `…`, and the text is never changed (the drawing
+of Emacs' `org-table-shrink`). The toggle works out the widths that make each table wider than the
+window fit (columns that fit keep their width, the others share what is left, the widest first) and
+hands them to that drawing, so **no cookie is written into the note**. A table with cookies of its
+own is left to org.nvim. In Insert mode a table shows in full. While a table is shrunk the window
+does not wrap (a raw row longer than the window would take extra screen rows under the drawing),
+and `wrap` comes back when none is. Saved as `table_shrink` (the toggles of `configs/functions.lua`);
+the code is "Narrowing wide tables" in `lua/pure/render-org.lua`.
+
+**Wrapping wide tables into rows (`<leader>tW`).** The other way, and this one **changes the text**:
+a cell that does not fit its column continues on the next line, as an extra table row holding only the
+rest of that cell (the other cells of that row empty). Widths are worked out as for shrinking, the
+rows are written aligned by org.nvim's own formatter, so the table fits the window in the text and on
+screen, and nothing needs the window to stop wrapping or the cursor line to be drawn differently. It
+runs when a note is opened and when Insert mode is left in a table; a table that already fits is left
+alone, and so is one with a `#+TBLFM` line. A `[[link]]` or an `=verbatim=` is never split; a word wider
+than its column is cut. The continuation rows are remembered (extmarks), so turning the toggle off joins
+them back into their rows (this session only: rows written in an earlier session are ordinary rows).
+Saved as `table_wrap`, off by default. **A script that reads the note's tables sees the extra rows**
+(the maps of `D:\Assets\_maps` are read by one): do not save a wrapped copy of such a file.
+`<leader>tT` and `<leader>tW` work alone or together (wrapped tables fit, so there is nothing left to shrink).
+
+Not covered by the width fix: the `||alias` part of a link, which org.nvim counts but the render hides.
 
 Links keep the buffer's own text: the brackets and the target are concealed and the text
 stays, coloured. Neovim sizes a wrapped line by its **raw** width, concealed text included, so
@@ -91,9 +125,9 @@ draw the icon and band. Same checks as the markdown headings: `vim.g.pure_org_he
 `:PureOrgHeadings [auto|osc66|decdhl|off]` changes it while Neovim runs. In WSL set it to
 `decdhl` for WezTerm, as for markdown. The terminal code is a copy of `render-md.lua`'s.
 
-`<leader>om` cycles the rendering through three states: full, without the big headlines
-(everything else stays rendered; only the OSC 66 / DECDHL headlines go) and off.
-`require('pure.render-org').set_level('full'|'partial'|'off')` sets one directly.
+`<leader>tm` turns the rendering on and off; `<leader>tM` turns the big headlines (OSC 66 / DECDHL) on or off,
+off by default (saved as `big_headings`; they show only while the rendering is on).
+`require('pure.render-org').set_level('full'|'off')` sets the rendering directly.
 
 Tested in Kitsu (kitty for Windows) on the right monitor, with the real config, on a copy of the
 Flora garden notes: scrolling by lines and pages, fast `Ctrl-D/U/E/Y`, folds, inserting, toggling.
@@ -221,7 +255,7 @@ copied and why: Flora note `projects/setup/Org LSP.org`.
 | What | How |
 |---|---|
 | `K` on a link | `textDocument/hover` (the `K` map falls through to `lsp.hover()` when it is not a web link): the note, or the section for a heading link, as an org block (properties drawer left out, 40 lines at most); a link that names nothing says so (`No single note or heading named "x"`, `No note or heading with the id ...`). Links read: `[[id:ID][text]]`, `[[Note]]`, `[[Note#Heading]]` (with or without `\|\|alias`), `[[file:path]]`; web links give nothing. The server reads the open buffers, so unsaved text shows. |
-| Automatic hover | `configs/lspConfigs.lua`, for **every** attached server that has a hover (not only this one): once the cursor has rested `vim.g.lsp_auto_hover_delay` ms (default 500) the hover shows by itself, silent when there is nothing. A timer of its own, so `updatetime` is untouched. `vim.g.lsp_auto_hover = false` turns it off; `<leader>tk` toggles it (saved across restarts, `configs/toggles.lua`). |
+| Automatic hover | `configs/lspConfigs.lua`, for **every** attached server that has a hover (not only this one): once the cursor has rested `vim.g.lsp_auto_hover_delay` ms (default 500) the hover shows by itself, silent when there is nothing. A timer of its own, so `updatetime` is untouched. `vim.g.lsp_auto_hover = false` turns it off; `<leader>tk` toggles it (saved across restarts, `configs/functions.lua`). |
 | `<leader>vp` | unchanged: still `flora.preview`, not the LSP. |
 
 The module has no side effects when loaded, so it can be required next to `pure.links`; the editor side that

@@ -1,9 +1,8 @@
 local M = {}
 
---- Remember a toggle across restarts (configs/toggles.lua). Never raises.
+--- Remember a toggle across restarts (configs/functions.lua). Never raises.
 local function save(key, value)
-  local ok, toggles = pcall(require, 'configs.toggles')
-  if ok then toggles.set(key, value) end
+  M.set(key, value)
 end
 
 function M.ConfigHighlightByColorscheme(colorscheme, highlightGroups)
@@ -62,6 +61,11 @@ function M.MyTabline()
   return line .. "%#TabLineFill#"
 end
 
+--- The notice every toggle shows, so it is clear what was just turned on or off: "Wrap on", "Wrap off".
+local function announce(label, on)
+  vim.notify(label .. (on and ' on' or ' off'))
+end
+
 local zen_mode_enabled = false
 function M.toggleZenMode(show_notify)
   show_notify = show_notify ~= false -- Default to true if not explicitly false
@@ -115,6 +119,7 @@ function M.toggleStatusline()
     vim.o.laststatus = 0
   end
   save('laststatus', vim.o.laststatus)
+  announce('Statusline', vim.o.laststatus ~= 0)
 end
 
 function M.toggleTabline()
@@ -124,20 +129,24 @@ function M.toggleTabline()
         vim.o.showtabline = 1
     end
     save('showtabline', vim.o.showtabline)
+    announce('Tabline', vim.o.showtabline ~= 0)
 end
 
-function M.toggleNumber()
+--- `quiet` leaves the notice to the caller (<leader>tn flips both number options and says it once).
+function M.toggleNumber(quiet)
   if vim.o.number == true then
     vim.o.number = false
   else
     vim.o.number = true
   end
   save('number', vim.o.number)
+  if not quiet then announce('Line numbers', vim.o.number) end
 end
 
-function M.toggleRelativenumber()
+function M.toggleRelativenumber(quiet)
   vim.opt.relativenumber = not vim.opt.relativenumber:get()
   save('relativenumber', vim.o.relativenumber)
+  if not quiet then announce('Relative line numbers', vim.o.relativenumber) end
 end
 
 function M.toggleSigncolumn()
@@ -147,17 +156,20 @@ function M.toggleSigncolumn()
     vim.wo.signcolumn = 'yes'
   end
   save('signcolumn', vim.wo.signcolumn)
+  announce('Signcolumn', vim.wo.signcolumn ~= 'no')
 end
 
 function M.toggleWrap()
   vim.wo.wrap = not vim.wo.wrap
   save('wrap', vim.wo.wrap)
+  announce('Wrap', vim.wo.wrap)
 end
 
 function M.toggleDiagnostics()
   local on = not vim.diagnostic.config().virtual_text
   vim.diagnostic.config({ virtual_text = on })
   save('diagnostics_virtual_text', on)
+  announce('Diagnostics', on)
 end
 
 function M.toggleInlayHints()
@@ -167,6 +179,7 @@ function M.toggleInlayHints()
   local on = not vim.lsp.inlay_hint.is_enabled()
   vim.lsp.inlay_hint.enable(on)
   save('inlay_hints', on)
+  announce('Inlay hints', on)
 end
 
 function M.getOpts(base_opts, desc)
@@ -201,6 +214,7 @@ end
 function M.toggleHighlightSearch()
   local is_active = vim.opt.hlsearch:get()
   vim.opt.hlsearch = not is_active
+  announce('Search highlight', not is_active)
 end
 
 --- Highlight every occurrence of the word under the cursor, or turn the
@@ -217,6 +231,7 @@ function M.toggleWordHighlight()
 
   if vim.o.hlsearch and (word == '' or vim.fn.getreg('/') == pattern) then
     vim.o.hlsearch = false
+    announce('Word highlight', false)
     return
   end
   if word == '' then return end
@@ -224,16 +239,31 @@ function M.toggleWordHighlight()
   vim.fn.setreg('/', pattern)
   vim.fn.histadd('/', pattern) -- so / then <Up> recalls it
   vim.o.hlsearch = true
+  announce('Word highlight', true)
 end
-
--- TODO: Move this func to its own file to extend functionality
--- Git Diff
 
 -- TODO:Add signcolumn always shown ()
 local namespace_id =vim.api.nvim_create_namespace("git-diff")
 -- Per buffer (b:pure_git_diff): one global flag meant toggling in a second
 -- buffer "deactivated" it there, while the first kept its marks.
-function M.gitDiffToggle()
+--- The `git diff` arguments for two commit ids: (from, to) compares the two
+--- commits, (from) compares `from` with the working tree, () is the working
+--- tree against the index.
+local function diffArgs(from, to)
+  local args = {}
+  if from and from ~= '' then args[#args + 1] = vim.fn.shellescape(from) end
+  if to and to ~= '' then args[#args + 1] = vim.fn.shellescape(to) end
+  return table.concat(args, ' ')
+end
+
+--- Toggle the diff marks of the current file.
+---
+--- gitDiffToggle(from, to)  commit ids: the diff between those two commits
+--- gitDiffToggle(from)      `from` against the working tree
+--- gitDiffToggle()          automatic: the working tree against HEAD when the
+---                          file has changes; when it is clean, HEAD~ against
+---                          HEAD (the last commit), and it says so.
+function M.gitDiffToggle(from, to)
   if vim.b.pure_git_diff then
     vim.api.nvim_buf_clear_namespace(0,namespace_id,0,-1)
     vim.b.pure_git_diff = false
@@ -246,12 +276,37 @@ function M.gitDiffToggle()
   local file_path = vim.fn.fnamemodify(buf_path, ":h")
 
 
-  local cmd = string.format("git -C %s diff -U0 --no-color -- %s",
-  vim.fn.shellescape(file_path), -- buff parent dir
-  vim.fn.shellescape(vim.fn.fnamemodify(buf_path, ":t"))
-  )
+  local dir = vim.fn.shellescape(file_path) -- buff parent dir
+  local name = vim.fn.shellescape(vim.fn.fnamemodify(buf_path, ":t"))
+  local function run(args)
+    return vim.fn.systemlist(string.format("git -C %s diff -U0 --no-color %s -- %s", dir, args, name))
+  end
 
-  local output = vim.fn.systemlist(cmd)
+  local output
+  if from and from ~= '' then
+    output = run(diffArgs(from, to))
+  else
+    -- Automatic: HEAD when the file has changes, otherwise the last commit.
+    output = run('HEAD')
+    if vim.v.shell_error ~= 0 then
+      vim.notify("Git diff: not a repository, or no commits yet", vim.log.levels.WARN)
+      return
+    end
+    if #output == 0 then
+      output = run(diffArgs('HEAD~', 'HEAD'))
+      if vim.v.shell_error ~= 0 then
+        vim.notify("Git diff: nothing to show (no previous commit)")
+        return
+      end
+      if #output > 0 then
+        vim.notify("Already at HEAD with nothing to commit: showing HEAD compared with the previous commit (HEAD~)")
+      end
+    end
+  end
+  if vim.v.shell_error ~= 0 then
+    vim.notify("Git diff failed: " .. table.concat(output, ' '), vim.log.levels.WARN)
+    return
+  end
 
   if not output or #output == 0 then
     vim.notify("Git diff: nothing to show")
@@ -485,6 +540,427 @@ function M.toggleTransparency()
       vim.g.pure_reapplying_theme = false
     end
   end
+  announce('Transparency', M.transparent)
+end
+
+local file = vim.fn.stdpath('data') .. '/toggles.json'
+local data
+
+local function load()
+  if data then return data end
+  data = {}
+  local fh = io.open(file, 'r')
+  if fh then
+    local text = fh:read('*a')
+    fh:close()
+    local ok, decoded = pcall(vim.json.decode, text)
+    if ok and type(decoded) == 'table' then data = decoded end
+  end
+  return data
+end
+
+--- The saved value of a toggle, or `default` when it was never pressed.
+function M.get(key, default)
+  local value = load()[key]
+  if value == nil then return default end
+  return value
+end
+
+--- Save a value (nil forgets it). Never raises: a read-only data folder must not break a toggle.
+function M.set(key, value)
+  -- Read the file again and change only this key: another Neovim (or an older
+  -- run) may have saved other toggles since this one started.
+  data = nil
+  load()[key] = value
+  vim.fn.mkdir(vim.fn.stdpath('data'), 'p')
+  local ok, text = pcall(vim.json.encode, data)
+  if not ok then return end
+  local fh = io.open(file, 'w')
+  if fh then
+    fh:write(text)
+    fh:close()
+  end
+end
+
+-- -----------------------------------------------------------------------------
+--  The coloured bar behind the headings (md and org): <leader>oH
+-- -----------------------------------------------------------------------------
+function M.headingBand()
+  return M.get('heading_band', true)
+end
+
+function M.setHeadingBand(on)
+  M.set('heading_band', on)
+  for _, name in ipairs({ 'pure.render-md', 'pure.render-org' }) do
+    local module = package.loaded[name]
+    if type(module) == 'table' and module.refresh then pcall(module.refresh, true) end
+  end
+end
+
+function M.toggleHeadingBand()
+  local on = not M.headingBand()
+  M.setHeadingBand(on)
+  vim.notify('Heading background ' .. (on and 'on' or 'off'))
+end
+
+-- -----------------------------------------------------------------------------
+--  The automatic hover (configs/lspConfigs.lua): <leader>tk
+-- -----------------------------------------------------------------------------
+--  On unless vim.g.lsp_auto_hover is false; the choice is saved like the other toggles.
+function M.toggleAutoHover()
+  local on = vim.g.lsp_auto_hover == false
+  vim.g.lsp_auto_hover = on
+  M.set('lsp_auto_hover', on)
+  vim.notify('Automatic hover ' .. (on and 'on' or 'off'))
+end
+
+-- -----------------------------------------------------------------------------
+--  Put the saved state back
+-- -----------------------------------------------------------------------------
+local function restore()
+  local function saved(key, apply)
+    local value = M.get(key)
+    if value ~= nil then pcall(apply, value) end
+  end
+
+  saved('number', function(v) vim.o.number = v end)
+  saved('relativenumber', function(v) vim.o.relativenumber = v end)
+  saved('signcolumn', function(v) vim.o.signcolumn = v end)
+  saved('wrap', function(v) vim.o.wrap = v end)
+  saved('laststatus', function(v) vim.o.laststatus = v end)
+  saved('showtabline', function(v) vim.o.showtabline = v end)
+  saved('diagnostics_virtual_text', function(v) vim.diagnostic.config({ virtual_text = v }) end)
+  saved('copilot', function(v) vim.g.copilot_enabled = v end)
+  saved('lsp_auto_hover', function(v) vim.g.lsp_auto_hover = v end)
+  saved('transparent', function(v) require('configs.functions').transparent = v end)
+end
+
+restore()
+
+-- What needs a running UI or the LSP client: after startup.
+vim.api.nvim_create_autocmd('VimEnter', {
+  once = true,
+  callback = function()
+    local func = require('configs.functions')
+    if func.transparent then pcall(func.applyTransparency) end
+    local hints = M.get('inlay_hints')
+    if hints ~= nil then pcall(vim.lsp.inlay_hint.enable, hints) end
+  end,
+})
+
+vim.api.nvim_create_user_command('PureToggles', function(opts)
+  if opts.args == 'reset' then
+    data = {}
+    pcall(os.remove, file)
+    vim.notify('Saved toggles forgotten (the defaults apply on the next start)')
+    return
+  end
+  vim.notify(vim.inspect(load()))
+end, {
+  nargs = '?',
+  complete = function() return { 'reset' } end,
+  desc = 'Show or reset the saved toggle states',
+})
+
+
+--- The directory `dir` names (a path, or a function returning one) when it exists; else nil, saying why.
+--- Used by explore and inDir.
+local function checkedDir(dir)
+  -- Not `type(dir) == 'function' and dir() or dir`: when dir() returns nil
+  -- (no vault yet) that idiom falls through to `or dir`, the function itself.
+  local path = dir
+  if type(dir) == 'function' then path = dir() end
+  if not path then
+    vim.notify('No directory set for this key', vim.log.levels.WARN)
+    return nil
+  end
+  if vim.fn.isdirectory(path) == 0 then
+    vim.notify('Directory does not exist: ' .. path, vim.log.levels.WARN)
+    return nil
+  end
+  return path
+end
+
+--- Toggle an oil float on `dir` (a path, or a function returning one).
+---
+--- The same key closes the float again. That check comes first: inside oil the
+--- buffer name is an oil:// URL, so here() would yield a path that isdirectory()
+--- rejects and the key would warn instead of closing.
+---
+--- oil is required on use: plugins/oil.lua loads after the keymaps, so the module
+--- is not on the runtimepath yet when they are defined.
+function M.explore(dir)
+  return function()
+    local oil = require('oil')
+    if vim.w.is_oil_win then
+      return oil.close()
+    end
+    local path = checkedDir(dir)
+    if path then oil.open_float(path) end
+  end
+end
+
+-- =============================================================================
+--  Helpers of the keymaps (moved from keymaps.lua, the logic as it was)
+-- =============================================================================
+
+local home = vim.uv.os_homedir():gsub("\\", "/") .. "/"
+
+--- The vault folder with a trailing slash.
+local function vaultDir()
+  local vault = vim.fs.normalize(vim.fn.expand(vim.g.flora_dir or '~/Flora'))
+  return vault and (vault .. '/') or nil
+end
+
+--- One table feeds explore (<leader>e_), find (<leader>f_) and new file
+--- (<leader>n_), so each directory is written once instead of three times in
+--- three near-identical blocks.
+---
+--TODO:Make those global variables and put it on configs.lua
+M.dirs = {
+  ['~'] = home,
+  ['.'] = home .. '.config/',
+  n     = home .. '.config/nvim/',
+  -- The vault (org), vim.g.flora_dir or ~/Flora (pure/flora.lua).
+  v     = vaultDir,
+  p     = home .. 'Projects',
+  -- The file new notes go to (<leader>oi opens it): vim.g.orgls_inbox, as in lsp/orgls.lua, or inbox.org.
+  inbox = function()
+    local vault = vaultDir()
+    return vault and (vault .. (vim.g.orgls_inbox or 'inbox.org')) or nil
+  end,
+}
+
+--- Directory `levels` up from the current file, always with a trailing slash.
+--- A function, not a string: a string would be expanded once at startup and
+--- keep pointing at the first file. In the scratch note (which lives in the
+--- data folder) it counts from the folder the window was opened from:
+--- pure/scratch.lua, scratch.dir(levels up).
+function M.up(levels) return require('pure.scratch').dir(levels) .. '/' end
+
+--- Directory of the current file.
+function M.here()
+  return M.up(0)
+end
+
+--- The directories above the current file, as functions (see M.up).
+M.fileDirs = {
+  p      = function() return M.up(0) end,
+  pp     = function() return M.up(1) end,
+  ["3p"] = function() return M.up(2) end,
+  ["4p"] = function() return M.up(3) end,
+}
+
+--- Run `picker` on `dir`, saying so when the directory simply is not there.
+--- Without this the picker opens, the shell fails on a missing path, and the
+--- floating window blinks shut with nothing explaining why.
+function M.inDir(picker, dir)
+  return function()
+    local path = checkedDir(dir)
+    if path then picker(path) end
+  end
+end
+
+--- Move lines (<up>/<down> in normal and visual mode).
+---
+--- Guarded by buffer type. The fuzzy pickers run fzf inside a terminal buffer,
+--- and any moment spent in terminal-normal mode there (fuzzyLogic only calls
+--- startinsert after a delay) meant the arrow keys fired this mapping instead of
+--- reaching fzf -- failing with "E21: Cannot make changes, 'modifiable' is off"
+--- and leaving the arrows apparently dead inside the picker.
+---
+--- Returning the key itself falls through to the builtin, because these mappings
+--- are noremap: the returned key is not looked up again.
+function M.moveLine(keys, fallback)
+  return function()
+    if vim.bo.buftype ~= '' or not vim.bo.modifiable then
+      return fallback
+    end
+    return keys
+  end
+end
+
+--- The file about you that every LLM request reads (outside any git repository).
+function M.openUserContext()
+  local path = require('pure.llm').userContextFile()
+  if not path then return vim.notify('User context is off (vim.g.pure_llm_user_context = false)') end
+  vim.cmd('edit ' .. vim.fn.fnameescape(path))
+end
+
+--- On a link, K follows it (pure/notes.lua): in markdown any link, elsewhere
+--- only web links, since [[x]] in code is not a note. Else LSP hover.
+function M.followOrHover()
+  if require('pure.notes').follow(vim.bo.filetype ~= 'markdown') then return end
+  vim.lsp.buf.hover()
+end
+
+--- <Up> in insert mode (expr map). Signature help only where a language server
+--- can answer: in markdown (no such server) it raised 'method
+--- "textDocument/signatureHelp" is not supported' on every press (Improvment.md).
+--- Elsewhere <Up> moves up, as it would unmapped.
+function M.signatureHelpOrUp()
+  if #vim.lsp.get_clients({ bufnr = 0, method = 'textDocument/signatureHelp' }) > 0 then
+    return "<Cmd>lua vim.lsp.buf.signature_help()<CR>"
+  end
+  return "<Up>"
+end
+
+--- <leader>tM: the big headings (OSC 66 / DECDHL) of markdown and org, off by default.
+--- Saved as `big_headings`; they only show while the rendering itself is on.
+function M.toggleBigHeadings()
+  local on = not M.get('big_headings', false)
+  M.set('big_headings', on)
+  for _, name in ipairs({ 'pure.render-md', 'pure.render-org' }) do
+    local module = package.loaded[name]
+    if type(module) == 'table' and module.applyBigHeadings then pcall(module.applyBigHeadings) end
+  end
+  vim.notify('Big headings ' .. (on and 'on' or 'off'))
+end
+
+--- <leader>tT: shrink the org tables wider than the window (width cookies worked out, none written into the note).
+function M.toggleTableShrink()
+  if vim.bo.filetype ~= 'org' then
+    vim.notify('Table shrink is for org notes', vim.log.levels.WARN)
+    return
+  end
+  require('pure.render-org').toggleTableShrink()
+end
+
+--- <leader>tW: wrap the org tables wider than the window into extra rows (the text changes; off joins them back).
+function M.toggleTableWrap()
+  if vim.bo.filetype ~= 'org' then
+    vim.notify('Table wrap is for org notes', vim.log.levels.WARN)
+    return
+  end
+  require('pure.render-org').toggleTableWrap()
+end
+
+--- One toggle for the notes: markdown (pure/render-md.lua) or org (pure/render-org.lua), by the buffer.
+function M.toggleNoteRendering()
+  local module = vim.bo.filetype == 'org' and 'pure.render-org' or 'pure.render-md'
+  require(module).toggle()
+end
+
+--- Delete the fold under the cursor, saying why when there is none.
+function M.deleteFold()
+  local ok, err = pcall(vim.cmd, 'normal! zd')
+  if not ok then vim.notify(err:gsub('^.-E%d+: ', ''), vim.log.levels.WARN) end
+end
+
+--- One key for zR / zM: opens everything if any fold is closed, otherwise
+--- closes them all.
+function M.toggleAllFolds()
+  for lnum = 1, vim.fn.line('$') do
+    if vim.fn.foldclosed(lnum) ~= -1 then return vim.cmd('normal! zR') end
+  end
+  vim.cmd('normal! zM')
+end
+
+--- dd (expr map): an empty line is deleted without overwriting the default register.
+function M.smartDd()
+  if vim.api.nvim_get_current_line():match("^%s*$") then
+    return '"_dd'
+  end
+  return "dd"
+end
+
+-- -----------------------------------------------------------------------------
+--  Insert mode: Tab, S-Tab, Esc, Enter (completion, closing pairs, snippets, lists)
+-- -----------------------------------------------------------------------------
+--  Tab in insert mode (as asked in the vault's Improvment.md, second
+--  round: Tab must not indent, and walks the suggestions). In order:
+--    the completion menu open           next suggestion (<CR> takes it)
+--    closers right after the cursor     step past all of them: "[[a|]]" -> "[[a]]|"
+--    a snippet with a next field        jump to it
+--    anything else                      a plain Tab, the one way left to
+--                                       type one (<C-v><Tab> works too)
+--  Tab never opens the menu itself ('autocomplete' opens it as you type):
+--  returning <C-n> from this mapping with the menu closed crashed Neovim
+--  0.12.5 (segfault) together with 'lazyredraw' and 'autocomplete'; it
+--  reproduces with --clean, so it is Neovim's bug, not this config's.
+--  The menu wins over a closer (third round, "option b"): inside [[...]]
+--  the ]] is always there, so with the closer first Tab could never pick a
+--  link. Esc closes the menu (below), then Tab steps past the pair.
+--  The first version of this indented a markdown list item (<C-t>); that
+--  was taken out on request. >> and << in normal mode still indent.
+local closers = "[%)%]}>\"'`]"
+local function closersAhead()
+  local col = vim.api.nvim_win_get_cursor(0)[2]
+  local ahead = vim.api.nvim_get_current_line():sub(col + 1)
+  return #(ahead:match('^' .. closers .. '+') or '')
+end
+
+-- Right after a list item's marker ("- [ ] |", "- |", "1. |"), where the
+-- item is still empty: Tab / S-Tab make it a sub-item / take it back out
+-- (Improvment.md, fourth round). Anywhere else Tab never indents.
+local function atItemStart()
+  local it = require('pure.lists').item()
+  return it ~= nil and vim.api.nvim_win_get_cursor(0)[2] == it.start
+end
+
+--- <Tab> in insert mode (expr map, replace_keycodes).
+function M.insertTab()
+  if atItemStart() then
+    return (vim.fn.pumvisible() == 1 and "<C-e>" or "") .. "<C-t>"
+  end
+  if vim.fn.pumvisible() == 1 then return "<C-n>" end
+  local n = closersAhead()
+  if n > 0 then return string.rep("<right>", n) end
+  if vim.snippet.active({ direction = 1 }) then
+    return "<cmd>lua vim.snippet.jump(1)<cr>"
+  end
+  return "<tab>"
+end
+
+--- Mirrors Tab backwards: previous suggestion, snippet back; else the builtin.
+function M.insertShiftTab()
+  if atItemStart() then
+    return (vim.fn.pumvisible() == 1 and "<C-e>" or "") .. "<C-d>"
+  end
+  if vim.fn.pumvisible() == 1 then return "<C-p>" end
+  -- was `direction = 1` here too, so the backward jump asked whether a
+  -- *forward* jump was possible.
+  if vim.snippet.active({ direction = -1 }) then
+    return "<cmd>lua vim.snippet.jump(-1)<cr>"
+  end
+  return "<S-tab>"
+end
+
+--- Esc with the completion menu open closes only the menu and stays in
+--- insert mode (Improvment.md): then Tab steps past the pair. A suggestion
+--- picked with Tab is kept (<C-y>); with none picked the typed text stays
+--- (<C-e>). A second Esc leaves insert mode as always.
+function M.insertEsc()
+  if vim.fn.pumvisible() == 0 then return "<Esc>" end
+  return vim.fn.complete_info({ 'selected' }).selected ~= -1 and "<C-y>" or "<C-e>"
+end
+
+--- <CR>: a Copilot suggestion on screen is accepted. With the completion menu
+--- open the suggestion is taken: the selected item, or the first one when
+--- none is (completeopt has noselect, so usually none is). Only when the
+--- word typed already is that first item (nothing left to complete) does
+--- <CR> close the menu and make the new line. Otherwise, in a markdown list,
+--- the next item starts (pure/lists.lua), else a plain new line.
+--- (expr map, replace_keycodes = false: the keys are returned already translated.)
+function M.insertEnter()
+  local ok, shown = pcall(vim.fn['copilot#GetDisplayedSuggestion'])
+  if ok and type(shown) == 'table' and (shown.text or '') ~= '' then
+    return vim.fn['copilot#Accept']('')
+  end
+  local cr = vim.keycode('<CR>')
+  if vim.fn.pumvisible() == 1 then
+    local info = vim.fn.complete_info({ 'selected', 'items' })
+    if info.selected ~= -1 then return vim.keycode('<C-y>') end
+    local first = info.items[1] and info.items[1].word or ''
+    local col = vim.api.nvim_win_get_cursor(0)[2]
+    local before = vim.api.nvim_get_current_line():sub(1, col)
+    if first ~= '' and before:sub(-#first) ~= first then
+      return vim.keycode('<C-n><C-y>')
+    end
+    local list = require('pure.lists').enter()
+    return vim.keycode('<C-e>') .. (list or cr)
+  end
+  return require('pure.lists').enter() or cr
 end
 
 return M

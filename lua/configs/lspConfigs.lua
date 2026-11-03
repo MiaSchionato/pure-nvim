@@ -162,9 +162,18 @@ vim.api.nvim_create_autocmd({ 'CursorMoved', 'BufEnter' }, {
     if vim.g.lsp_auto_hover == false then return end
     local win = vim.api.nvim_get_current_win()
     local pos = vim.api.nvim_win_get_cursor(win)
-    hoverTimer:start(vim.g.lsp_auto_hover_delay or 500, 0, vim.schedule_wrap(function()
+    hoverTimer:start(vim.g.lsp_auto_hover_delay or 2000, 0, vim.schedule_wrap(function()
       autoHoverNow(args.buf, win, pos[1], pos[2])
     end))
   end,
 })
 vim.api.nvim_create_autocmd('InsertEnter', { group = lang_settings_group, callback = function() hoverTimer:stop() end })
+
+-- Locale. The shell here exports LANG=C.UTF-8 and LC_ALL=C.UTF-8; Windows' C library does not know
+-- "C.UTF-8", so Neovim stays in the plain "C" locale and :checkhealth says the locale does not
+-- support UTF-8. ".UTF-8" is the system default locale with the UTF-8 code page, which it does know.
+-- (Only the character classes change; the text was always UTF-8 inside Neovim.)
+if vim.v.ctype == 'C' then
+  pcall(vim.cmd, 'language ctype .UTF-8')
+end
+

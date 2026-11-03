@@ -168,13 +168,19 @@ See [manim.md](manim.md).
 
 ## `<leader>o` – Toggles
 
+Every toggle says what it did in a notice ("Wrap on", "Wrap off", ...); `<leader>tn` flips both number
+options and says "Line numbers on/off" once.
+
 | Key | Mode | What |
 |---|---|---|
 | `<leader>oc` | n | Toggle signcolumn |
 | `<leader>od` | n | Toggle diagnostics |
 | `<leader>oh` | n | Toggle word highlight |
 | `<leader>oi` | n | Toggle inlay hints |
-| `<leader>om` | n | Toggle note rendering (markdown or org, by the buffer); org cycles full / no big headlines / off |
+| `<leader>tm` | n | Toggle note rendering on / off (markdown or org, by the buffer), without the big headings |
+| `<leader>tM` | n | Toggle the big headings (OSC 66 / DECDHL) of markdown and org; off by default |
+| `<leader>tT` | n | Toggle shrinking of org tables wider than the window (columns cut with `…`, text untouched) |
+| `<leader>tW` | n | Toggle wrapping of org tables wider than the window into extra rows (a long cell continues on the next line; changes the text, off joins it back) |
 | `<leader>on` | n, x | Toggle line numbers |
 | `<leader>op` | n | Toggle Copilot |
 | `<leader>or` | n, x | Toggle relativenumber |

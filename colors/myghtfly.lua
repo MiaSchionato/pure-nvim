@@ -7,3 +7,4 @@ end
 vim.g.colors_name = "myghtfly"
 
 require("themes.myghtfly").setup()
+
