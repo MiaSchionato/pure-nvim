@@ -97,11 +97,12 @@ o.wildignore:append("*/node_modules/*", "*/.git/*", "*/tmp/*", "*/dist/*", "*/bu
 -- The menu with one match too, nothing inserted or selected until Tab picks
 -- (see configs/keymaps.lua: Tab, <CR>, Esc).
 o.completeopt = { "menu", "menuone", "noinsert", "noselect" }
--- Completion as you type (Neovim 0.12). Sources in order: 'o' the omnifunc
+-- Completion as you type (Neovim 0.12). Sources in order: pure/suggest.lua (the
+-- F{func} flag: "hoje" / "today" offers the date, in org, markdown and .txt only), 'o' the omnifunc
 -- (the language server, or the [[links]] of the vault in notes), then words
 -- of this buffer, other windows, other buffers, unloaded buffers.
 o.autocomplete = true
-o.complete = "o,.,w,b,u"
+o.complete = "Fv:lua.require'pure.suggest'.complete,o,.,w,b,u"
 o.pumheight = 10            -- at most 10 items shown
 o.pumborder = "rounded"     -- border of the menu
 o.pumblend = 0              -- menu opaque

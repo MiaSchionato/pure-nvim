@@ -101,6 +101,19 @@ git commits) and without a server, from the words in open buffers.
 
 Nothing is selected until you pick; `<CR>` takes the suggestion.
 
+**Suggestions from what you write** (`lua/pure/suggest.lua`, only in org, markdown and `.txt`): type
+`hoje`, `today` or `oggi` and the menu offers today's date; `amanhã` / `tomorrow` / `domani` and
+`ontem` / `yesterday` / `ieri` the neighbouring days; a weekday name (`sexta`, `friday`, `venerdi`...,
+typed whole) its next date; `agora` / `now` / `adesso` the time. Taking one replaces the word you typed.
+The shapes: in an org note the timestamps first (`<2026-11-03 Tue>`, `[2026-11-03 Tue]`), then
+`2026-11-03`, `03/11/2026` and `3 de novembro de 2026`; elsewhere the last three. The time:
+`14:05`, `2026-11-03 14:05` (and the org timestamps with the time). Accents and case do not matter. It is
+a source of `'complete'` (`F{func}`, first in the list in `configs/configs.lua`), so the other sources
+(links, words) go on as before. A word counts when it is the whole trigger, or the start of it when that
+is at least five letters and at most one short (`tomorro`); `toda` and `ho` show nothing, so ordinary
+text is left alone. `vim.g.pure_suggest_filetypes = { 'org' }` changes where it works,
+`vim.g.pure_suggest = false` turns it off; more words are one line each in the `TRIGGERS` table.
+
 | Key (insert) | What |
 |---|---|
 | `<Tab>` / `<S-Tab>` | menu open: next / previous suggestion. Else: step past the closing pairs right after the cursor (`[[a\|]]` → `[[a]]\|`), jump in a snippet, or a plain Tab. Right after an empty list item's marker: indent / outdent it (Lists, above). Tab never indents otherwise |
