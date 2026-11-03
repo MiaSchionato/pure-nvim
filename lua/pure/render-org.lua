@@ -30,24 +30,23 @@
 --  or, when nil, vim.g.pure_md_headings: 'auto', 'osc66', 'decdhl', 'off').
 --  :PureOrgHeadings [auto|osc66|decdhl|off] changes it at run time.
 --
---    <leader>om   cycle the rendering (M.toggle): full -> no big headlines -> off -> full
---                 (M.set_level('full'|'partial'|'off') sets one; 'partial' keeps the
---                 rendering and turns off only the OSC 66 / DECDHL headlines)
+--    <leader>tm   rendering on / off (M.toggle; M.set_level('full'|'off') sets one)
+--    <leader>tM   the big headlines (OSC 66 / DECDHL) on / off; off by default (key big_headings)
 -- =============================================================================
 
 local M = {}
 local View, Headings -- the sections below; they call into each other
 View = M
 
--- The toggles stay as left (configs/toggles.lua): the saved value, or `default` when none.
+-- The toggles stay as left (configs/functions.lua): the saved value, or `default` when none.
 local function saved(key, default)
-  local ok, toggles = pcall(require, 'configs.toggles')
+  local ok, toggles = pcall(require, 'configs.functions')
   if ok then return toggles.get(key, default) end
   return default
 end
 
 local startLevel = saved('render_org', 'full')
-if startLevel ~= 'partial' and startLevel ~= 'off' then startLevel = 'full' end
+if startLevel ~= 'off' then startLevel = 'full' end
 
 -- The base groups (PureMd*: code shade, bullets, rule, table, bands) are defined by the Markdown file.
 pcall(require, 'pure.render-md')
@@ -55,7 +54,7 @@ local notecolors = require('pure.notecolors')
 
 local ns = vim.api.nvim_create_namespace('pure_orgview')
 local enabled = startLevel ~= 'off'
-local level = startLevel -- 'full' | 'partial' (no terminal big headlines) | 'off'
+local level = startLevel -- 'full' | 'off' (the big headlines are separate: <leader>tM)
 
 -- -----------------------------------------------------------------------------
 --  Settings of an org buffer
@@ -193,7 +192,7 @@ local ns = vim.api.nvim_create_namespace('pure_org_headings')
 
 local state = {
   mode = nil,      -- 'osc66' | 'decdhl' | nil (off)
-  enabled = startLevel == 'full',  -- the big headlines: on only in the full state
+  enabled = startLevel == 'full' and saved('big_headings', false) == true,  -- the big headlines: <leader>tM, off by default
   cursor = nil,    -- lnum of the heading under the cursor
   drawn = {},      -- blocks written by the last render: { row, col, width, height }
   setup = false,
@@ -1036,22 +1035,30 @@ function M.refresh(force)
   vim.b[buf].pure_org_link = cursorLink()
 end
 
-local NEXT = { full = 'partial', partial = 'off', off = 'full' }
-local LABEL = {
-  full = 'on',
-  partial = 'on, without the big headlines (OSC 66 / DECDHL)',
-  off = 'off',
-}
+local NEXT = { full = 'off', off = 'full' }
+local LABEL = { full = 'on', off = 'off' }
+
+--- The big headlines (OSC 66 / DECDHL, <leader>tM) need the rendering on too.
+local function bigHeadings(on)
+  local ok, toggles = pcall(require, 'configs.functions')
+  return on and ok and toggles.get('big_headings', false) == true
+end
 
 function M.set_level(want)
   if not NEXT[want] then return end
   level = want
   enabled = want ~= 'off'
-  local ok, toggles = pcall(require, 'configs.toggles')
+  local ok, toggles = pcall(require, 'configs.functions')
   if ok then toggles.set('render_org', want) end
-  Headings.set_enabled(want == 'full')
-  M.refresh()
+  Headings.set_enabled(bigHeadings(enabled))
+  M.refresh(true)
   vim.notify('Org rendering ' .. LABEL[want])
+end
+
+--- <leader>tM changed: draw or stop drawing the big headlines.
+function M.applyBigHeadings()
+  Headings.set_enabled(bigHeadings(enabled))
+  M.refresh(true)
 end
 
 function M.level() return level end

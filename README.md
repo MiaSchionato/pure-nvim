@@ -74,6 +74,9 @@ Tasks can also live in a note, as in Obsidian's Todoist plugin (same syntax, so 
 name: Today
 filter: "today | overdue"
 ```
+<!-- todoist -->
+*Nothing to do.*
+<!-- /todoist -->
 ````
 
 The tasks are drawn under the block without being written to the file. `:TodoistRefresh` reloads them, and `:Todoist` with the cursor inside the block opens that filter as the interactive list.
