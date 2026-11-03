@@ -44,6 +44,8 @@ so a `-` inside a code block is never taken for a bullet.
   `<!--`, a footnote definition), adding or removing lines, scrolling or
   changing mode redraws the screen.
 
+A bare URL pasted into a markdown note becomes `[site](url)` and then `[page title](url)`: see [org.md](org.md#pasted-links-get-their-name-luapureurltitlelua) (same module, org and markdown).
+
 ## Other markdown settings (`render-md.lua`)
 
 For every markdown buffer: `textwidth` 110, spell checking in the languages

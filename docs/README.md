@@ -121,8 +121,9 @@ where to change them.
 | `vim.g.pure_llm_model` | `'claude:default'` (a pick with `<leader>am` wins) | [llm](llm.md) |
 | `vim.g.pure_claude_cmd` | `'claude'` | [llm](llm.md) |
 | `vim.g.pure_ollama_cmd` | `'ollama'`, else `ollama.exe` | [llm](llm.md) |
-| `vim.g.pure_llm_actions` | `'claude'` (folder of the vault) | [llm](llm.md) |
+| `vim.g.pure_llm_actions` | `'claude'` (folder of the vault); here `~/Flora/ai/actions` | [llm](llm.md) |
 | `vim.g.pure_llm_blocks` | on | [llm](llm.md) |
+| `vim.g.pure_url_titles` | on (a pasted URL becomes a link with the page title, org and markdown) | [org](org.md) |
 | `vim.g.pure_manim_cmd` | `'manim'` | [manim](manim.md) |
 | `vim.g.pure_manim_quality` | `'l'` | [manim](manim.md) |
 | `vim.g.pure_manim_viewer_args` | none | [manim](manim.md) |

@@ -155,3 +155,21 @@ require('org').setup({
     },
   },
 })
+
+-- In a table <Tab> / <S-Tab> go to the next / previous cell, but while the completion menu is open they pick the
+-- next / previous suggestion, as everywhere else. org.nvim's action steps aside (an action that returns false is
+-- "not handled") and its key falls back to the global <Tab> / <S-Tab> of configs/keymaps.lua, which know the menu.
+-- The lookup is wrapped here, not the actions, so org.nvim's table editor is still loaded only when it is used.
+local actions = require('org.actions')
+local original_get = actions.get
+local YIELDS_TO_MENU = { insert_tab = true, table_prev_field = true }
+actions.get = function(name)
+  local fn, action = original_get(name)
+  if fn and YIELDS_TO_MENU[name] then
+    return function(...)
+      if vim.fn.pumvisible() == 1 then return false end
+      return fn(...)
+    end, action
+  end
+  return fn, action
+end
