@@ -56,6 +56,15 @@ local ns = vim.api.nvim_create_namespace('pure_orgview')
 local enabled = startLevel ~= 'off'
 local level = startLevel -- 'full' | 'off' (the big headlines are separate: <leader>tM)
 
+-- org.nvim aligns a table by the width the buffer shows (a link counts as its text,
+-- hidden emphasis marks as nothing), but only when its own conceal options say so, and those are off
+-- in plugins/org.lua because this file does the hiding. Tell it per buffer, following the
+-- rendering (<leader>tm) and vim.g.pure_org_emphasis, so the columns line up on screen.
+local function syncTableWidths(buf)
+  vim.b[buf].org_link_descriptive = enabled
+  vim.b[buf].org_hide_emphasis_markers = enabled and vim.g.pure_org_emphasis ~= false
+end
+
 -- -----------------------------------------------------------------------------
 --  Settings of an org buffer
 -- -----------------------------------------------------------------------------
@@ -83,6 +92,7 @@ vim.api.nvim_create_autocmd('FileType', {
     vim.opt_local.formatexpr = "v:lua.require'pure.render-md'.formatexpr()"
 
     notecolors.apply()
+    syncTableWidths(args.buf)
 
     local map = function(lhs, rhs, desc) vim.keymap.set('n', lhs, rhs, { buffer = args.buf, desc = desc }) end
     map('<leader>ds', 'z=', 'Dictionary suggestion')
@@ -897,6 +907,385 @@ local function rangeAt(ranges, row)
 end
 
 -- -----------------------------------------------------------------------------
+--  Narrowing wide tables (<leader>tT)
+-- -----------------------------------------------------------------------------
+--  org.nvim can shrink a column: a column with a width cookie `<W>` shows the first W characters of each
+--  cell and a "…", and the text is never changed. Here the toggle works out the widths that make every
+--  table wider than the window fit and hands them to that same drawing, so no cookie is written into the
+--  note. A column that fits keeps its width; the others share what is left, the widest first. A table with
+--  cookies of its own is left to org.nvim. In Insert mode a table shows in full (org.nvim does that).
+--  The window does not wrap while a table is shrunk: a raw row longer than the window would otherwise take
+--  extra screen rows under the drawing. Saved as `table_shrink`.
+local MIN_COLUMN = 4
+local shrink_on = saved('table_shrink', false) == true
+local original_cookies
+
+local function textWidth(win)
+  return vim.api.nvim_win_get_width(win) - vim.fn.getwininfo(win)[1].textoff
+end
+
+local function windowOf(buf)
+  local current = vim.api.nvim_get_current_win()
+  if vim.api.nvim_win_get_buf(current) == buf then return current end
+  return vim.fn.win_findbuf(buf)[1]
+end
+
+--- The width of every column of parsed table `t` once it fits `width` columns, and the set of columns that had
+--- to shrink (empty when it already fits).
+local function fittedWidths(t, o, width)
+  local natural = require('org.table').layout(t, o)
+  local ncols, total = t.ncols, 0
+  for c = 1, ncols do total = total + natural[c] end
+  local avail = width - #t.indent - (3 * ncols + 1) -- the pipes and a space each side of every cell
+  if total <= avail or avail < ncols * MIN_COLUMN then return natural, {} end
+  local widths, left, remaining = {}, avail, {}
+  for c = 1, ncols do remaining[c] = c end
+  local changed = true
+  while changed and #remaining > 0 do
+    changed = false
+    local share = math.floor(left / #remaining)
+    for idx = #remaining, 1, -1 do
+      local c = remaining[idx]
+      if natural[c] <= share then
+        widths[c], left, changed = natural[c], left - natural[c], true
+        table.remove(remaining, idx)
+      end
+    end
+  end
+  local shrunk = {}
+  if #remaining > 0 then
+    table.sort(remaining, function(a, b) return natural[a] > natural[b] or (natural[a] == natural[b] and a < b) end)
+    local share, extra = math.floor(left / #remaining), left % #remaining
+    for i, c in ipairs(remaining) do
+      widths[c] = math.max(MIN_COLUMN, share + (i <= extra and 1 or 0))
+      if widths[c] < natural[c] then shrunk[c] = true end
+    end
+  end
+  return widths, shrunk
+end
+
+--- org.nvim reads the widths from the cookies in the table; while the toggle is on a table without cookies
+--- gets the fitted ones (the natural widths when it fits, so nothing is cut).
+local function installCookieWidths()
+  if original_cookies then return end
+  local shrink = require('org.table.shrink')
+  original_cookies = shrink.cookie_widths
+  shrink.cookie_widths = function(t)
+    local own = original_cookies(t)
+    if next(own) or not shrink_on then return own end
+    local win = windowOf(vim.api.nvim_get_current_buf())
+    if not win then return own end
+    return (fittedWidths(t, require('org.ui').conceal_opts(0), textWidth(win)))
+  end
+end
+
+--- The window stops wrapping while a table is shrunk in it; a 'wrap' turned off here is given back after.
+local function shrinkWrap(win, shrunk)
+  local ours = vim.w[win].pure_org_nowrap == true
+  if shrunk and vim.wo[win].wrap then
+    vim.wo[win].wrap, vim.w[win].pure_org_nowrap = false, true
+  elseif not shrunk and ours then
+    vim.wo[win].wrap, vim.w[win].pure_org_nowrap = true, nil
+  end
+end
+
+--- Calls fn(info, t) for every table of the buffer.
+local function eachTable(buf, fn)
+  local T = require('org.table')
+  local l = 1
+  while l <= vim.api.nvim_buf_line_count(buf) do
+    local line = vim.api.nvim_buf_get_lines(buf, l - 1, l, false)[1]
+    local info = T.is_table_line(line) and T.find(buf, l) or nil
+    if info then
+      fn(info, T.parse(info.lines))
+      l = info.finish + 1
+    else
+      l = l + 1
+    end
+  end
+end
+
+local function sameSet(a, b)
+  for k in pairs(a) do if not b[k] then return false end end
+  for k in pairs(b) do if not a[k] then return false end end
+  return true
+end
+
+--- Shrink the tables of the buffer that do not fit its window and expand the ones that do.
+local function applyShrink(buf)
+  if not shrink_on or not vim.api.nvim_buf_is_valid(buf) or vim.bo[buf].filetype ~= 'org' then return end
+  local win = windowOf(buf)
+  if not win or vim.fn.mode():match('^[iR]') then return end
+  installCookieWidths()
+  local shrink = require('org.table.shrink')
+  local o = require('org.ui').conceal_opts(buf)
+  local width, any = textWidth(win), false
+  eachTable(buf, function(info, t)
+    if next(original_cookies(t)) then return end
+    local _, shrunk = fittedWidths(t, o, width)
+    local current = shrink.get(buf, info.start)
+    if next(shrunk) then
+      any = true
+      if not sameSet(current, shrunk) then shrink.set(buf, info.start, shrunk) end
+    elseif next(current) then
+      shrink.expand(buf, info.start)
+    end
+  end)
+  shrink.refresh_all(buf) -- the window may have changed size: the widths are worked out again
+  shrinkWrap(win, any)
+end
+
+--- Expand the tables this toggle shrank and give the window its 'wrap' back.
+local function clearShrink(buf)
+  if not vim.api.nvim_buf_is_valid(buf) or vim.bo[buf].filetype ~= 'org' then return end
+  local shrink = require('org.table.shrink')
+  eachTable(buf, function(info, t)
+    if not next(original_cookies and original_cookies(t) or shrink.cookie_widths(t)) and next(shrink.get(buf, info.start)) then
+      shrink.expand(buf, info.start)
+    end
+  end)
+  for _, win in ipairs(vim.fn.win_findbuf(buf)) do shrinkWrap(win, false) end
+end
+
+--- <leader>tT: shrink the tables wider than the window (and expand them again).
+function M.toggleTableShrink()
+  shrink_on = not shrink_on
+  local ok, toggles = pcall(require, 'configs.functions')
+  if ok then toggles.set('table_shrink', shrink_on) end
+  for _, b in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_loaded(b) and vim.bo[b].filetype == 'org' then
+      if shrink_on then applyShrink(b) else clearShrink(b) end
+    end
+  end
+  vim.notify('Table shrink ' .. (shrink_on and 'on' or 'off'))
+end
+
+vim.api.nvim_create_autocmd({ 'BufWinEnter', 'WinResized', 'InsertLeave', 'TextChanged' }, {
+  group = vim.api.nvim_create_augroup('PureOrgTableShrink', { clear = true }),
+  callback = function(args)
+    if not shrink_on or vim.bo[args.buf].filetype ~= 'org' then return end
+    -- After org.nvim's own alignment on opening (it is scheduled).
+    vim.defer_fn(function() applyShrink(args.buf) end, args.event == 'BufWinEnter' and 60 or 0)
+  end,
+})
+-- A window that leaves the note gets its 'wrap' back (the other buffer must not inherit the nowrap).
+vim.api.nvim_create_autocmd('BufWinLeave', {
+  group = 'PureOrgTableShrink',
+  callback = function(args)
+    if vim.bo[args.buf].filetype == 'org' then shrinkWrap(vim.api.nvim_get_current_win(), false) end
+  end,
+})
+
+-- -----------------------------------------------------------------------------
+--  Wrapping wide tables into rows (<leader>tW)
+-- -----------------------------------------------------------------------------
+--  The other way to make a table fit the window, and this one changes the text: a cell that does not
+--  fit its column goes on the next line, as an extra table row that holds only the rest of that
+--  cell (the other cells of the row empty). Widths are worked out as for shrinking (above) and the
+--  rows are written aligned by org.nvim's own formatter, so the columns line up on the screen as
+--  they do in the text. It runs when a note is opened and when Insert mode is left in a table; a
+--  table that already fits is left alone, as one with a #+TBLFM line. The continuation rows are
+--  remembered (extmarks), so turning the toggle off joins them back into their rows (this session
+--  only: a row written in an earlier session is an ordinary row). Saved as `table_wrap`.
+--  A script that reads the note's tables will see the extra rows: the toggle is off by default.
+local wrap_rows_on = saved('table_wrap', false) == true
+local cont_ns = vim.api.nvim_create_namespace('pure_org_table_cont')
+local cont_glue = {} -- "buf:extmark id" of a continuation row -> { [column] = true } where it goes on from a cut word
+
+--- `raw` cut at spaces into tokens that are not split: a [[link]] and an =verbatim= or ~code~ keep their spaces.
+local function rawTokens(raw)
+  local tokens, i = {}, 1
+  while i <= #raw do
+    if raw:sub(i, i):match('%s') then
+      i = i + 1
+    else
+      local j = i
+      local mark = raw:sub(i, i)
+      if mark == '=' or mark == '~' then
+        local close = raw:find(mark, i + 2, true)
+        if close and not raw:sub(close - 1, close - 1):match('%s') then j = close + 1 end
+      end
+      while j <= #raw and not raw:sub(j, j):match('%s') do
+        if raw:sub(j, j + 1) == '[[' then
+          local close = raw:find(']]', j + 2, true)
+          j = close and close + 2 or j + 2
+        else
+          j = j + 1
+        end
+      end
+      tokens[#tokens + 1] = raw:sub(i, j - 1)
+      i = j
+    end
+  end
+  return tokens
+end
+
+--- `raw` (a cell as written) in lines that show at most `width` columns. A token that is too wide alone goes
+--- on a line of its own; a plain one (no link, no marks) is cut where it must be.
+--- Second result: `glued[i]` is true when line i goes on from line i-1 in the middle of a word (a cut one), so
+--- joining the lines back must not put a space between them.
+local function wrapRaw(raw, width, o)
+  local ui = require('org.ui')
+  local lines, glued, line, line_width = {}, {}, '', 0
+  local function flush() lines[#lines + 1], line, line_width = line, '', 0 end
+  for _, token in ipairs(rawTokens(raw)) do
+    local token_width = ui.visible_width(token, o)
+    local plain = not token:find('[%[%]=~]')
+    local cut = false -- the token was cut: what is left goes on from the piece before
+    while plain and token_width > width do
+      if line_width > 0 then flush() end
+      local piece, taken = '', 0
+      for ci = 0, vim.fn.strchars(token) - 1 do
+        local ch = vim.fn.strcharpart(token, ci, 1)
+        if vim.fn.strdisplaywidth(piece .. ch) > width then break end
+        piece, taken = piece .. ch, ci + 1
+      end
+      if taken == 0 then taken, piece = 1, vim.fn.strcharpart(token, 0, 1) end
+      if cut then glued[#lines + 1] = true end
+      lines[#lines + 1] = piece
+      cut = true
+      token = vim.fn.strcharpart(token, taken)
+      token_width = vim.fn.strdisplaywidth(token)
+    end
+    if token ~= '' then
+      if line_width == 0 then
+        if cut then glued[#lines + 1] = true end
+        line, line_width = token, token_width
+      elseif line_width + 1 + token_width <= width then
+        line, line_width = line .. ' ' .. token, line_width + 1 + token_width
+      else
+        flush()
+        line, line_width = token, token_width
+      end
+    end
+  end
+  if line_width > 0 or #lines == 0 then flush() end
+  return lines, glued
+end
+
+--- Rewrite the table `info` so that it fits `width`. Returns the number of rows added (0: nothing changed) and, for
+--- each original row, the buffer line (1-based) where it now starts.
+local function wrapTable(buf, info, t, o, width)
+  if #info.tblfm > 0 then return 0 end
+  local widths, shrunk = fittedWidths(t, o, width)
+  if not next(shrunk) then return 0 end
+  local rows, starts, added = {}, {}, {}
+  for i, row in ipairs(t.rows) do
+    starts[i] = info.start + #rows
+    if row.hline then
+      rows[#rows + 1] = { hline = true }
+    else
+      local pieces, glued, height = {}, {}, 1
+      for c = 1, t.ncols do
+        pieces[c], glued[c] = wrapRaw(vim.trim(row.cells[c] or ''), widths[c], o)
+        height = math.max(height, #pieces[c])
+      end
+      for h = 1, height do
+        local cells, glue = {}, {}
+        for c = 1, t.ncols do
+          cells[c] = pieces[c][h] or ''
+          glue[c] = glued[c][h] or nil
+        end
+        if h > 1 then added[#added + 1] = { lnum = info.start + #rows, glue = glue } end
+        rows[#rows + 1] = { cells = cells }
+      end
+    end
+  end
+  local lines = require('org.table').render({ indent = t.indent, rows = rows, ncols = t.ncols })
+  if vim.deep_equal(lines, info.lines) then return 0 end
+  vim.api.nvim_buf_set_lines(buf, info.start - 1, info.finish, false, lines)
+  for _, a in ipairs(added) do
+    local id = vim.api.nvim_buf_set_extmark(buf, cont_ns, a.lnum - 1, 0, {})
+    cont_glue[buf .. ':' .. id] = a.glue
+  end
+  return #added, starts
+end
+
+--- Wrap every table of the buffer that does not fit its window. Returns how many tables changed.
+local function wrapTables(buf)
+  if not vim.api.nvim_buf_is_valid(buf) or vim.bo[buf].filetype ~= 'org' or not vim.bo[buf].modifiable then return 0 end
+  local win = windowOf(buf)
+  if not win then return 0 end
+  local o, width = require('org.ui').conceal_opts(buf), textWidth(win)
+  local found = {}
+  eachTable(buf, function(info, t) found[#found + 1] = { info = info, t = t } end)
+  local cursor = vim.api.nvim_win_get_cursor(win)
+  local changed, moved = 0, 0
+  for k = #found, 1, -1 do -- from the bottom, so the lines of the tables above do not move
+    local info = found[k].info
+    local added, starts = wrapTable(buf, info, found[k].t, o, width)
+    if added > 0 then
+      changed = changed + 1
+      if cursor[1] >= info.start and cursor[1] <= info.finish then
+        local row = cursor[1] - info.start + 1 -- the row the cursor was on, now at its first line
+        moved = starts[row] - cursor[1]
+      elseif cursor[1] > info.finish then
+        moved = moved + added
+      end
+    end
+  end
+  if changed > 0 and moved ~= 0 then
+    pcall(vim.api.nvim_win_set_cursor, win, { math.max(cursor[1] + moved, 1), cursor[2] })
+  end
+  return changed
+end
+
+--- Join the continuation rows this session made back into their rows.
+local function unwrapTables(buf)
+  if not vim.api.nvim_buf_is_valid(buf) or not vim.bo[buf].modifiable then return end
+  local T = require('org.table')
+  local marks = vim.api.nvim_buf_get_extmarks(buf, cont_ns, 0, -1, {})
+  for k = #marks, 1, -1 do -- from the bottom: a row split in three folds in two steps, in order
+    local lnum = marks[k][2] + 1
+    local prev_line = vim.api.nvim_buf_get_lines(buf, lnum - 2, lnum - 1, false)[1]
+    local line = vim.api.nvim_buf_get_lines(buf, lnum - 1, lnum, false)[1]
+    if lnum > 1 and prev_line and line and T.is_table_line(prev_line) and T.is_table_line(line) then
+      local upper, lower = T.parse({ prev_line }).rows[1], T.parse({ line }).rows[1]
+      if upper.cells and lower.cells then
+        local cells = {}
+        local glue = cont_glue[buf .. ':' .. marks[k][1]] or {}
+        for c = 1, math.max(#upper.cells, #lower.cells) do
+          local a, b = vim.trim(upper.cells[c] or ''), vim.trim(lower.cells[c] or '')
+          cells[c] = (a ~= '' and b ~= '' and not glue[c]) and (a .. ' ' .. b) or (a .. b)
+        end
+        local indent = prev_line:match('^%s*')
+        vim.api.nvim_buf_set_lines(buf, lnum - 2, lnum, false, { indent .. '| ' .. table.concat(cells, ' | ') .. ' |' })
+      end
+    end
+    pcall(vim.api.nvim_buf_del_extmark, buf, cont_ns, marks[k][1])
+    cont_glue[buf .. ':' .. marks[k][1]] = nil
+  end
+  vim.api.nvim_buf_clear_namespace(buf, cont_ns, 0, -1)
+  -- Pad the joined rows again (org.nvim's own alignment, by the width the buffer shows).
+  local T2 = require('org.table')
+  pcall(T2.align_all, buf)
+end
+
+--- <leader>tW: wrap the tables wider than the window into rows (and join them back).
+function M.toggleTableWrap()
+  wrap_rows_on = not wrap_rows_on
+  local ok, toggles = pcall(require, 'configs.functions')
+  if ok then toggles.set('table_wrap', wrap_rows_on) end
+  local buf = vim.api.nvim_get_current_buf()
+  local changed = 0
+  if wrap_rows_on then
+    changed = wrapTables(buf)
+  else
+    unwrapTables(buf)
+  end
+  vim.notify('Table wrap ' .. (wrap_rows_on and 'on' or 'off') .. (changed > 0 and (' (' .. changed .. ' tables)') or ''))
+end
+
+vim.api.nvim_create_autocmd({ 'BufWinEnter', 'InsertLeave' }, {
+  group = vim.api.nvim_create_augroup('PureOrgTableWrap', { clear = true }),
+  callback = function(args)
+    if not wrap_rows_on or vim.bo[args.buf].filetype ~= 'org' then return end
+    -- After org.nvim's own alignment (on opening it is scheduled, on leaving Insert mode it runs in this event).
+    vim.defer_fn(function() wrapTables(args.buf) end, args.event == 'BufWinEnter' and 80 or 10)
+  end,
+})
+
+-- -----------------------------------------------------------------------------
 --  Driver
 -- -----------------------------------------------------------------------------
 local function active(buf)
@@ -1048,6 +1437,9 @@ function M.set_level(want)
   if not NEXT[want] then return end
   level = want
   enabled = want ~= 'off'
+  for _, b in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_loaded(b) and vim.bo[b].filetype == 'org' then syncTableWidths(b) end
+  end
   local ok, toggles = pcall(require, 'configs.functions')
   if ok then toggles.set('render_org', want) end
   Headings.set_enabled(bigHeadings(enabled))

@@ -72,6 +72,11 @@ require('org').setup({
   agenda_files = { vault .. '/tasks.org', vault .. '/inbox.org', vault .. '/projects/**/*.org' },
 
   todo_keywords = todo_keywords,
+
+  -- Align every table when a note is opened (Emacs: #+STARTUP: align); by default
+  -- org.nvim aligns only when a table is edited. Tables written by scripts show up straight.
+  startup_align_all_tables = true,
+
   -- org.nvim draws nothing over the text (links, stars, checkboxes...): the
   -- rendering is pure/render-org.lua's, so it can be toggled and follows the
   -- terminal (<leader>om). Its syntax colours stay.
