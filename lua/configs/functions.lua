@@ -61,6 +61,11 @@ function M.MyTabline()
   return line .. "%#TabLineFill#"
 end
 
+--- The notice every toggle shows, so it is clear what was just turned on or off: "Wrap on", "Wrap off".
+local function announce(label, on)
+  vim.notify(label .. (on and ' on' or ' off'))
+end
+
 local zen_mode_enabled = false
 function M.toggleZenMode(show_notify)
   show_notify = show_notify ~= false -- Default to true if not explicitly false
@@ -114,6 +119,7 @@ function M.toggleStatusline()
     vim.o.laststatus = 0
   end
   save('laststatus', vim.o.laststatus)
+  announce('Statusline', vim.o.laststatus ~= 0)
 end
 
 function M.toggleTabline()
@@ -123,20 +129,24 @@ function M.toggleTabline()
         vim.o.showtabline = 1
     end
     save('showtabline', vim.o.showtabline)
+    announce('Tabline', vim.o.showtabline ~= 0)
 end
 
-function M.toggleNumber()
+--- `quiet` leaves the notice to the caller (<leader>tn flips both number options and says it once).
+function M.toggleNumber(quiet)
   if vim.o.number == true then
     vim.o.number = false
   else
     vim.o.number = true
   end
   save('number', vim.o.number)
+  if not quiet then announce('Line numbers', vim.o.number) end
 end
 
-function M.toggleRelativenumber()
+function M.toggleRelativenumber(quiet)
   vim.opt.relativenumber = not vim.opt.relativenumber:get()
   save('relativenumber', vim.o.relativenumber)
+  if not quiet then announce('Relative line numbers', vim.o.relativenumber) end
 end
 
 function M.toggleSigncolumn()
@@ -146,17 +156,20 @@ function M.toggleSigncolumn()
     vim.wo.signcolumn = 'yes'
   end
   save('signcolumn', vim.wo.signcolumn)
+  announce('Signcolumn', vim.wo.signcolumn ~= 'no')
 end
 
 function M.toggleWrap()
   vim.wo.wrap = not vim.wo.wrap
   save('wrap', vim.wo.wrap)
+  announce('Wrap', vim.wo.wrap)
 end
 
 function M.toggleDiagnostics()
   local on = not vim.diagnostic.config().virtual_text
   vim.diagnostic.config({ virtual_text = on })
   save('diagnostics_virtual_text', on)
+  announce('Diagnostics', on)
 end
 
 function M.toggleInlayHints()
@@ -166,6 +179,7 @@ function M.toggleInlayHints()
   local on = not vim.lsp.inlay_hint.is_enabled()
   vim.lsp.inlay_hint.enable(on)
   save('inlay_hints', on)
+  announce('Inlay hints', on)
 end
 
 function M.getOpts(base_opts, desc)
@@ -200,6 +214,7 @@ end
 function M.toggleHighlightSearch()
   local is_active = vim.opt.hlsearch:get()
   vim.opt.hlsearch = not is_active
+  announce('Search highlight', not is_active)
 end
 
 --- Highlight every occurrence of the word under the cursor, or turn the
@@ -216,6 +231,7 @@ function M.toggleWordHighlight()
 
   if vim.o.hlsearch and (word == '' or vim.fn.getreg('/') == pattern) then
     vim.o.hlsearch = false
+    announce('Word highlight', false)
     return
   end
   if word == '' then return end
@@ -223,6 +239,7 @@ function M.toggleWordHighlight()
   vim.fn.setreg('/', pattern)
   vim.fn.histadd('/', pattern) -- so / then <Up> recalls it
   vim.o.hlsearch = true
+  announce('Word highlight', true)
 end
 
 -- TODO:Add signcolumn always shown ()
@@ -523,6 +540,7 @@ function M.toggleTransparency()
       vim.g.pure_reapplying_theme = false
     end
   end
+  announce('Transparency', M.transparent)
 end
 
 local file = vim.fn.stdpath('data') .. '/toggles.json'
@@ -797,6 +815,24 @@ function M.toggleBigHeadings()
     if type(module) == 'table' and module.applyBigHeadings then pcall(module.applyBigHeadings) end
   end
   vim.notify('Big headings ' .. (on and 'on' or 'off'))
+end
+
+--- <leader>tT: shrink the org tables wider than the window (width cookies worked out, none written into the note).
+function M.toggleTableShrink()
+  if vim.bo.filetype ~= 'org' then
+    vim.notify('Table shrink is for org notes', vim.log.levels.WARN)
+    return
+  end
+  require('pure.render-org').toggleTableShrink()
+end
+
+--- <leader>tW: wrap the org tables wider than the window into extra rows (the text changes; off joins them back).
+function M.toggleTableWrap()
+  if vim.bo.filetype ~= 'org' then
+    vim.notify('Table wrap is for org notes', vim.log.levels.WARN)
+    return
+  end
+  require('pure.render-org').toggleTableWrap()
 end
 
 --- One toggle for the notes: markdown (pure/render-md.lua) or org (pure/render-org.lua), by the buffer.
