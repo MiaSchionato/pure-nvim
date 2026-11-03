@@ -297,11 +297,11 @@ map('n', '<leader>am', llm('selectModel'), func.getOpts(opts, "Select model (Oll
 map('n', '<leader>at', llm('toggleThinking'), func.getOpts(opts, "Thinking of <leader>ai (show / hide)"))
 -- The file about you that every request reads (outside any git repository).
 map('n', '<leader>au', func.openUserContext, func.getOpts(opts, "User context file (what the LLMs know about you)"))
-map({ 'n', 'x' }, '<leader>ax', llm('pickAction'), func.getOpts(opts, "Actions (claude/ folder of the vault)"))
+map({ 'n', 'x' }, '<leader>ax', llm('pickAction'), func.getOpts(opts, "Actions (~/Flora/ai/actions)"))
 map('n', '<leader>ab', llm('runBlockAtCursor'), func.getOpts(opts, "Run the ```llm block under the cursor"))
-map('n', '<leader>ad', function() require('pure.llm').runNamed('Nota do dia') end,
+map('n', '<leader>ad', function() require('pure.llm').runNamed('Daily note') end,
 func.getOpts(opts, "Daily note: next step and the measured day"))
-map('n', '<leader>aw', function() require('pure.llm').runNamed('Nota da semana') end,
+map('n', '<leader>aw', function() require('pure.llm').runNamed('Week review') end,
 func.getOpts(opts, "Weekly note: the week in one place"))
 map('n', '<leader>ap', llm('pickPersona'), func.getOpts(opts, "Personas: pick one, open its chat"))
 map('n', '<leader>aj', function() require('pure.llm').chatWith('job') end,
