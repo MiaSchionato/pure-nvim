@@ -3070,7 +3070,8 @@ function M.actions()
   local dir = actionsDir()
   if not dir then return {} end
   local personas = persona.dir()
-  local skip = personas and (personas:sub(#dir + 2) .. '/'):lower()
+  -- Only a personas' folder inside the actions folder is left out of the actions (one elsewhere is not in the way).
+  local skip = personas and personas:sub(1, #dir + 1) == dir .. '/' and (personas:sub(#dir + 2) .. '/'):lower()
   local out = {}
   for name, kind in vim.fs.dir(dir, { depth = 4 }) do
     local inPersonas = skip and name:gsub('\\', '/'):lower():sub(1, #skip) == skip
@@ -3131,11 +3132,15 @@ end
 --  the tools stay the action's or the block's (a block runs on its own, so
 --  it never gets a persona's write permission).
 
---- The personas' folder, or nil.
+--- The personas' folder, or nil: a folder of the actions folder, or an absolute path (vim.g.pure_llm_personas).
 function persona.dir()
+  local setting = vim.fn.expand(vim.g.pure_llm_personas or 'Personas')
+  if setting:match('^/') or setting:match('^%a:[/\\]') then
+    return vim.fn.isdirectory(setting) == 1 and vim.fs.normalize(setting) or nil
+  end
   local dir = actionsDir()
   if not dir then return nil end
-  local name = (vim.g.pure_llm_personas or 'Personas'):lower()
+  local name = setting:lower()
   for entry, kind in vim.fs.dir(dir) do
     if kind == 'directory' and entry:lower() == name then return dir .. '/' .. entry end
   end

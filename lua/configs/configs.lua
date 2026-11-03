@@ -391,6 +391,7 @@ g.pure_protonpass_items = {
 -- Read both secrets in the background at startup, so pass-cli (about half a
 -- second per call) never blocks the first request.
 require('pure.protonpass').prefetch()
+require('pure.urltitle').setup()
 
 -- -----------------------------------------------------------------------------
 --  LLMs: Claude, Ollama, agy  (pure/llm.lua, <leader>a)
@@ -403,13 +404,18 @@ require('pure.protonpass').prefetch()
 -- Claude's command (Claude Code). Default: 'claude'.
 g.pure_claude_cmd = 'claude'
 
+-- A bare URL pasted into an org or markdown note becomes a link called by the site's name at once, and
+-- by the page's title (the video's name for YouTube) as soon as it is fetched (pure/urltitle.lua).
+-- The paste makes one request to the pasted address. false: a URL is pasted as it is. Default: true.
+g.pure_url_titles = true
+
 -- ```claude blocks in notes run by themselves when due. false: only with
 -- <leader>ab. Default: true.
 g.pure_llm_blocks = true
 
--- Folder of the actions (<leader>ax), inside the vault. Default: 'claude'.
--- Changed: '8-AI' (the vault's Claude/ folder became AI/ on 2026-10-01, 8-AI on 2026-10-16).
-g.pure_llm_actions = '8-AI'
+-- Folder of the actions (<leader>ax): a name inside the vault, or an absolute path (~ works).
+-- Default: 'claude'. Changed: the actions of the Flora vault (before: '8-AI', a folder of the old Atlas vault).
+g.pure_llm_actions = '~/Flora/ai/actions'
 
 -- Folders (inside the vault, or absolute) no cloud model (Claude, agy) may
 -- see; local models (Ollama) may. A request holding a note from one, or whose
@@ -419,8 +425,9 @@ g.pure_llm_actions = '8-AI'
 -- pure_outside_folders).
 g.pure_llm_private = { '~/Private' }
 
--- Folder of the personas (/name), inside the actions folder. Default: 'Personas'.
--- g.pure_llm_personas = 'Personas'
+-- Folder of the personas (/name): a name inside the actions folder, or an absolute path (~ works).
+-- Default: 'Personas'. Changed: the personas of the Flora vault, next to the actions folder.
+g.pure_llm_personas = '~/Flora/ai/personas'
 
 -- A model's thinking: 'show' (dimmed while it thinks, folded after: t in the
 -- chat, <leader>at for <leader>ai) or 'hide'. Default: 'show'.

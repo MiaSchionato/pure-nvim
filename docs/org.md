@@ -80,7 +80,11 @@ flags `b:org_link_descriptive` and `b:org_hide_emphasis_markers` to follow the r
 (`<leader>tm`) and `vim.g.pure_org_emphasis`, so `|` columns line up on screen. With the
 rendering off the raw width is used. `startup_align_all_tables = true` (`lua/plugins/org.lua`)
 aligns every table when a note is opened (like `#+STARTUP: align`), so tables written by scripts
-show straight at once; the buffer then counts as modified.
+show straight at once; the buffer then counts as modified. A table row that is wider than the window *as written* (a long
+`[[link]]` counts in full, the render hides it) would wrap into extra screen rows and leave the `│` of the table loose: while
+such a row is in view the window does not wrap, and `wrap` comes back when none is (`vim.g.pure_org_table_nowrap = false`
+turns it off). In Insert mode `<Tab>` / `<S-Tab>` in a table go to the next / previous cell, and with the completion menu
+open they pick the next / previous suggestion.
 
 **Shrinking wide tables (`<leader>tT`).** org.nvim can shrink a column: a column with a width cookie
 `<W>` shows the first W characters of each cell and a `…`, and the text is never changed (the drawing
@@ -142,6 +146,28 @@ What that found and fixed (the same engine draws the Markdown headings):
 - A code block's label left a hole in the shading; a link line showed a blank row under it (an
   inline virtual text is counted on top of the raw width); big headlines showed the `*bold*` marks
   and the link syntax of their text.
+
+## Pasted links get their name (`lua/pure/urltitle.lua`)
+
+Paste a bare `http(s)` URL into an org or markdown note (a terminal paste: Ctrl+V, Win+V, middle
+button) and it becomes a link at once, called by the site's name, then by the page's title as soon as
+`curl` has fetched it, in the background (the text you keep typing is not disturbed):
+
+| In | You paste | At once | A moment later |
+|---|---|---|---|
+| org | `https://www.youtube.com/watch?v=3ZeKWrs6VBM` | `[[https://www.youtube.com/watch?v=3ZeKWrs6VBM][youtube.com]]` | `[[...][Bro drew for 1000 hours]]` |
+| markdown | `https://example.com/` | `[example.com](https://example.com/)` | `[Example Domain](https://example.com/)` |
+
+The title is the page's `og:title`, else its `<title>`; for YouTube the video's name (oEmbed). A page
+that does not answer, or has no title, keeps the site's name. Brackets in a title become parentheses,
+a title is cut at 120 characters.
+
+Left alone: a paste of anything but one URL (text, several lines), a paste inside a link (`[[...` in
+org, the `(...)` of `](...)` in markdown), other file types (`.txt` has no link syntax: the URL stays),
+a long paste that arrives in pieces, Visual and Command-line mode, and `p` of a register (only the
+terminal's paste is a paste). The paste makes one request to the pasted address, the one opening the
+link would make. `vim.g.pure_url_titles = false` (`configs/configs.lua`, on by default) pastes the URL
+as it is.
 
 ## Flora keys (`<leader>v`, `lua/pure/flora.lua`)
 

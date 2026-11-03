@@ -879,7 +879,8 @@ local function inline(buf, row, text, from, own_link, emph, mark)
   links(buf, row, text, from, own_link, collect)
   if emph then emphasis(row, text, from, {}, collect) end
   if #pending == 0 then return end
-  if vim.g.pure_org_conceal_wrapped ~= true then
+  -- (only a window that wraps has the problem: with 'nowrap' every line is one row, raw or not)
+  if vim.g.pure_org_conceal_wrapped ~= true and vim.wo.wrap then
     local width = vim.api.nvim_win_get_width(0) - vim.fn.getwininfo(vim.api.nvim_get_current_win())[1].textoff
     local raw = vim.fn.strdisplaywidth(text)
     if width > 0 and math.ceil(raw / width) > math.ceil(math.max(raw - saved, 1) / width) then return end
@@ -979,12 +980,16 @@ local function installCookieWidths()
   end
 end
 
---- The window stops wrapping while a table is shrunk in it; a 'wrap' turned off here is given back after.
-local function shrinkWrap(win, shrunk)
+--- The window does not wrap for as long as a reason holds: 'shrink' (a table is shrunk in it) or 'table' (a table row
+--- is wider than the window as written). A 'wrap' turned off here is given back when no reason is left.
+local function noWrap(win, reason, on)
+  local reasons = vim.w[win].pure_org_nowrap_for or {}
+  reasons[reason] = on or nil
+  vim.w[win].pure_org_nowrap_for = reasons
   local ours = vim.w[win].pure_org_nowrap == true
-  if shrunk and vim.wo[win].wrap then
+  if next(reasons) and vim.wo[win].wrap then
     vim.wo[win].wrap, vim.w[win].pure_org_nowrap = false, true
-  elseif not shrunk and ours then
+  elseif not next(reasons) and ours then
     vim.wo[win].wrap, vim.w[win].pure_org_nowrap = true, nil
   end
 end
@@ -1032,7 +1037,7 @@ local function applyShrink(buf)
     end
   end)
   shrink.refresh_all(buf) -- the window may have changed size: the widths are worked out again
-  shrinkWrap(win, any)
+  noWrap(win, 'shrink', any)
 end
 
 --- Expand the tables this toggle shrank and give the window its 'wrap' back.
@@ -1044,7 +1049,7 @@ local function clearShrink(buf)
       shrink.expand(buf, info.start)
     end
   end)
-  for _, win in ipairs(vim.fn.win_findbuf(buf)) do shrinkWrap(win, false) end
+  for _, win in ipairs(vim.fn.win_findbuf(buf)) do noWrap(win, 'shrink', false) end
 end
 
 --- <leader>tT: shrink the tables wider than the window (and expand them again).
@@ -1072,7 +1077,11 @@ vim.api.nvim_create_autocmd({ 'BufWinEnter', 'WinResized', 'InsertLeave', 'TextC
 vim.api.nvim_create_autocmd('BufWinLeave', {
   group = 'PureOrgTableShrink',
   callback = function(args)
-    if vim.bo[args.buf].filetype == 'org' then shrinkWrap(vim.api.nvim_get_current_win(), false) end
+    if vim.bo[args.buf].filetype == 'org' then
+      local win = vim.api.nvim_get_current_win()
+      noWrap(win, 'shrink', false)
+      noWrap(win, 'table', false)
+    end
   end,
 })
 
@@ -1340,6 +1349,7 @@ function M.refresh(force)
   if not active(buf) then
     vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
     drawn[buf], last_state[buf] = nil, nil
+    noWrap(0, 'table', false) -- the rendering is off: the text is as written, nothing hides
     return
   end
   local cursor = vim.api.nvim_win_get_cursor(0)
@@ -1350,6 +1360,24 @@ function M.refresh(force)
   last_state[buf] = key
 
   local info = scan(buf)
+
+  -- A table row wider than the window as written (a long [[link]] counts in full, the render hides it) would wrap into
+  -- extra screen rows and break the table: the window does not wrap while one is in view. vim.g.pure_org_table_nowrap
+  -- = false turns it off.
+  local text_width = vim.api.nvim_win_get_width(0) - vim.fn.getwininfo(vim.api.nvim_get_current_win())[1].textoff
+  local wide_table = false
+  if vim.g.pure_org_table_nowrap ~= false then
+    for row = vim.fn.line('w0') - 1, vim.fn.line('w$') - 1 do
+      local r = info.rows[row]
+      if r and (r.kind == 'table' or r.kind == 'tablerule')
+        and vim.fn.strdisplaywidth(info.lines[row + 1] or '') > text_width then
+        wide_table = true
+        break
+      end
+    end
+  end
+  noWrap(0, 'table', wide_table)
+
   -- Only the rows on screen, plus a margin so short scrolls look finished.
   local top = math.max(vim.fn.line('w0') - 1 - 20, 0)
   local bottom = vim.fn.line('w$') + 20

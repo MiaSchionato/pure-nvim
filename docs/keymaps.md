@@ -36,7 +36,7 @@ See [llm.md](llm.md).
 | `<leader>aa` | n, x | Chat: show / hide (like <leader>tt) |
 | `<leader>ab` | n | Run the ```` ```llm ```` block under the cursor |
 | `<leader>ac` | n, x | Review the code |
-| `<leader>ad` | n | Daily note: next step and the measured day (the vault action `Nota do dia`) |
+| `<leader>ad` | n | Daily note: next step and the measured day (the action `Daily note` of `~/Flora/ai/actions`) |
 | `<leader>ah` | n | Past answers |
 | `<leader>ai` | n, x | Write here (visual: rewrite) |
 | `<leader>ap` | n | Personas: pick one from the list, open its chat (`/name`, see [llm.md](llm.md#personas)) |
@@ -47,7 +47,7 @@ See [llm.md](llm.md).
 | `<leader>aq` | n | Quit the AI: stop, unload models, close Ollama |
 | `<leader>at` | n | Thinking of <leader>ai (show / hide) |
 | `<leader>au` | n | User context file (what the LLMs know about you) |
-| `<leader>aw` | n | Weekly note: the week in one place (the vault action `Nota da semana`) |
+| `<leader>aw` | n | Weekly note: the week in one place (the action `Week review` of `~/Flora/ai/actions`) |
 | `<leader>ax` | n, x | Actions (claude/ folder of the vault) |
 
 ## `<leader>b` – Buffers

@@ -116,7 +116,7 @@ text is left alone. `vim.g.pure_suggest_filetypes = { 'org' }` changes where it 
 
 | Key (insert) | What |
 |---|---|
-| `<Tab>` / `<S-Tab>` | menu open: next / previous suggestion. Else: step past the closing pairs right after the cursor (`[[a\|]]` → `[[a]]\|`), jump in a snippet, or a plain Tab. Right after an empty list item's marker: indent / outdent it (Lists, above). Tab never indents otherwise |
+| `<Tab>` / `<S-Tab>` | menu open: next / previous suggestion (also in an org table, where the key is otherwise the next / previous cell: `plugins/org.lua` makes org.nvim step aside while the menu is open). Else: step past the closing pairs right after the cursor (`[[a\|]]` → `[[a]]\|`), jump in a snippet, or a plain Tab. Right after an empty list item's marker: indent / outdent it (Lists, above). Tab never indents otherwise |
 | `<CR>` | a Copilot suggestion on screen: accept it. Menu open: take the selected suggestion, or the first one (a word already complete just gets its new line). Else a new line (the next list item in notes) |
 | `<Esc>` | menu open: close only the menu (a picked suggestion stays) and stay in insert mode; else leave insert mode |
 | `<Up>` | signature help where a language server offers it; else up |
