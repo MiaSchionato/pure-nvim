@@ -11,10 +11,10 @@ window to the bottom, so no `~` shows under the drawing.
 
 | Key | What |
 |---|---|
-| `d` | today's daily note, created from the template if it is not there yet ([zettelkasten](zettelkasten.md)) |
-| `l` | the last note of the vault that was open, at the line where it was left (else the last file Neovim was closed on, `'0`) |
+| `d` | today in the Flora journal (org-roam dailies, same as `<leader>vJ`; [org](org.md)) |
+| `l` | the last note (org or markdown) of the vault that was open, at the line where it was left (else the last file Neovim was closed on, `'0`) |
 | `n` | the scratch note (below) |
-| `v` | new note in the vault's inbox, asking only its name (same as `<leader>vn`) |
+| `v` | a seed in Flora's inbox (same as `<leader>vn`) |
 | `q` | quit; in a tab while others are open, close just that tab |
 | `u` | update: the configuration's repository, then the plugins (below) |
 
@@ -115,12 +115,12 @@ elsewhere `'shell'`.
 
 ## Remote (`lua/pure/remote.lua`)
 
-The first Neovim started listens at a fixed address, `/tmp/nvim-atlas.sock`
+The first Neovim started listens at a fixed address, `/tmp/nvim-remote.sock`
 (`vim.g.remote_socket`; `''` turns it off), so a program outside can open a
 file in it instead of starting another one:
 
 ```
-nvim --server /tmp/nvim-atlas.sock --remote 'Atlas/0-Inbox/Note.md'
+nvim --server /tmp/nvim-remote.sock --remote 'Flora/inbox.org'
 ```
 
 The Flow Launcher plugin `nv` does this. A Neovim started while another owns

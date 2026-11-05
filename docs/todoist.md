@@ -236,7 +236,8 @@ carries its link.
 ## 3. Archive
 
 ```lua
-vim.g.pure_todoist_archive = '6-Archive/Todoist/'
+vim.g.pure_todoist_archive = 'archive/Todoist/'
+vim.g.pure_todoist_archive_format = 'org'  -- 'md' (default) or 'org'
 ```
 
 A relative folder is inside the Obsidian vault (see [zettelkasten](zettelkasten.md)),
@@ -249,6 +250,12 @@ changed:
 - `history.md` – one line per change, with date and time (made here, or
   seen changed in Todoist);
 - `tasks.json` – the list as data, used to detect changes.
+
+With `vim.g.pure_todoist_archive_format = 'org'` the first two are
+`tasks.org` (a `* Todoist` heading, `** Project` under it) and `history.org`
+(the same lines). Whatever precedes the first heading of an existing
+`tasks.org`, such as its `:PROPERTIES:` drawer with the `:ID:` that links use
+and its `#+TITLE`, is kept on every rewrite.
 
 Unset or `''` turns it off.
 

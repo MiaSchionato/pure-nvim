@@ -186,13 +186,19 @@ g.pure_links_complete = true
 -- -----------------------------------------------------------------------------
 --  Vault and notes  (pure/zettelkasten.lua, pure/notes.lua, <leader>v)
 -- -----------------------------------------------------------------------------
--- The Obsidian vault. Unset (default): asked for on a fresh install and
--- remembered in stdpath('data'); :ZettelVault changes it. Setting it here
--- overrides that.
--- g.pure_vault = '~/Atlas'
+-- The vault. Unset (default): asked for on a fresh install and remembered in
+-- stdpath('data'); :ZettelVault changes it. Setting it here overrides that.
+-- Changed: the Flora vault (org), the same folder as pure/flora.lua and
+-- lua/plugins/org.lua. It was the Markdown vault ~/Atlas until 2026-11-05.
+-- The LLM tools, backlinks, vault sync, the Todoist archive and the pickers
+-- use it. The Markdown note engine (pure/zettelkasten.lua: templates,
+-- periodic notes, trash) was made for Atlas; its automatic parts are off
+-- below (pure_trash_cleanup, pure_periodic_on_start).
+g.pure_vault = '~/Flora'
 
 -- Folder of the templates, inside the vault. Default: 'Templates'.
-g.pure_templates = '7-Templates'
+-- Changed: Flora's (the org versions of the Atlas templates).
+g.pure_templates = 'archive/templates'
 
 -- Folders whose new notes are born with a template: a link to a note that
 -- does not exist yet, created there (Yes), gets it at once. Folder inside
@@ -258,16 +264,20 @@ g.pure_quotes = '6-Archive/Periodic/Quotes.md'
 -- template send notes) each time Neovim starts, as Obsidian's TrashCleaner
 -- did. true: everything; a number: only what was not modified for that many
 -- days; false: never. Deleted for good, not moved to the recycle bin.
--- Default: false. Changed: true.
-g.pure_trash_cleanup = true
+-- Default: false. Changed: true for Atlas; false since the vault is Flora
+-- (2026-11-05), whose trash is not this module's to empty.
+g.pure_trash_cleanup = false
 
 -- Make the current periodic notes (from their templates) each time Neovim
 -- starts, without opening them, so they are there before they are first
 -- opened: today's daily, this week's, this month's (the current one, so a
 -- week whose Monday Neovim was not opened still gets its note). Periods
 -- left out are made only when opened. (g.pure_daily_on_start = true, the
--- older option, makes the daily alone.) Default: none. Changed: all three.
-g.pure_periodic_on_start = { 'Daily', 'Weekly', 'Monthly' }
+-- older option, makes the daily alone.) Default: none. Changed: all three
+-- for Atlas; none since the vault is Flora (2026-11-05): its journal is
+-- org-roam's dailies (pure/flora.lua, <leader>v), and these would be
+-- Markdown notes in Atlas' folders.
+g.pure_periodic_on_start = {}
 
 -- -----------------------------------------------------------------------------
 --  New files and pickers  (pure/fuzzyUtils.lua, <leader>n, <leader>f)
@@ -302,8 +312,8 @@ g.pure_tasks_done = 'xX-'
 -- -----------------------------------------------------------------------------
 -- The first Neovim started listens at this address, so the Flow Launcher
 -- plugin (or `nvim --server ADDRESS --remote FILE`) opens a file in it.
--- '' or false: do not listen. Default: '/tmp/nvim-atlas.sock'.
-g.remote_socket = '/tmp/nvim-atlas.sock'
+-- '' or false: do not listen. Default: '/tmp/nvim-remote.sock'.
+g.remote_socket = '/tmp/nvim-remote.sock'
 
 -- -----------------------------------------------------------------------------
 --  Link view  (pure/linkview.lua, <leader>vp preview, <leader>vq quick edit)
@@ -333,9 +343,13 @@ g.pure_todoist_confirm = 'never'
 
 -- Folder where the task list and a timestamped history of every change are
 -- kept (tasks.md, history.md, tasks.json), relative to the vault so it moves
--- with it. Unset or '' (default): no archive. Changed: set (6-Archive since
--- the vault was reorganised on 2026-10-16).
-g.pure_todoist_archive = '6-Archive/Todoist/'
+-- with it. Unset or '' (default): no archive. Changed: set (Flora's archive
+-- folder, where the migration put the Atlas one, since 2026-11-05).
+g.pure_todoist_archive = 'archive/Todoist/'
+
+-- Syntax of that archive: 'md' (tasks.md, history.md) or 'org' (tasks.org,
+-- history.org). Default: 'md'. Changed: 'org', the Flora vault's.
+g.pure_todoist_archive_format = 'org'
 
 -- Write the tasks of each ```todoist block into its note as text, refreshed
 -- every `interval` minutes. false (default): drawn, not written.
