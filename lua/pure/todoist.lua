@@ -429,6 +429,11 @@ end
 --                the full list is reloaded
 --    tasks.json  the last full list, to tell what changed since
 --
+--  vim.g.pure_todoist_archive_format = 'org' writes tasks.org and history.org
+--  instead (a '* Todoist' heading, '** Project' under it); whatever comes
+--  before the first heading of an existing tasks.org (its :PROPERTIES: drawer
+--  with the :ID: links use, its #+TITLE) is kept. Default: 'md'.
+--
 --  tasks.md and tasks.json hold no timestamp and are rewritten only when their
 --  content differs, so reloading an unchanged list touches nothing. All disk
 --  work goes through libuv's asynchronous calls, off the editing path; only
@@ -436,6 +441,11 @@ end
 
 local archive = { skip_external = false }
 local uv = vim.uv
+
+--- 'org' or 'md': the extension and the syntax of tasks.* and history.*.
+local function archiveExt()
+  return vim.g.pure_todoist_archive_format == 'org' and 'org' or 'md'
+end
 
 --- The archive folder (created on first use), or nil when archiving is off.
 ---
@@ -487,13 +497,13 @@ local function writeIfChanged(path, data)
   end)
 end
 
---- Append one line per entry to history.md, all with the same time.
+--- Append one line per entry to history.md (.org), all with the same time.
 local function logEntries(dir, entries)
   if not dir or #entries == 0 then return end
   local stamp = os.date('%Y-%m-%d %H:%M:%S')
   local out = {}
   for _, e in ipairs(entries) do table.insert(out, ('- %s · %s\n'):format(stamp, e)) end
-  writeAsync(dir .. '/history.md', table.concat(out), 'a')
+  writeAsync(dir .. '/history.' .. archiveExt(), table.concat(out), 'a')
 end
 
 function archive.log(entries)
@@ -566,7 +576,8 @@ function archive.snapshot(tasks, projects)
     end
   end
   local marks = readStates()
-  local md = { '# Todoist' }
+  local org = archiveExt() == 'org'
+  local md = { org and '* Todoist' or '# Todoist' }
   local function emit(t, depth)
     table.insert(md, (taskLine(t, depth, marks[t.id]):gsub('%s*‹[%w_%-]+›%s*$', '')))
     for _, c in ipairs(children[t.id] or {}) do emit(c, depth + 1) end
@@ -576,7 +587,7 @@ function archive.snapshot(tasks, projects)
   end
   for _, pid in ipairs(order) do
     if top[pid] then
-      vim.list_extend(md, { '', '## ' .. (names[pid] or pid) })
+      vim.list_extend(md, { '', (org and '** ' or '## ') .. (names[pid] or pid) })
       for _, t in ipairs(top[pid]) do emit(t, 0) end
     end
   end
@@ -589,7 +600,19 @@ function archive.snapshot(tasks, projects)
   local skip = archive.skip_external
   archive.skip_external = false
 
-  writeIfChanged(dir .. '/tasks.md', md_text)
+  if org then
+    -- Keep what precedes the first heading of the file already there.
+    local path = dir .. '/tasks.org'
+    readAsync(path, function(old)
+      -- The head ends at the line before the first heading, without its newline.
+      local head = old and old:match('^(.-)\n%* ') or ''
+      if head ~= '' then head = head .. '\n' end
+      local data = head .. md_text
+      if old ~= data then writeAsync(path, data, 'w') end
+    end)
+  else
+    writeIfChanged(dir .. '/tasks.md', md_text)
+  end
   readAsync(dir .. '/tasks.json', function(old_text)
     if old_text == json_text then return end
     local ok, old = pcall(vim.json.decode, old_text or '')

@@ -101,17 +101,18 @@ where to change them.
 
 | Setting | Default | Page |
 |---|---|---|
-| `vim.g.pure_vault` | asked on first start | [zettelkasten](zettelkasten.md) |
-| `vim.g.pure_templates` | `'Templates'` | [zettelkasten](zettelkasten.md) |
+| `vim.g.pure_vault` | asked on first start (`'~/Flora'` in configs.lua) | [zettelkasten](zettelkasten.md) |
+| `vim.g.pure_templates` | `'Templates'` (`'archive/templates'` in configs.lua) | [zettelkasten](zettelkasten.md) |
 | `vim.g.pure_folder_templates` | `{}` | [notes](notes.md) |
 | `vim.g.pure_outside_folders` | `{}` (name = folder outside the vault, or `{ dir, cipher, idle, fido2 }` for an encrypted one) | [notes](notes.md) |
 | `vim.g.pure_fido2_id` | none (the FIDO2 key's USB `vendor:product`, attached to WSL only while mounting) | [notes](notes.md) |
 | `vim.g.pure_templates_locale` | `'en'` | [zettelkasten](zettelkasten.md) |
-| `vim.g.pure_trash_cleanup` | off (`true` in configs.lua) | [zettelkasten](zettelkasten.md) |
-| `vim.g.pure_periodic_on_start` | off (`{ 'Daily', 'Weekly', 'Monthly' }` in configs.lua) | [zettelkasten](zettelkasten.md) |
+| `vim.g.pure_trash_cleanup` | off | [zettelkasten](zettelkasten.md) |
+| `vim.g.pure_periodic_on_start` | off | [zettelkasten](zettelkasten.md) |
 | `vim.g.pure_daily_on_start` | off (the daily alone; older) | [zettelkasten](zettelkasten.md) |
 | `vim.g.pure_todoist_confirm` | `'all'` | [todoist](todoist.md) |
-| `vim.g.pure_todoist_archive` | off | [todoist](todoist.md) |
+| `vim.g.pure_todoist_archive` | off (`'archive/Todoist/'` in configs.lua) | [todoist](todoist.md) |
+| `vim.g.pure_todoist_archive_format` | `'md'` (`'org'` in configs.lua) | [todoist](todoist.md) |
 | `vim.g.pure_todoist_sync` | off (`{ interval = 10 }` in configs.lua) | [todoist](todoist.md) |
 | `vim.g.pure_todoist_fold` | `'subtasks'` | [todoist](todoist.md) |
 | `vim.g.pure_calendar_cell_width` | `25` (grid 197 columns) | [calendar](calendar.md) |
