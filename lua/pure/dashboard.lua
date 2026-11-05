@@ -142,8 +142,8 @@ local function render(buf, win)
 end
 
 --- l on the dashboard: back to the last note of the vault that was open
---- (Improvment.md), at the line where it was left: the newest entry of
---- v:oldfiles that is a markdown file inside the vault. With no such note
+--- (Improvment.org), at the line where it was left: the newest entry of
+--- v:oldfiles that is an org or markdown file inside the vault. With no such note
 --- (or no vault), the last file Neovim was closed on, Vim's '0 mark.
 function M.lastNote()
   local ok, zet = pcall(require, 'pure.zettelkasten')
@@ -156,7 +156,7 @@ function M.lastNote()
     local root = key(vault) .. '/'
     for _, f in ipairs(vim.v.oldfiles) do
       local path = vim.fs.normalize(f)
-      if f:match('%.md$') and key(path):sub(1, #root) == root and vim.fn.filereadable(path) == 1 then
+      if (f:match('%.org$') or f:match('%.md$')) and key(path):sub(1, #root) == root and vim.fn.filereadable(path) == 1 then
         vim.cmd('edit ' .. vim.fn.fnameescape(path))
         -- Where it was left ('"), as reopening a file with :e does not do.
         pcall(vim.cmd, 'normal! g`"')
@@ -204,11 +204,12 @@ function M.drawDashboard()
 
   -- Set your keymaps for the dashboard buffer
   local opts = { buffer = buf, silent = true, nowait = true }
-  vim.keymap.set('n', 'd', function() require('pure.zettelkasten').openDaily() end, opts)
+  -- Today's journal of the Flora vault (org-roam dailies, like <leader>vJ).
+  vim.keymap.set('n', 'd', function() require('pure.flora').journalToday() end, opts)
   vim.keymap.set('n', 'l', M.lastNote, opts)
   vim.keymap.set('n', 'n', function() require('pure.scratch').open() end, opts)
-  -- A note in the vault's inbox, asking only its name (like <leader>vn).
-  vim.keymap.set('n', 'v', function() require('pure.zettelkasten').newNote() end, opts)
+  -- A seed in Flora's inbox (like <leader>vn).
+  vim.keymap.set('n', 'v', function() require('pure.flora').newSeed() end, opts)
   -- In a tab of its own, q closes that tab; from the last one it quits.
   vim.keymap.set('n', 'q', function()
     vim.cmd(#vim.api.nvim_list_tabpages() > 1 and 'tabclose' or 'qa')

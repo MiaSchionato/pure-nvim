@@ -4,7 +4,7 @@
 --  One Neovim answers at a fixed address, so something outside (the Flow
 --  Launcher plugin "nv") can open a file in it instead of starting another:
 --
---    nvim --server /tmp/nvim-atlas.sock --remote 'Atlas/0-Inbox/Note.md'
+--    nvim --server /tmp/nvim-remote.sock --remote 'Flora/inbox.org'
 --
 --  The first Neovim started owns the address; the ones after it find it
 --  taken and are left alone (they are still reachable by their own
@@ -12,14 +12,14 @@
 --  removed first.
 --
 --  Settings:
---    vim.g.remote_socket   the address (default '/tmp/nvim-atlas.sock');
+--    vim.g.remote_socket   the address (default '/tmp/nvim-remote.sock');
 --                          '' or false: do not listen
 --  Skipped when nvim runs headless (tests, scripts).
 -- =============================================================================
 
 local M = {}
 
-local DEFAULT = '/tmp/nvim-atlas.sock'
+local DEFAULT = '/tmp/nvim-remote.sock'
 
 --- True when a Neovim answers at `path`.
 local function alive(path)
