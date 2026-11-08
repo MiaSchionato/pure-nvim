@@ -152,6 +152,7 @@ map('n', "<leader>sj", "<C-w>j", func.getOpts(opts, "Focus split window below"))
 map('n', "<leader>sk", "<C-w>k", func.getOpts(opts, "Focus split window above"))
 map('n', "<leader>sl", "<C-w>l", func.getOpts(opts, "Focus split window right"))
 map('n', "<leader>sq", "<C-w>q", func.getOpts(opts, "Close split window"))
+map('n', "<leader>so", "<C-w>o", func.getOpts(opts, "Close all other split window"))
 map('n', "<leader>sn", "<C-w>n", func.getOpts(opts, "New split horizontally"))
 map('n', "<leader>sv", "<C-w>v", func.getOpts(opts, "New split vertically"))
 
