@@ -199,7 +199,8 @@ command wins over `vim.g.pure_reading_width`, which is only the starting value (
 
 The toggles stay as you left them (`lua/configs/functions.lua`): a toggle you press is saved in
 `stdpath('data')/toggles.json` and applied again on the next start. That covers the note
-rendering (markdown on/off, org full / no big headlines / off), the heading bar, transparency,
+rendering (markdown on/off, org full / no big headlines / off), the heading bar, the `TODO:`
+background (`<leader>tb`), transparency,
 diagnostics, statusline, tabline, sign column, wrap, line numbers, inlay hints and Copilot. Until a
 toggle is pressed, the default of `configs.lua` applies. Not saved: zen mode (temporary, it puts
 things back) and `oh` (the word highlight follows the cursor). `:PureToggles` shows what is saved,

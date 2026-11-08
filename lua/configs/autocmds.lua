@@ -72,8 +72,10 @@ vim.api.nvim_create_autocmd("VimEnter", {
 -- The colour is set once and again after a colorscheme change (it was reset
 -- on every BufEnter). The match is added once per window, and only in
 -- windows showing a real file -- not terminals, pickers or the dashboard.
+-- The colour can be switched off (<leader>tb, vim.g.pure_todo_bg): see
+-- applyTodoBackground in configs/functions.lua.
 local function todoColour()
-  vim.api.nvim_set_hl(0, "PureTodo", { bg = 'grey', fg = 'NvimLightGrey2' })
+  require('configs.functions').applyTodoBackground()
 end
 todoColour()
 vim.api.nvim_create_autocmd("ColorScheme", { callback = todoColour })
