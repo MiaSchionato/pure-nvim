@@ -264,6 +264,10 @@ map('n', '<leader>vN', vault.newNote, func.getOpts(opts, "New note in its own fi
 -- linked note, which was <leader>vq, was removed.
 map('n', '<leader>vq', vault.capture, func.getOpts(opts, "Quick capture: seed, task, link, journal, source"))
 map('n', '<leader>q', vault.capture, func.getOpts(opts, "Quick capture: seed, task, link, journal, source"))
+-- <leader>a: the org agenda's menu (a week, t every open item, m match, s search), the same as org.nvim's
+-- <leader>ma; it opens floating (lua/plugins/org.lua). The AI was <leader>a and is <leader>l; the LSP was
+-- <leader>l and is <leader>L. (Mia, 2026-11-08.)
+map('n', '<leader>a', function() vim.cmd('Org agenda') end, func.getOpts(opts, "Agenda (a week, t open items, m match, s search)"))
 map('n', '<leader>vn', vault.grow, func.getOpts(opts, "Grow the idea: SEED > SPROUT > PLANT > TREE"))
 map('n', '<leader>vc', vault.compost, func.getOpts(opts, "Let the idea go: compost"))
 map('n', '<leader>vm', vault.move, func.getOpts(opts, "Move this heading to another note (its :TYPE: note in sources/, or pick one)"))
@@ -286,31 +290,31 @@ vim.api.nvim_create_autocmd('FileType', {
 })
 
 -- =============================================================================
---  LLMs: Claude, Ollama, agy  (<leader>a, pure/llm.lua)
+--  LLMs: Claude, Ollama, agy  (<leader>l, pure/llm.lua)
 -- =============================================================================
 local function llm(fn)
   return function() require('pure.llm')[fn]() end
 end
-map({ 'n', 'x' }, '<leader>ai', llm('write'), func.getOpts(opts, "Write here (visual: rewrite)"))
-map({ 'n', 'x' }, '<leader>aa', llm('ask'), func.getOpts(opts, "Chat: show / hide"))
-map({ 'n', 'x' }, '<leader>ac', llm('review'), func.getOpts(opts, "Review the code"))
-map({ 'n', 'x' }, '<leader>ar', llm('repeatLast'), func.getOpts(opts, "Repeat the last request"))
-map('n', '<leader>ah', llm('history'), func.getOpts(opts, "Past answers"))
-map('n', '<leader>as', llm('stop'), func.getOpts(opts, "Stop"))
+map({ 'n', 'x' }, '<leader>li', llm('write'), func.getOpts(opts, "Write here (visual: rewrite)"))
+map({ 'n', 'x' }, '<leader>la', llm('ask'), func.getOpts(opts, "Chat: show / hide"))
+map({ 'n', 'x' }, '<leader>lc', llm('review'), func.getOpts(opts, "Review the code"))
+map({ 'n', 'x' }, '<leader>lr', llm('repeatLast'), func.getOpts(opts, "Repeat the last request"))
+map('n', '<leader>lh', llm('history'), func.getOpts(opts, "Past answers"))
+map('n', '<leader>ls', llm('stop'), func.getOpts(opts, "Stop"))
 -- Frees the GPU without quitting (Improvment.md): what quitting does.
-map('n', '<leader>aq', llm('shutdown'), func.getOpts(opts, "Quit the AI: stop, unload models, close Ollama"))
-map('n', '<leader>am', llm('selectModel'), func.getOpts(opts, "Select model (Ollama / Claude / agy)"))
-map('n', '<leader>at', llm('toggleThinking'), func.getOpts(opts, "Thinking of <leader>ai (show / hide)"))
+map('n', '<leader>lq', llm('shutdown'), func.getOpts(opts, "Quit the AI: stop, unload models, close Ollama"))
+map('n', '<leader>lm', llm('selectModel'), func.getOpts(opts, "Select model (Ollama / Claude / agy)"))
+map('n', '<leader>lt', llm('toggleThinking'), func.getOpts(opts, "Thinking of <leader>li (show / hide)"))
 -- The file about you that every request reads (outside any git repository).
-map('n', '<leader>au', func.openUserContext, func.getOpts(opts, "User context file (what the LLMs know about you)"))
-map({ 'n', 'x' }, '<leader>ax', llm('pickAction'), func.getOpts(opts, "Actions (the folder vim.g.pure_llm_actions)"))
-map('n', '<leader>ab', llm('runBlockAtCursor'), func.getOpts(opts, "Run the ```llm block under the cursor"))
-map('n', '<leader>ad', function() require('pure.llm').runNamed('Daily note') end,
+map('n', '<leader>lu', func.openUserContext, func.getOpts(opts, "User context file (what the LLMs know about you)"))
+map({ 'n', 'x' }, '<leader>lx', llm('pickAction'), func.getOpts(opts, "Actions (the folder vim.g.pure_llm_actions)"))
+map('n', '<leader>lb', llm('runBlockAtCursor'), func.getOpts(opts, "Run the ```llm block under the cursor"))
+map('n', '<leader>ld', function() require('pure.llm').runNamed('Daily note') end,
 func.getOpts(opts, "Daily note: next step and the measured day"))
-map('n', '<leader>aw', function() require('pure.llm').runNamed('Week review') end,
+map('n', '<leader>lw', function() require('pure.llm').runNamed('Week review') end,
 func.getOpts(opts, "Weekly note: the week in one place"))
-map('n', '<leader>ap', llm('pickPersona'), func.getOpts(opts, "Personas: pick one, open its chat"))
-map('n', '<leader>aj', function() require('pure.llm').chatWith('job') end,
+map('n', '<leader>lp', llm('pickPersona'), func.getOpts(opts, "Personas: pick one, open its chat"))
+map('n', '<leader>lj', function() require('pure.llm').chatWith('job') end,
 func.getOpts(opts, "Job assistant: the chat with the /job persona"))
 
 -- =============================================================================
@@ -342,9 +346,9 @@ map('n', 'K', func.followOrHover, func.getOpts(opts, "Follow link, else LSP hove
 map('n', 'gd', lsp.definition, func.getOpts(opts, "LSP definition"))
 -- No 'gr' here: it made the builtin grr/grn/gra/gri/grt/grx wait 500 ms, and
 -- grr already lists references.
-map('n', '<leader>la', lsp.code_action, func.getOpts(opts, "LSP code action"))
-map('n', '<leader>lr', lsp.rename, func.getOpts(opts, "LSP rename"))
-map('n', '<leader>ls', lsp.workspace_symbol, func.getOpts(opts, "LSP workspace symbols"))
+map('n', '<leader>La', lsp.code_action, func.getOpts(opts, "LSP code action"))
+map('n', '<leader>Lr', lsp.rename, func.getOpts(opts, "LSP rename"))
+map('n', '<leader>Ls', lsp.workspace_symbol, func.getOpts(opts, "LSP workspace symbols"))
 map('i', '<up>', func.signatureHelpOrUp, { expr = true, replace_keycodes = true, silent = true, desc = "LSP signature help, else up" })
 
 -- =============================================================================
@@ -460,7 +464,7 @@ map('n', '<leader>oi', function() vim.cmd('edit ' .. vim.fn.fnameescape(dirs.inb
 --  Debug
 -- =============================================================================
 map({ 'n', 'v' }, '<leader>in', ':Inspect<cr>', func.getOpts(opts, "Inspect highlight under cursor"))
-map('v', '<leader>ldb', 'y:lua print(<C-r>")<cr>', func.getOpts(opts, "Print selection via lua"))
+map('v', '<leader>Ldb', 'y:lua print(<C-r>")<cr>', func.getOpts(opts, "Print selection via lua"))
 
 -- =============================================================================
 --  Completion and snippets

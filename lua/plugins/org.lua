@@ -169,6 +169,10 @@ require('org').setup({
   -- file of projects/, like `my/garden-agenda-files` in Doom.
   agenda_files = { vault .. '/tasks.org', vault .. '/inbox.org', vault .. '/projects/**/*.org' },
 
+  -- The agenda opens floating, in this config's window like the capture (see the window opener below the
+  -- setup). Default: 'split'. (Mia, 2026-11-08.)
+  agenda = { window = 'float' },
+
   todo_keywords = todo_keywords,
 
   -- Align every table when a note is opened (Emacs: #+STARTUP: align); by default
@@ -267,16 +271,22 @@ require('org').setup({
 -- refile <C-c><C-w> abort <C-c><C-k>  (:w finishes)") is left out. The keys stay: :w or <C-c><C-c> stores the
 -- entry and closes the window, <C-c><C-k> aborts. Its size is CAPTURE_RATIO (above), the size of the capture's
 -- questions. (Mia, 2026-11-08.)
+-- The agenda (agenda.window = 'float' above) asks org.nvim's own float, titled "Org Agenda": that one window is
+-- opened here too, at the same size and place as the capture, so both look alike. Its winbar is left alone (the
+-- agenda's column view writes its titles there).
 local orgUi = require('org.ui')
 local openBufferWindow = orgUi.open_buffer_window
 orgUi.open_buffer_window = function(buf, mode, opts)
-  if mode ~= 'pure_float' then return openBufferWindow(buf, mode, opts) end
+  local agenda = mode == 'float' and opts ~= nil and opts.title == 'Org Agenda'
+  if mode ~= 'pure_float' and not agenda then return openBufferWindow(buf, mode, opts) end
   local title = opts and opts.title and (' ' .. opts.title .. ' ') or ' '
   local win = require('configs.functions').createWindow(title, CAPTURE_RATIO, { buf = buf })
-  -- org.nvim writes its hint into the winbar right after this returns: clear it once it has.
-  vim.schedule(function()
-    if vim.api.nvim_win_is_valid(win) then vim.wo[win].winbar = '' end
-  end)
+  if not agenda then
+    -- org.nvim writes the capture's hint into the winbar right after this returns: clear it once it has.
+    vim.schedule(function()
+      if vim.api.nvim_win_is_valid(win) then vim.wo[win].winbar = '' end
+    end)
+  end
   return win
 end
 

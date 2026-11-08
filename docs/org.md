@@ -50,6 +50,15 @@ and closes the window; `:q` closes it and drops the entry; `<C-c><C-k>` aborts.
 org.nvim's window modes are strings only, so `lua/plugins/org.lua` wraps its window
 opener (`org.ui.open_buffer_window`) for that one mode; every other window is org.nvim's.
 
+## Agenda (`<leader>a`)
+
+`<leader>a` (or org.nvim's own `<leader>ma`) opens the agenda's menu: `a` the week, `t` every
+open item, `m` a tags / property match, `s` a word search. It reads `tasks.org`, `inbox.org` and
+`projects/**/*.org` (`agenda_files`). The agenda opens floating (`agenda = { window = 'float' }`),
+in the config's window at the size and place of the capture windows (`CAPTURE_RATIO`): the window
+opener of `lua/plugins/org.lua` takes org.nvim's "Org Agenda" float too. `<CR>` or `<Tab>` on an
+entry closes the float and opens the note in the window behind; `q` closes it. `g?` lists its keys.
+
 ## Tables made from headings (dynamic blocks)
 
 A `#+BEGIN: columnview ... #+END:` block builds a table from the properties of the
