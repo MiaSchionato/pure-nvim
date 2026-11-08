@@ -26,7 +26,7 @@ The keys of the quick capture (Win+Q) of the Emacs side:
 | `t` | a `TODO` in `tasks.org`; no question: the buffer has an empty `SCHEDULED:` line, filled in words (`today`, `tomorrow`, `fri`, `+3d`, `2026-11-20`, also `hoje`, `amanhã`, `oggi`, `domani`) that become a timestamp when stored; left empty, the line is dropped |
 | `T` | a `TODO` with a `DEADLINE` (date picked in org.nvim's date float) |
 | `l` | a link in `inbox.org`; asks the address (the clipboard is the default) and the title; the buffer then opens in Normal mode, to check them |
-| `f` | a source; no question: the buffer has every source property, empty (`TYPE AUTHOR STATUS GENRE LANGUAGE BY WHERE RATING NOTES`, `STATUS` = `to-read`); when stored, `:TYPE: Books` (any case) sends it to `sources/books.org`; no `:TYPE:`, or no note of that name in `sources/`, sends it to `inbox.org` (nothing is made; `<leader>vm` moves it later) |
+| `f` | a source; no question: the buffer has every source property, empty (`TYPE AUTHOR STATUS GENRE LANGUAGE BY WHERE RATING NOTES`); when stored, `:TYPE: Books` (any case) sends it to `sources/books.org`; no `:TYPE:`, or no note of that name in `sources/`, sends it to `inbox.org` (nothing is made; `<leader>vm` moves it later) |
 
 Only `l` asks questions, in the input float in the centre (`vim.ui.input`,
 `pure/fuzzyUtils.lua`, through org.nvim's `utils.input`), in its target function,
