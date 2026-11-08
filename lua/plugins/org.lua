@@ -89,13 +89,15 @@ local function link_template()
   return '* [[' .. literal(a.url or '') .. '][' .. literal(a.title or '') .. ']]\n' .. CREATED
 end
 
--- Source: no question; the buffer has every property of a source, empty, to fill in (the render hides the
--- empty ones). :TYPE: says where the entry goes when it is stored: `:TYPE: Books` sends it to the note
--- sources/books.org (any case: books, Books, BOOKS), whose columnview table then lists it; no :TYPE:, or a type
--- with no note of that name in sources/, sends it to the inbox. No note is made: make it, then move the entry
--- with <leader>vm. TYPE is in no table (no #+COLUMNS lists it). The empty properties stay in the entry.
+-- Node (`n`, which replaced `s` seed and `f` source, Mia 2026-11-08): no question; the buffer has every property,
+-- empty, to fill in. :TYPE: says what the entry is and where it goes when it is stored (any case):
+--   seed -> the inbox as a SEED; sprout, plant -> garden/<year>.org; tree, flower -> a note of its own in garden/;
+--   compost -> archive/compost.org (each with that state, the TYPE line dropped);
+--   the name of a note of sources/ (books, quotes...) -> that note, whose columnview table lists it (TYPE kept);
+--   none, or a type with no note -> the inbox as a SEED.
+-- The properties left empty are dropped. pure.vault.routeNode does it (from the store filter below).
 local SOURCE_PROPERTIES = { 'TYPE', 'AUTHOR', 'STATUS', 'GENRE', 'LANGUAGE', 'BY', 'WHERE', 'RATING', 'NOTES' }
-local function source_template()
+local function node_template()
   local lines = { '* %?', ':PROPERTIES:' }
   for _, key in ipairs(SOURCE_PROPERTIES) do
     lines[#lines + 1] = (':%s:'):format(key) .. string.rep(' ', 9 - #key) -- every one empty, STATUS too (Mia)
@@ -106,7 +108,7 @@ end
 
 -- What a store filter does with the entry of a capture, before org.nvim stores it (org.capture.store_filters:
 -- `fun(tpl, lines, ctx)` returns the lines and, to send the entry elsewhere, a target). The templates opt in with
--- two fields of this config: `route_by_type` (f) and `read_planning` (t).
+-- two fields of this config: `route_node` (n) and `read_planning` (t).
 
 -- Words of the planning lines in Portuguese and Italian, read as org.nvim's English ones.
 local DATE_WORDS = { hoje = 'today', ['amanhã'] = 'tomorrow', amanha = 'tomorrow', ontem = 'yesterday', agora = 'now',
@@ -136,17 +138,10 @@ end
 
 require('org.capture').store_filters.pure_vault = function(tpl, lines)
   if tpl.read_planning then lines = readPlanning(lines) end
-  if tpl.route_by_type then
-    local type
-    for _, l in ipairs(lines) do
-      type = l:match('^%s*:[Tt][Yy][Pp][Ee]:%s*(.-)%s*$')
-      if type then break end
-    end
-    local rel = type and type ~= '' and require('pure.vault').sourceFile(type)
+  if tpl.route_node then
+    local rel
+    lines, rel = require('pure.vault').routeNode(lines)
     if rel then return lines, { target = rel } end
-    if type and type ~= '' then
-      vim.notify(('No note sources/%s.org: the entry goes to the inbox'):format(vim.fn.tolower(type)), vim.log.levels.WARN)
-    end
   end
   return lines
 end
@@ -203,10 +198,11 @@ require('org').setup({
     -- closes it. Default: 'split'.
     window = 'pure_float',
     templates = {
-      s = {
-        description = 'Seed',
-        template = '* SEED %?\n' .. CREATED,
+      n = {
+        description = 'Node',
+        template = node_template,
         target = 'inbox.org',
+        route_node = true,
         empty_lines = 1,
       },
       t = {
@@ -227,13 +223,6 @@ require('org').setup({
         template = link_template,
         target = link_target,
         hook = restorePercent,
-        empty_lines = 1,
-      },
-      f = {
-        description = 'Source',
-        template = source_template,
-        target = 'inbox.org',
-        route_by_type = true,
         empty_lines = 1,
       },
       j = {

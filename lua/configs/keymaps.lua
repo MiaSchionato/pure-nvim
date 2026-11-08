@@ -228,7 +228,7 @@ map("n", "<leader>ns", function() require('pure.scratch').open() end, func.getOp
 map("n", "<leader>nh", inDir(fzf.NewFileIn, dirs['~']), func.getOpts(opts, "New file in home"))
 map("n", "<leader>n.", inDir(fzf.NewFileIn, dirs['.']), func.getOpts(opts, "New file in ~/.config"))
 map("n", "<leader>nn", inDir(fzf.NewFileIn, dirs.n), func.getOpts(opts, "New file in nvim config"))
--- A seed in the vault's inbox (the quick capture's `s`, <leader>vq s).
+-- A seed in the vault's inbox: the node capture with no :TYPE: (<leader>vq n).
 map("n", "<leader>nv", function() require('pure.vault').newSeed() end, func.getOpts(opts, "New seed in the vault's inbox"))
 map("n", "<leader>nd", function() fzf.NewFolder(here()) end, func.getOpts(opts, "New folder here"))
 -- <leader>nt (template) and <leader>nr (rename note) moved to the vault group
@@ -260,9 +260,9 @@ map('n', '<leader>vF', vault.findFile, func.getOpts(opts, "Find a file of the va
 map('n', '<leader>vg', vault.grep, func.getOpts(opts, "Grep the vault"))
 map('n', '<leader>vN', vault.newNote, func.getOpts(opts, "New note in its own file"))
 -- 2026-11-08 (Mia): the capture menu moved from <leader>vt to <leader>vq (vt is gone); n and c are
--- Doom's grow and compost; a new seed is the capture's `s` (n was "new seed"). The quick edit of the
+-- Doom's grow and compost; a new seed is the capture's `n` (node; n was "new seed"). The quick edit of the
 -- linked note, which was <leader>vq, was removed.
-map('n', '<leader>vq', vault.capture, func.getOpts(opts, "Quick capture: seed, task, link, journal, source"))
+map('n', '<leader>vq', vault.capture, func.getOpts(opts, "Quick capture: node (by its :TYPE:), task, link, journal"))
 map('n', '<leader>q', vault.capture, func.getOpts(opts, "Quick capture: seed, task, link, journal, source"))
 -- <leader>a: the org agenda's menu (a week, t every open item, m match, s search), the same as org.nvim's
 -- <leader>ma; it opens floating (lua/plugins/org.lua). The AI was <leader>a and is <leader>l; the LSP was
