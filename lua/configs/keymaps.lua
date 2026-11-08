@@ -269,6 +269,8 @@ map('n', '<leader>a', function() vim.cmd('Org agenda') end, func.getOpts(opts, "
 map('n', '<leader>vn', vault.grow, func.getOpts(opts, "Grow the idea: SEED > SPROUT > PLANT > TREE"))
 map('n', '<leader>vc', vault.compost, func.getOpts(opts, "Let the idea go: compost"))
 map('n', '<leader>vm', vault.move, func.getOpts(opts, "Move this heading to another note (its :TYPE: note in sources/, or pick one)"))
+map('n', '<leader>vt', vault.todoState, func.getOpts(opts, "TODO state menu (the states of this note: garden or tasks)"))
+map('n', '<leader>va', vault.agenda, func.getOpts(opts, "Agenda (its menu; the same as <leader>a)"))
 map('n', '<leader>vi', vault.insertLink, func.getOpts(opts, "Insert a link to a node"))
 map('n', '<leader>vb', vault.backlinks, func.getOpts(opts, "Backlinks (notes linking here)"))
 map('n', '<leader>vr', vault.rename, func.getOpts(opts, "Rename this note (title and file)"))
