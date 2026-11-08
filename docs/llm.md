@@ -5,7 +5,7 @@ only model; that name still works as an alias.) Each request goes with its conte
 file (path, type, content), the cursor line, the selection and the LSP
 diagnostics. The request runs in the file's git root (or its folder).
 
-Three backends, picked with `<leader>am` (see "Models" below):
+Three backends, picked with `<leader>lm` (see "Models" below):
 
 - **Claude** – [Claude Code](https://claude.com/claude-code) installed and
   logged in on that machine: `claude` in the PATH (run `claude` once in a
@@ -15,7 +15,7 @@ Three backends, picked with `<leader>am` (see "Models" below):
 - **agy** – Antigravity's CLI (Gemini, Claude and GPT-OSS models of that
   service), when `agy` is installed.
 
-## Write into the buffer: `<leader>ai`
+## Write into the buffer: `<leader>li`
 
 The most common use. Type what you want; the answer goes **straight into
 the buffer**:
@@ -37,13 +37,13 @@ fence around it), in the file's language and style.
 
 A model that thinks first (qwen3.5, deepseek-r1…) shows the last lines of its
 thinking in the dimmed lines while it thinks; it is never written into the
-buffer. `<leader>at` shows all of it (and hides it again) while it writes,
+buffer. `<leader>lt` shows all of it (and hides it again) while it writes,
 and afterwards opens the last write's thinking in a window.
 
-## Chat: `<leader>aa`
+## Chat: `<leader>la`
 
 For questions that write nothing: "what does this do?", "why this error?",
-"how do I…". `<leader>aa` works like `<leader>tt` for the terminal:
+"how do I…". `<leader>la` works like `<leader>tt` for the terminal:
 
 - no chat yet: an empty one opens, with the cursor in the **box at its
   bottom**; type the question there and `Enter`;
@@ -92,10 +92,10 @@ In the answer:
 | `n` | a new chat (the old one stays reachable with `[`) |
 | `t` | show / hide the thinking of every answer |
 | `y` | copy the answer (also to the system clipboard) |
-| `Esc` | hide the chat (its key shows it again: `<leader>aa`, or a persona's, see "Personas") |
+| `Esc` | hide the chat (its key shows it again: `<leader>la`, or a persona's, see "Personas") |
 | `q` | close it for good (stops an answer still coming) |
 
-A request that ends in an error, or is stopped (`<leader>as`), frees the
+A request that ends in an error, or is stopped (`<leader>ls`), frees the
 chat like an answer does: `n` starts a new chat, and the box asks again
 (the first question failed: a new conversation) or follows up again (a
 follow-up failed: the same conversation). Only a request still running
@@ -108,22 +108,22 @@ answer, never change them.
 
 | Key | What |
 |---|---|
-| `<leader>ac` | review the code (or the selection) in the window: bugs, risky cases, simplifications, with line numbers |
-| `<leader>ar` | the last request again, with the context of now (another selection, another file) |
-| `<leader>ah` | past answers of this session, in the picker; opening one allows follow-ups |
-| `<leader>am` | select model: Ollama (local), Claude, agy (see "Models") |
-| `<leader>at` | the thinking of `<leader>ai`: show / hide it while it writes, or open the last one |
-| `<leader>au` | open the user context file (see "What the models know about you") |
-| `<leader>as` | stop everything running |
-| `<leader>aq` | what quitting Neovim does, without quitting: stop everything, unload the Ollama models used here from the GPU, close the Ollama started here (the next local request asks to start it again) |
-| `<leader>ax` | the actions of the vault's `claude` folder (below) |
-| `<leader>ab` | run the ```` ```claude ```` or ```` ```llm ```` block under the cursor (again) |
+| `<leader>lc` | review the code (or the selection) in the window: bugs, risky cases, simplifications, with line numbers |
+| `<leader>lr` | the last request again, with the context of now (another selection, another file) |
+| `<leader>lh` | past answers of this session, in the picker; opening one allows follow-ups |
+| `<leader>lm` | select model: Ollama (local), Claude, agy (see "Models") |
+| `<leader>lt` | the thinking of `<leader>li`: show / hide it while it writes, or open the last one |
+| `<leader>lu` | open the user context file (see "What the models know about you") |
+| `<leader>ls` | stop everything running |
+| `<leader>lq` | what quitting Neovim does, without quitting: stop everything, unload the Ollama models used here from the GPU, close the Ollama started here (the next local request asks to start it again) |
+| `<leader>lx` | the actions of the vault's `claude` folder (below) |
+| `<leader>lb` | run the ```` ```claude ```` or ```` ```llm ```` block under the cursor (again) |
 
-## Actions: `<leader>ax`
+## Actions: `<leader>lx`
 
 The requests you make often, one markdown file each, in the vault's `ai/actions`
 (`vim.g.pure_llm_actions` in `configs/configs.lua`: a folder of the vault by name,
-any case, or an absolute path; unset it is the `claude` folder of the vault). `<leader>ax`
+any case, or an absolute path; unset it is the `claude` folder of the vault). `<leader>lx`
 lists them in the fzf picker by title (the file name, as Obsidian shows
 it), with the file as preview; the one you pick
 runs with the context of now (the note, the selection, the cursor).
@@ -194,13 +194,13 @@ return M
 | `dirs` | where it may change files: `vault`, `file` (the note's folder), or paths (`~/Downloads`); the first is where it runs | `vault` |
 | `confirm` | `auto`: ask before running only when one of the `dirs` is not in a git repository · `always` · `never` | `auto` |
 | `model` | the model for this action (`haiku`, `sonnet`, `opus`) | the usual one |
-| `key` | its own key, in normal and visual mode (`<leader>a1`). To keep every key in `keymaps.lua` instead, map `require('pure.claude').runNamed('File name')` there | none |
+| `key` | its own key, in normal and visual mode (`<leader>l1`). To keep every key in `keymaps.lua` instead, map `require('pure.claude').runNamed('File name')` there | none |
 | `context` | more context for the request, added at its end: the `text()` of a Lua file of the actions folder (`stats.lua`) or of a module `lua/pure/<name>`, between tags named after it (see above) | none |
 
 Inside the vault nothing needs asking: it is a git repository (`:VaultSync`),
 so a change is undone from its history. Open notes an action changed on disk
-are reloaded when it ends. `<leader>ar` repeats the last action; its answers
-are in `<leader>ah`.
+are reloaded when it ends. `<leader>lr` repeats the last action; its answers
+are in `<leader>lh`.
 
 It is the format of Claude Code's own commands (`.claude/commands/*.md`),
 whose other keys are ignored here.
@@ -233,7 +233,7 @@ It works the same on Claude, agy and Ollama, and the `todoist` blocks of open
 notes are redrawn after. The vault's "Sincronizar com Todoist" action uses it
 to bring the current note's `- [ ]` tasks into Todoist.
 
-**Examples.** `:LLMActionsExamples` (or `<leader>ax` while the folder has
+**Examples.** `:LLMActionsExamples` (or `<leader>lx` while the folder has
 no actions) writes five into the folder, never over an existing file:
 
 | File | What |
@@ -250,12 +250,12 @@ An action is *what* to do; a persona is *who* answers: its instructions (tone,
 rules, what it knows how to do), the context it needs and its tools. Start
 any request with `/name` and that persona answers it:
 
-- **in the chat** (`<leader>aa`, or its own, see `chatWith` below), as the
+- **in the chat** (`<leader>la`, or its own, see `chatWith` below), as the
   first question or a follow-up: `/job what do I do now?`. It stays for the
   follow-ups, until another `/name`. Here the persona brings its own `tools`
   and `dirs` too: with `Edit`, `Write` and `Move` it reads, writes and moves
   files in its folders while you talk;
-- **at `<leader>ai`**: `/job summarize this` writes in the persona's voice;
+- **at `<leader>li`**: `/job summarize this` writes in the persona's voice;
 - **in an action's text** or a **```` ```llm ```` block** starting with
   `/name`: its instructions and context come first. The tools stay the
   action's or the block's (a block runs on its own, so it never gets a
@@ -291,11 +291,11 @@ propose one small step...
 | `context`, `tools`, `dirs`, `model` | as for actions. With `Edit`, `Write` or `Move` it may change, write or move files in `dirs` when you ask or it clearly helps, and says which |
 
 `require('pure.llm').chatWith('job')` opens the persona's **own chat**,
-apart from `<leader>aa`'s: each keeps its own conversation and context, so
+apart from `<leader>la`'s: each keeps its own conversation and context, so
 you can go back and forth between them. It opens with the persona's
 greeting (if it has one) and the box waiting for your first question
 (nothing is asked before it). Called again, it hides or shows that chat,
-like `<leader>aa`. The chats share the middle of the screen, so showing one
+like `<leader>la`. The chats share the middle of the screen, so showing one
 hides the other (kept, with an answer still coming). Map it in
 `keymaps.lua` to give a persona its key.
 
@@ -316,7 +316,7 @@ Resuma a daily de ontem e liste as tarefas que ficaram abertas.
 
 It runs when the note is shown (or saved) and **has no answer yet**, so it
 runs once. In Neovim the request and the markers are hidden once there is an
-answer; move the cursor onto it to see them. `<leader>ab` (or
+answer; move the cursor onto it to see them. `<leader>lb` (or
 `:LLMBlock`) on the block runs it again and replaces the answer. For
 these requests the model may read the whole vault (Read, Grep, Glob), never
 change it; it is told where the daily / weekly / monthly notes live and
@@ -341,7 +341,7 @@ Options, as the first lines of the block:
 | Option | What |
 |---|---|
 | `when: sunday` | not before that weekday (English or Portuguese: `domingo`, `sexta`…). In a weekly note (`2026-W39`), the weekday of that note's week |
-| `run: manual` | never on its own, only with `<leader>ab` |
+| `run: manual` | never on its own, only with `<leader>lb` |
 | `model: ...` | specific model for this block (e.g. `qwen2.5-coder:14b` or `haiku`) |
 
 It never runs:
@@ -356,9 +356,9 @@ It never runs:
 The note is saved after the answer is written, unless it had other unsaved
 changes by then.
 
-## Models: `<leader>am`
+## Models: `<leader>lm`
 
-`<leader>am` (or `:LLMModel`) opens the model picker:
+`<leader>lm` (or `:LLMModel`) opens the model picker:
 
 - **Ollama**: the models of the running Ollama (`http://localhost:11434`),
   such as `qwen3.5:9b`. With Ollama down, the line "(offline) start Ollama"
@@ -393,7 +393,7 @@ The `:Claude…` names of these commands (`:ClaudeModel`, `:ClaudeActions`,
 - **Off when idle.** `vim.g.pure_ollama_idle_minutes` (default 15) minutes
   after the last local request ends, the models used here are unloaded from
   the GPU and the Ollama started here is closed; never while a request
-  runs. `false` or `0`: never. `<leader>aq` does the same at once (and stops
+  runs. `false` or `0`: never. `<leader>lq` does the same at once (and stops
   every request).
 - **Tools.** Local models get the same tools as Claude in the same request:
   read a file, list files, grep and, only where the request allows it
@@ -464,18 +464,18 @@ vim.g.pure_llm_private = { '~/Private' }   -- a folder outside the vault
 
 A request to a cloud model is not sent ("…not sent. A local model may do
 it.") when it holds the text of a note from one of them (the chat,
-`<leader>ai`, an action or a block from such a note), or when its folders
+`<leader>li`, an action or a block from such a note), or when its folders
 reach one, since its tools could read it there. Claude may still work in the
 vault's root when the vault's `.claude/settings.json` denies
 `Read(<folder>/**)`, which Claude Code enforces itself; agy has nothing like
 it, so it gets no request whose folders reach one. A cloud model's `Move`
 never takes a file into or out of one.
 
-## What the models know about you: `<leader>au`
+## What the models know about you: `<leader>lu`
 
 A markdown file about you that every request reads, whatever the model:
 `stdpath('data')/llm_user.md`, outside every git repository (another path with
-`vim.g.pure_llm_user_context`). `<leader>au` opens it to edit.
+`vim.g.pure_llm_user_context`). `<leader>lu` opens it to edit.
 
 A model may add to it: when you tell it something lasting (a preference, your
 work), it puts `<remember>…</remember>` at the end of its answer; that is
@@ -492,7 +492,7 @@ vim.g.pure_llm_model = nil            -- model when none was picked ('ollama:gem
 vim.g.pure_claude_cmd = 'claude'      -- Claude Code command, if not in the PATH
 vim.g.pure_ollama_cmd = 'ollama'      -- ollama command; without one, `ollama`, else Windows'
                                       -- ollama.exe (from WSL: the Windows Ollama is used)
-vim.g.pure_llm_blocks = true          -- false: blocks run only with <leader>ab
+vim.g.pure_llm_blocks = true          -- false: blocks run only with <leader>lb
 vim.g.pure_llm_actions = '~/vault/ai/actions'    -- folder of the actions (a name in the vault, or a path); default 'claude'
 vim.g.pure_llm_personas = '~/vault/ai/personas'  -- folder of the personas (/name); default 'Personas' in the actions folder
 vim.g.pure_llm_thinking = 'show'      -- 'hide': never show a model's thinking

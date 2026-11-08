@@ -119,7 +119,7 @@ where to change them.
 | `vim.g.pure_calendar_duration` | `60` minutes | [calendar](calendar.md) |
 | `vim.g.pure_calendar_confirm` | `'delete'` | [calendar](calendar.md) |
 | `vim.g.pure_calendar_sync` | `{ interval = 15 }` | [calendar](calendar.md) |
-| `vim.g.pure_llm_model` | `'claude:default'` (a pick with `<leader>am` wins) | [llm](llm.md) |
+| `vim.g.pure_llm_model` | `'claude:default'` (a pick with `<leader>lm` wins) | [llm](llm.md) |
 | `vim.g.pure_claude_cmd` | `'claude'` | [llm](llm.md) |
 | `vim.g.pure_ollama_cmd` | `'ollama'`, else `ollama.exe` | [llm](llm.md) |
 | `vim.g.pure_llm_actions` | `'claude'` (folder of the vault); here the vault's `ai/actions` | [llm](llm.md) |
@@ -177,9 +177,9 @@ folder (`:echo stdpath('data')`: `~/.local/share/nvim`, or
 | `todoist_sync.json` | the same for the Todoist sync |
 | `obsidian_vault` | the vault folder (`:ZettelVault` writes it) |
 | `obsidian_vault_no_prompt` | "never ask for the vault" |
-| `llm_user.md` | what the LLMs know about you (`<leader>au`; they may add to it) |
+| `llm_user.md` | what the LLMs know about you (`<leader>lu`; they may add to it) |
 
-Undo history is in `stdpath('state')/undo`; the model picked with `<leader>am` in
+Undo history is in `stdpath('state')/undo`; the model picked with `<leader>lm` in
 `stdpath('state')/pure_llm_model`, and agy's list of models in
 `stdpath('state')/pure_agy_models`.
 

@@ -410,9 +410,9 @@ require('pure.protonpass').prefetch()
 require('pure.urltitle').setup()
 
 -- -----------------------------------------------------------------------------
---  LLMs: Claude, Ollama, agy  (pure/llm.lua, <leader>a)
+--  LLMs: Claude, Ollama, agy  (pure/llm.lua, <leader>l)
 -- -----------------------------------------------------------------------------
--- The model when none was picked with <leader>am (a pick is remembered and
+-- The model when none was picked with <leader>lm (a pick is remembered and
 -- wins): 'claude:default', 'claude:sonnet', 'ollama:qwen3.5:9b', 'agy:', ...
 -- Unset (default): 'claude:default'.
 -- g.pure_llm_model = 'ollama:gemma4:e4b'
@@ -426,10 +426,10 @@ g.pure_claude_cmd = 'claude'
 g.pure_url_titles = true
 
 -- ```claude blocks in notes run by themselves when due. false: only with
--- <leader>ab. Default: true.
+-- <leader>lb. Default: true.
 g.pure_llm_blocks = true
 
--- Folder of the actions (<leader>ax): a name inside the vault, or an absolute path (~ works).
+-- Folder of the actions (<leader>lx): a name inside the vault, or an absolute path (~ works).
 -- Default: 'claude'. Changed: the actions folder of the vault (before: '8-AI', a folder of the old Markdown vault).
 g.pure_llm_actions = '~/Flora/ai/actions'
 
@@ -446,10 +446,10 @@ g.pure_llm_private = { '~/Private' }
 g.pure_llm_personas = '~/Flora/ai/personas'
 
 -- A model's thinking: 'show' (dimmed while it thinks, folded after: t in the
--- chat, <leader>at for <leader>ai) or 'hide'. Default: 'show'.
+-- chat, <leader>lt for <leader>li) or 'hide'. Default: 'show'.
 g.pure_llm_thinking = 'show'
 
--- The file about you that every request reads (<leader>au opens it).
+-- The file about you that every request reads (<leader>lu opens it).
 -- Unset (default): stdpath('data')/llm_user.md, outside every git
 -- repository. false: no such file.
 -- g.pure_llm_user_context = '~/notes/about-me.md'
@@ -482,7 +482,7 @@ g.pure_ollama_autostart = 'ask'
 g.pure_ollama_start_with_nvim = false
 
 -- Minutes without any Ollama request after which the models used here are
--- unloaded from the GPU and the Ollama started here is closed (as <leader>aq
+-- unloaded from the GPU and the Ollama started here is closed (as <leader>lq
 -- does). The next request starts it again (see pure_ollama_autostart).
 -- false or 0: never. Default: 15.
 g.pure_ollama_idle_minutes = 15
@@ -515,7 +515,6 @@ g.pure_keyhint_triggers = { { 'n', '<leader>' }, { 'x', '<leader>' } }
 
 -- Group names shown by the key hint window (pure/keyhint.lua) after <leader>.
 g.pure_keyhint_groups = {
-  ['<leader>a'] = 'AI (LLMs)',
   ['<leader>b'] = 'Buffers',
   ['<leader>c'] = 'Code',
   ['<leader>d'] = 'Diagnostics',
@@ -523,7 +522,8 @@ g.pure_keyhint_groups = {
   ['<leader>f'] = 'Find',
   ['<leader>g'] = 'Git',
   ['<leader>j'] = 'Jumps',
-  ['<leader>l'] = 'LSP',
+  ['<leader>l'] = 'AI (LLMs)',
+  ['<leader>L'] = 'LSP',
   ['<leader>m'] = 'Org notes',
   ['<leader>M'] = 'Manim',
   ['<leader>n'] = 'New file / folder',
