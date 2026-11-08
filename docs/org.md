@@ -9,7 +9,7 @@ independent of the Markdown modules (`notes`, `zettelkasten`): those act on
 
 | Setting | Value |
 |---|---|
-| Agenda files | `tasks.org`, `seedbed.org` (the inbox until 2026-11-08), `projects/**/*.org` (as `my/garden-agenda-files` in Doom) |
+| Agenda files | `tasks.org`, `inbox.org` (`seedbed.org` from 2026-11-08 to 2026-11-09), `projects/**/*.org`, `garden/*.org` (from 2026-11-09; as `my/garden-agenda-files` in Doom) |
 | Task states | `TODO NEXT DOING WAITING \| DONE CANCELLED` |
 | Idea stages | `SEED SPROUT PLANT TREE FRUIT \| COMPOST` (FRUIT was FLOWER until 2026-11-08: a tree bears fruit) (keywords must be declared, or a node title would start with `PLANT`) |
 | Keyword colours | the Ethereal palette |
@@ -24,8 +24,8 @@ The keys of the quick capture (Win+Q) of the Emacs side:
 |---|---|
 | `t` | a `TODO` in `tasks.org`; no question: the buffer has an empty `SCHEDULED:` line, filled in words (`today`, `tomorrow`, `fri`, `+3d`, `2026-11-20`, also `hoje`, `amanhã`, `oggi`, `domani`) that become a timestamp when stored; left empty, the line is dropped |
 | `T` | a `TODO` with a `DEADLINE` (date picked in org.nvim's date float) |
-| `l` | a link in `seedbed.org`; asks the address (the clipboard is the default) and the title; the buffer then opens in Normal mode, to check them |
-| `n` | a node (it replaced `s` seed and `f` source); no question: the buffer has every property, empty (`TYPE AUTHOR STATUS GENRE LANGUAGE BY WHERE RATING NOTES`); the ones left empty are dropped when stored, and `:TYPE:` (any case) says where it goes: `seed` the seedbed (`seedbed.org`) as a SEED; `sprout` a heading of `garden/nursery.org`; `plant`, `tree`, `fruit` a note of its own in `garden/` (named after the title); `compost` `archive/compost.org` (each with that state, the TYPE line dropped); the name of a note of `sources/` (`books`, `quotes`...) that note (TYPE kept); none, or a type with no note, the seedbed as a SEED (`<leader>vm` moves it once the note exists) |
+| `l` | a link in `inbox.org`; asks the address (the clipboard is the default) and the title; the buffer then opens in Normal mode, to check them |
+| `n` | a node (it replaced `s` seed and `f` source); no question: the buffer has every property, empty (`TYPE AUTHOR STATUS GENRE LANGUAGE BY WHERE RATING NOTES`); the ones left empty are dropped when stored, and `:TYPE:` (any case) says where it goes: `seed` the inbox (`inbox.org`) as a SEED; `sprout` a heading of `garden/nursery.org`; `plant`, `tree`, `fruit` a note of its own in `garden/` (named after the title); `compost` `archive/compost.org` (each with that state, the TYPE line dropped); the name of a note of `sources/` (`books`, `quotes`...) that note (TYPE kept); none, or a type with no note, the inbox as a SEED (`<leader>vm` moves it once the note exists) |
 
 Only `l` asks questions, in the input float in the centre (`vim.ui.input`,
 `pure/fuzzyUtils.lua`, through org.nvim's `utils.input`), in its target function,
@@ -53,7 +53,7 @@ opener (`org.ui.open_buffer_window`) for that one mode; every other window is or
 
 The config has two sets of states: the tasks' (`TODO NEXT DOING WAITING | DONE CANCELLED`) and
 the garden's (`SEED SPROUT PLANT TREE FRUIT | COMPOST`). A note with a `#+TODO:` line of its own
-keeps only those sets, as in Emacs: `seedbed.org` has only the garden's, `tasks.org` only the tasks'.
+keeps only those sets, as in Emacs: `inbox.org` has only the garden's, `tasks.org` only the tasks'.
 So the state menu (`<leader>vt` or `<leader>T`, org.nvim's `<leader>mS` or `<C-c><C-t>`) and `t` in
 the agenda (which uses the note of the entry) offer only the right ones there; a keyword of the other
 set in those two is plain text. Every other note has both: `garden/nursery.org` and the notes of
@@ -63,8 +63,8 @@ note made by grow (`<leader>vn`) or the node capture gets both lines.
 ## Agenda (`<leader>a`)
 
 `<leader>a` (or org.nvim's own `<leader>ma`) opens the agenda's menu: `a` the week, `t` every
-open item, `m` a tags / property match, `s` a word search. It reads `tasks.org`, `seedbed.org` and
-`projects/**/*.org` (`agenda_files`). The agenda opens floating (`agenda = { window = 'float' }`),
+open item, `m` a tags / property match, `s` a word search. It reads `tasks.org`, `inbox.org`,
+`projects/**/*.org` and `garden/*.org` (`agenda_files`). The agenda opens floating (`agenda = { window = 'float' }`),
 in the config's window at the size and place of the capture windows (`CAPTURE_RATIO`): the window
 opener of `lua/plugins/org.lua` takes org.nvim's "Org Agenda" float too. `<CR>` or `<Tab>` on an
 entry closes the float and opens the note in the window behind; `q` closes it. `g?` lists its keys.
@@ -256,7 +256,7 @@ modified).
 
 | You type | What you get |
 |---|---|
-| `[[foo` | notes, aliases and headings called like foo; the last item, `+ New note: foo`, makes a `SEED` called foo in `seedbed.org` and links to it |
+| `[[foo` | notes, aliases and headings called like foo; the last item, `+ New note: foo`, makes a `SEED` called foo in `inbox.org` and links to it |
 | `[[*foo` or `[[#foo` | only headings |
 | `[[note*foo`, `[[note#foo`, `[[note:foo` | only the headings of the notes whose name has "note" |
 | `[[foo\|\|short` | the link reads "short" and the alias is saved in the note (`:ROAM_ALIASES: short`, also at a heading when it is a heading that is linked) |
@@ -326,7 +326,7 @@ note was written. The name of a note weighs more than a word inside it: every no
 comes before any heading, the newest first, then the headings in the same order, and `archive/` last
 of all, so with a typed name the note is above the headings that only hold it; any part of the name,
 the path or an alias matches, words in any order. Enter opens the note at the heading; a
-title that matches nothing makes a seed in `seedbed.org`.
+title that matches nothing makes a seed in `inbox.org`.
 
 The colours (`pure/notecolors.lua`) follow the colorscheme; in Ethereal they are Doom's
 exactly: note `#4f8a96`, alias `#c89dc1`, separators and path `#6d7db6`, headings the

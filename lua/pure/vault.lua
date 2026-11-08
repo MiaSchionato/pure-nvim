@@ -9,7 +9,7 @@
 --    F  find a file of the vault
 --    g  grep the vault
 --    q  quick capture (the template menu: node, task, link, journal; a node goes where its :TYPE: says)
---    n  grow the idea (SEED > SPROUT > PLANT > TREE; a seed of the seedbed moves to the nursery, a sprout to a note of its own)
+--    n  grow the idea (SEED > SPROUT > PLANT > TREE; a seed of the inbox moves to the nursery, a sprout to a note of its own)
 --    c  compost the idea (COMPOST, moved to archive/compost.org; nothing is erased)
 --    m  move this heading to another note (the sources/ note of its :TYPE:, or one picked in the fzf list)
 --    t  TODO state menu (the states of this note)   a  the agenda (its menu)
@@ -36,9 +36,9 @@ local M = {}
 
 local function warn(msg) vim.notify('Vault: ' .. msg, vim.log.levels.WARN) end
 
---- The seedbed: the note where new things land (seeds, links, sources with no type), from the vault's root.
---- The setting vim.g.orgls_inbox (configs.lua); it was inbox.org until 2026-11-08.
-function M.seedbed() return vim.g.orgls_inbox or 'seedbed.org' end
+--- The inbox: the note where new things land (seeds, links, sources with no type), from the vault's root.
+--- The setting vim.g.orgls_inbox (configs.lua); it was seedbed.org from 2026-11-08 to 2026-11-09.
+function M.inbox() return vim.g.orgls_inbox or 'inbox.org' end
 --- The nursery: where the sprouts grow (garden/<year>.org until 2026-11-08). Plants, trees and fruits have a
 --- note of their own in garden/.
 M.NURSERY = 'garden/nursery.org'
@@ -272,11 +272,11 @@ local function findLine(e)
   return table.concat({ visible .. string.rep(' ', math.max(70 - width, 2)) .. paint('PureNoteSep', meta), e.file, e.lnum }, '\t')
 end
 
---- A new seed in the seedbed, then open it.
+--- A new seed in the inbox, then open it.
 local function newSeed(title)
   local root = M.path()
   if not root then return end
-  local inbox = root .. '/' .. M.seedbed()
+  local inbox = root .. '/' .. M.inbox()
   local lines = vim.fn.filereadable(inbox) == 1 and vim.fn.readfile(inbox) or {}
   if #lines > 0 and lines[#lines] ~= '' then lines[#lines + 1] = '' end
   local first = #lines + 1
@@ -323,7 +323,7 @@ M.newSeed = org('capture n')
 M.journalLine = org('capture j')
 M.journalToday = org('roam_dailies_goto_today')
 -- The TODO state menu of the heading (org.nvim's todo_select, <leader>mS): it lists the states of the heading's
--- note, so the garden stages in the seedbed and garden/, the task states in tasks.org (their #+TODO: lines).
+-- note, so the garden stages in the inbox and garden/, the task states in tasks.org (their #+TODO: lines).
 M.todoState = org('todo_select')
 M.agenda = org('agenda')
 
@@ -531,11 +531,11 @@ end
 --  The stages are the second keyword set of lua/plugins/org.lua.
 
 local LADDER = { 'SEED', 'SPROUT', 'PLANT', 'TREE' }
--- The garden's states as a #+TODO: line: the seedbed carries only it, so its headings offer only these (tasks.org
+-- The garden's states as a #+TODO: line: the inbox carries only it, so its headings offer only these (tasks.org
 -- carries only the task states). The same words as the second set of lua/plugins/org.lua. FRUIT was FLOWER until
 -- 2026-11-08: a tree bears fruit (Mia).
 local GARDEN_TODO = '#+TODO: SEED(s) SPROUT(p) PLANT(l) TREE(r) FRUIT(f) | COMPOST(c)'
--- The nursery and the notes of garden/ carry both sets, the garden's first (Mia, 2026-11-09: only the seedbed and
+-- The nursery and the notes of garden/ carry both sets, the garden's first (Mia, 2026-11-09: only the inbox and
 -- tasks.org keep one set; every other note has both).
 local TASKS_TODO = '#+TODO: TODO(t) NEXT(n) DOING(d) WAITING(w@) | DONE(x!) CANCELLED(c@)'
 local NOTE_TODO = { GARDEN_TODO, TASKS_TODO }
@@ -595,7 +595,7 @@ local function refileTo(rel, title, target, header)
   return ok
 end
 
---- One stage up: SEED > SPROUT > PLANT > TREE. A SEED of the seedbed becomes a SPROUT and moves to the
+--- One stage up: SEED > SPROUT > PLANT > TREE. A SEED of the inbox becomes a SPROUT and moves to the
 --- nursery; a SPROUT becomes a PLANT and moves to a note of its own in garden/ (a plant is an idea of its own;
 --- a tree is a plant grown big, in the same note). A FRUIT is not a next step.
 function M.grow()
@@ -610,7 +610,7 @@ function M.grow()
   local ok, plain = pcall(function() return hl:plain_title() end)
   local title = vim.trim(ok and plain or '')
   require('org.todo').change_state(nil, nextStage)
-  if state == 'SEED' and sameFile(vim.api.nvim_buf_get_name(0), M.path() .. '/' .. M.seedbed()) then
+  if state == 'SEED' and sameFile(vim.api.nvim_buf_get_name(0), M.path() .. '/' .. M.inbox()) then
     if refileTo(M.NURSERY, 'Nursery', nil, NOTE_TODO) then vim.notify(nextStage .. ': moved to the nursery') end
   elseif state == 'SPROUT' then
     local rel = ownNote(title)
@@ -646,9 +646,9 @@ local function ensureNote(rel, lines)
 end
 
 --- Where each garden :TYPE: of the node capture goes: the state its heading gets and the note.
----   'seedbed' / 'nursery' / 'own' (a note of its own in garden/, named after the title) / 'compost'
+---   'inbox' / 'nursery' / 'own' (a note of its own in garden/, named after the title) / 'compost'
 local GARDEN_TYPES = {
-  seed = { 'SEED', 'seedbed' },
+  seed = { 'SEED', 'inbox' },
   sprout = { 'SPROUT', 'nursery' },
   plant = { 'PLANT', 'own' },
   tree = { 'TREE', 'own' },
@@ -660,7 +660,7 @@ local GARDEN_KEYWORDS = { 'SEED', 'SPROUT', 'PLANT', 'TREE', 'FRUIT', 'COMPOST' 
 --- The lines of a node capture, rewritten for where they go, and that place (a path from the root of the vault;
 --- nil keeps the template's target, the inbox). Used by the store filter of lua/plugins/org.lua (Mia, 2026-11-08):
 ---   :TYPE: seed / sprout / plant / tree / fruit / compost (any case): the heading gets that state and goes to the
----     seedbed, the nursery, a note of its own in garden/ (plant, tree, fruit), or archive/compost.org;
+---     inbox, the nursery, a note of its own in garden/ (plant, tree, fruit), or archive/compost.org;
 ---     the TYPE line is dropped (the state says it, and changes later).
 ---   :TYPE: <the name of a note of sources/>: that note; TYPE stays (<leader>vm reads it).
 ---   no TYPE, or a type with no note: the inbox as a SEED; an unknown TYPE stays, for <leader>vm once its note exists.
@@ -703,7 +703,7 @@ function M.routeNode(lines)
     local state, place = garden[1], garden[2]
     dropType()
     setState(state)
-    if place == 'seedbed' then return out, nil end
+    if place == 'inbox' then return out, nil end
     if place == 'compost' then
       ensureNote('archive/compost.org', { '#+TITLE: Compost' })
       return out, 'archive/compost.org'
@@ -721,7 +721,7 @@ function M.routeNode(lines)
   local source = key ~= '' and M.sourceFile(type) or nil
   if source then return out, source end
   if key ~= '' then
-    vim.notify(('No note sources/%s.org: the entry goes to the seedbed as a SEED'):format(key), vim.log.levels.WARN)
+    vim.notify(('No note sources/%s.org: the entry goes to the inbox as a SEED'):format(key), vim.log.levels.WARN)
   end
   setState('SEED')
   return out, nil
