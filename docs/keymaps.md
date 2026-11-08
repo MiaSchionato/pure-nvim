@@ -198,6 +198,7 @@ options and says "Line numbers on/off" once.
 
 | Key | Mode | What |
 |---|---|---|
+| `<leader>tb` | n | Toggle the grey background of `TODO:` lines (saved; default `vim.g.pure_todo_bg`) |
 | `<leader>tc` | n | Toggle signcolumn |
 | `<leader>td` | n | Toggle diagnostics |
 | `<leader>th` | n | Toggle word highlight (also `<leader>h`) |
