@@ -745,7 +745,7 @@ M.dirs = {
   -- The vault (org): vim.g.pure_vault (pure/vault.lua).
   v     = vaultDir,
   p     = home .. 'Projects',
-  -- The file new notes go to (<leader>oi opens it): vim.g.orgls_inbox (seedbed.org here), as in lsp/orgls.lua.
+  -- The file new notes go to (<leader>oi opens it): vim.g.orgls_inbox (inbox.org here), as in lsp/orgls.lua.
   inbox = function()
     local vault = vaultDir()
     return vault and (vault .. (vim.g.orgls_inbox or 'inbox.org')) or nil
