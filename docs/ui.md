@@ -14,7 +14,7 @@ window to the bottom, so no `~` shows under the drawing.
 | `d` | today in the vault's journal (org-roam dailies, same as `<leader>vJ`; [org](org.md)) |
 | `l` | the last note (org or markdown) of the vault that was open, at the line where it was left (else the last file Neovim was closed on, `'0`) |
 | `n` | the scratch note (below) |
-| `v` | a seed in the vault's inbox (same as `<leader>vq s`) |
+| `v` | a seed in the vault's inbox (the node capture, same as `<leader>vq n`) |
 | `q` | quit; in a tab while others are open, close just that tab |
 | `u` | update: the configuration's repository, then the plugins (below) |
 

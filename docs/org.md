@@ -22,16 +22,15 @@ The keys of the quick capture (Win+Q) of the Emacs side:
 
 | Key | Goes to |
 |---|---|
-| `s` | a `SEED` in `inbox.org` |
 | `t` | a `TODO` in `tasks.org`; no question: the buffer has an empty `SCHEDULED:` line, filled in words (`today`, `tomorrow`, `fri`, `+3d`, `2026-11-20`, also `hoje`, `amanhã`, `oggi`, `domani`) that become a timestamp when stored; left empty, the line is dropped |
 | `T` | a `TODO` with a `DEADLINE` (date picked in org.nvim's date float) |
 | `l` | a link in `inbox.org`; asks the address (the clipboard is the default) and the title; the buffer then opens in Normal mode, to check them |
-| `f` | a source; no question: the buffer has every source property, empty (`TYPE AUTHOR STATUS GENRE LANGUAGE BY WHERE RATING NOTES`); when stored, `:TYPE: Books` (any case) sends it to `sources/books.org`; no `:TYPE:`, or no note of that name in `sources/`, sends it to `inbox.org` (nothing is made; `<leader>vm` moves it later) |
+| `n` | a node (it replaced `s` seed and `f` source); no question: the buffer has every property, empty (`TYPE AUTHOR STATUS GENRE LANGUAGE BY WHERE RATING NOTES`); the ones left empty are dropped when stored, and `:TYPE:` (any case) says where it goes: `seed` the inbox as a SEED; `sprout`, `plant` a heading of `garden/<year>.org`; `tree`, `flower` a note of its own in `garden/` (named after the title); `compost` `archive/compost.org` (each with that state, the TYPE line dropped); the name of a note of `sources/` (`books`, `quotes`...) that note (TYPE kept); none, or a type with no note, the inbox as a SEED (`<leader>vm` moves it once the note exists) |
 
 Only `l` asks questions, in the input float in the centre (`vim.ui.input`,
 `pure/fuzzyUtils.lua`, through org.nvim's `utils.input`), in its target function,
 before org.nvim opens the inbox, so Esc cancels the capture and leaves nothing behind.
-The `:TYPE:` of `f` and the words of `t`'s `SCHEDULED:` are read by a store filter
+The `:TYPE:` of `n` (`pure.vault.routeNode`) and the words of `t`'s `SCHEDULED:` are read by a store filter
 (`org.capture.store_filters.pure_vault`, in `lua/plugins/org.lua`) just before the
 entry is stored, so org.nvim's "Captured to ..." names the file it went to. The source
 property names are added to org.nvim's completion of property names (after `:` in a
@@ -233,7 +232,7 @@ as it is.
 
 The group of the old Markdown vault now works on the org vault, like Doom's `SPC v`:
 find a node (`f`), a file (`F`), grep (`g`), quick capture (`q`: the template
-menu, a new seed is its `s`), grow the idea (`n`) and compost it (`c`) as Doom does,
+menu, a new seed is its `n`), grow the idea (`n`) and compost it (`c`) as Doom does,
 new note (`N`), insert a link (`i`), backlinks (`b`), rename (`r`),
 delete to `archive/trash/` (`d`), journal line (`j`), today (`J`), explore (`e`),
 save and commit (`s`), preview the linked note (`p`, in org notes). Until

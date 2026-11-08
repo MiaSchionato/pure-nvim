@@ -8,7 +8,7 @@
 --    f  find a node (a file, a headline with an :ID:, an alias); a new title makes a note
 --    F  find a file of the vault
 --    g  grep the vault
---    q  quick capture (the template menu: seed, task, link, journal, source)
+--    q  quick capture (the template menu: node, task, link, journal; a node goes where its :TYPE: says)
 --    n  grow the idea (SEED > SPROUT > PLANT > TREE; a seed of the inbox moves to garden/<year>.org)
 --    c  compost the idea (COMPOST, moved to archive/compost.org; nothing is erased)
 --    m  move this heading to another note (the sources/ note of its :TYPE:, or one picked in the fzf list)
@@ -22,7 +22,7 @@
 --
 --  Changed 2026-11-08 (Mia): the capture menu was <leader>vt and is now
 --  <leader>vq; n (grow) and c (compost) are Doom's `SPC v n` / `SPC v c`; a new
---  seed is the quick capture's `s` (n was "new seed" before). The quick edit of
+--  seed is the quick capture's `n` (n was "new seed" before). The quick edit of
 --  the linked note (it was <leader>vq) was removed.
 --
 --  Notes link to each other by :ID: (org-roam), so renaming or moving a file
@@ -311,7 +311,8 @@ M.newNote = org('roam_capture')
 M.insertLink = function() require('pure.links').pick() end
 M.backlinks = org('roam_buffer_toggle')
 M.capture = org('capture')
-M.newSeed = org('capture s')
+-- A new seed: the node capture (`n`), which stores an entry with no :TYPE: in the inbox as a SEED.
+M.newSeed = org('capture n')
 M.journalLine = org('capture j')
 M.journalToday = org('roam_dailies_goto_today')
 -- The TODO state menu of the heading (org.nvim's todo_select, <leader>mS): it lists the states of the heading's
@@ -604,8 +605,106 @@ function M.compost()
 end
 
 -- -----------------------------------------------------------------------------
---  Sources and moving a heading (m)
+--  Sources, the node capture and moving a heading (m)
 -- -----------------------------------------------------------------------------
+
+--- Make the note at `rel` (a path from the root of the vault) with `lines` when it does not exist yet.
+local function ensureNote(rel, lines)
+  local path = M.dir() .. '/' .. rel
+  if vim.uv.fs_stat(path) then return end
+  vim.fn.mkdir(vim.fn.fnamemodify(path, ':h'), 'p')
+  vim.fn.writefile(vim.list_extend(vim.deepcopy(lines), { '' }), path)
+end
+
+--- Where each garden :TYPE: of the node capture goes: the state its heading gets and the note.
+---   'inbox' / 'year' (garden/<year>.org) / 'own' (a note of its own in garden/, named after the title) / 'compost'
+local GARDEN_TYPES = {
+  seed = { 'SEED', 'inbox' },
+  sprout = { 'SPROUT', 'year' },
+  plant = { 'PLANT', 'year' },
+  tree = { 'TREE', 'own' },
+  flower = { 'FLOWER', 'own' },
+  compost = { 'COMPOST', 'compost' },
+}
+local GARDEN_KEYWORDS = { 'SEED', 'SPROUT', 'PLANT', 'TREE', 'FLOWER', 'COMPOST' }
+
+--- The lines of a node capture, rewritten for where they go, and that place (a path from the root of the vault;
+--- nil keeps the template's target, the inbox). Used by the store filter of lua/plugins/org.lua (Mia, 2026-11-08):
+---   :TYPE: seed / sprout / plant / tree / flower / compost (any case): the heading gets that state and goes to the
+---     inbox, garden/<year>.org, a note of its own in garden/ (tree and flower: grown ideas), or archive/compost.org;
+---     the TYPE line is dropped (the state says it, and changes later).
+---   :TYPE: <the name of a note of sources/>: that note; TYPE stays (<leader>vm reads it).
+---   no TYPE, or a type with no note: the inbox as a SEED; an unknown TYPE stays, for <leader>vm once its note exists.
+--- Every empty property is dropped (:AUTHOR: with nothing after it), in every case.
+function M.routeNode(lines)
+  local out, type, typeAt, heading = {}, nil, nil, nil
+  local inDrawer = false
+  for _, l in ipairs(lines) do
+    if not heading and l:match('^%*+%s') then
+      out[#out + 1] = l
+      heading = #out
+    elseif l:match('^%s*:PROPERTIES:%s*$') then
+      inDrawer = true
+      out[#out + 1] = l
+    elseif inDrawer and l:match('^%s*:END:%s*$') then
+      inDrawer = false
+      out[#out + 1] = l
+    elseif inDrawer and l:match('^%s*:[^:%s]+:%s*$') then
+      -- an empty property: left out
+    else
+      out[#out + 1] = l
+      local value = inDrawer and l:match('^%s*:[Tt][Yy][Pp][Ee]:%s*(.-)%s*$')
+      if value then type, typeAt = value, #out end
+    end
+  end
+  --- The heading with `state` in place of a garden state it may already have.
+  local function setState(state)
+    if not heading then return end
+    local stars, rest = out[heading]:match('^(%*+)%s+(.*)$')
+    local first = rest:match('^(%u+)%s') or rest:match('^(%u+)$')
+    if first and vim.tbl_contains(GARDEN_KEYWORDS, first) then rest = vim.trim(rest:sub(#first + 1)) end
+    out[heading] = stars .. ' ' .. state .. (rest ~= '' and ' ' .. rest or '')
+  end
+  local function dropType()
+    if typeAt then table.remove(out, typeAt) end
+  end
+  local key = vim.fn.tolower(vim.trim(type or ''))
+  local garden = GARDEN_TYPES[key]
+  if garden then
+    local state, place = garden[1], garden[2]
+    dropType()
+    setState(state)
+    if place == 'inbox' then return out, nil end
+    if place == 'compost' then
+      ensureNote('archive/compost.org', { '#+TITLE: Compost' })
+      return out, 'archive/compost.org'
+    end
+    if place == 'year' then
+      local year = os.date('%Y')
+      local rel = 'garden/' .. year .. '.org'
+      ensureNote(rel, { '#+title: ' .. year, GARDEN_TODO })
+      return out, rel
+    end
+    -- A note of its own, named after the title (a new name when one is taken: _2, _3...).
+    local title = heading and vim.trim(out[heading]:gsub('^%*+%s+', ''):gsub('^%u+%s+', '', 1)) or ''
+    local base = slug(title)
+    if base == '' then base = os.date('%Y%m%d%H%M%S') end
+    local rel, n = 'garden/' .. base .. '.org', 1
+    while vim.uv.fs_stat(M.dir() .. '/' .. rel) do
+      n = n + 1
+      rel = ('garden/%s_%d.org'):format(base, n)
+    end
+    ensureNote(rel, { '#+title: ' .. title, GARDEN_TODO })
+    return out, rel
+  end
+  local source = key ~= '' and M.sourceFile(type) or nil
+  if source then return out, source end
+  if key ~= '' then
+    vim.notify(('No note sources/%s.org: the entry goes to the inbox as a SEED'):format(key), vim.log.levels.WARN)
+  end
+  setState('SEED')
+  return out, nil
+end
 
 --- The note of sources/ named `type` (any case: books, Books, BOOKS -> sources/books.org), as a path from the
 --- root of the vault, or nil when there is none. Used by the source capture (lua/plugins/org.lua) and by move.
