@@ -832,8 +832,9 @@ function M.setup()
     end
     local prompt = vim.trim((opts.prompt or 'Select'):gsub(':%s*$', ''))
     -- opts.ratio (not part of vim.ui.select): the size of the window, for a caller that lines its windows up
-    -- (the org capture, lua/plugins/org.lua). Unset: pickList's default.
-    pickList(lines, { title = ' ' .. prompt .. ' ', ratio = opts.ratio, fzf = style.FZF .. ' --no-sort' }, function(selection)
+    -- (the org capture, lua/plugins/org.lua). Unset: pickList's default. opts.sort (not part of it either): rank
+    -- the matches by fzf's score instead of keeping the caller's order, for a long list (<leader>vm's notes).
+    pickList(lines, { title = ' ' .. prompt .. ' ', ratio = opts.ratio, fzf = style.FZF .. (opts.sort and '' or ' --no-sort') }, function(selection)
       local i = tonumber(style.last(selection))
       if i and items[i] ~= nil then return selected(items[i], i) end
       selected(nil, nil)

@@ -11,6 +11,7 @@
 --    q  quick capture (the template menu: seed, task, link, journal, source)
 --    n  grow the idea (SEED > SPROUT > PLANT > TREE; a seed of the inbox moves to garden/<year>.org)
 --    c  compost the idea (COMPOST, moved to archive/compost.org; nothing is erased)
+--    m  move this heading to another note (the sources/ note of its :TYPE:, or one picked in the fzf list)
 --    N  new note in its own file       i  insert a link to a node
 --    b  backlinks                      r  rename this note (title and file)
 --    d  delete this note (to archive/trash/, nothing is erased)
@@ -538,14 +539,15 @@ local function sameFile(a, b)
   return a == b
 end
 
---- Move the subtree at the cursor to the top level of `rel` (a file of the vault, made when missing), then save.
-local function refileTo(rel, title)
+--- Move the subtree at the cursor (or at `target`, { bufnr, lnum }) to the top level of `rel` (a file of the
+--- vault, made when missing, titled `title`), then save.
+local function refileTo(rel, title, target)
   local path = M.path() .. '/' .. rel
   if not vim.uv.fs_stat(path) then
     vim.fn.mkdir(vim.fn.fnamemodify(path, ':h'), 'p')
-    vim.fn.writefile({ '#+title: ' .. title, '' }, path)
+    vim.fn.writefile({ '#+title: ' .. (title or vim.fn.fnamemodify(rel, ':t:r')), '' }, path)
   end
-  local ok = pcall(require('org.refile').refile, nil,
+  local ok = pcall(require('org.refile').refile, target,
     { dest = { filename = path, path = rel }, save = true, note = false })
   -- Like org-save-all-org-buffers: the destination may be open in a window (refile saves only hidden ones).
   for _, b in ipairs(vim.api.nvim_list_bufs()) do
@@ -587,6 +589,49 @@ function M.compost()
   if vim.fn.confirm('Compost "' .. title .. '" (move it to archive/compost.org)?', '&Yes\n&No', 2) ~= 1 then return end
   require('org.todo').change_state(nil, 'COMPOST')
   if refileTo('archive/compost.org', 'Compost') then vim.notify('COMPOST: moved to archive/compost.org') end
+end
+
+-- -----------------------------------------------------------------------------
+--  Sources and moving a heading (m)
+-- -----------------------------------------------------------------------------
+
+--- The note of sources/ named `type` (any case: books, Books, BOOKS -> sources/books.org), as a path from the
+--- root of the vault, or nil when there is none. Used by the source capture (lua/plugins/org.lua) and by move.
+function M.sourceFile(type)
+  local root = M.dir()
+  if not root or type == nil or vim.trim(type) == '' then return nil end
+  local want = vim.fn.tolower(vim.trim(type)) .. '.org'
+  for name, kind in vim.fs.dir(root .. '/sources') do
+    if kind == 'file' and vim.fn.tolower(name) == want then return 'sources/' .. name end
+  end
+end
+
+--- Move the heading at the cursor, with everything under it, to another note of the vault (<leader>vm): the note
+--- of its :TYPE: when sources/ has one (a source left in the inbox), else a note picked in the fzf list. It lands
+--- at the top level of that note, both notes are saved, and a table made from headings there follows (the write
+--- hook of lua/plugins/org.lua). Links are by :ID:, so none breaks.
+function M.move()
+  local buf = vim.api.nvim_get_current_buf()
+  local here = vim.api.nvim_buf_get_name(buf)
+  if vim.bo[buf].filetype ~= 'org' or not inVault(here) then return warn('this buffer is not a note of the vault') end
+  local ok, hl = pcall(function()
+    return require('org.files').get_buffer(buf):headline_at(vim.api.nvim_win_get_cursor(0)[1])
+  end)
+  if not ok or not hl then return warn('not under a heading') end
+  local target = { bufnr = buf, lnum = hl.line }
+  local rel = M.sourceFile(hl:get_property('TYPE'))
+  if rel and not sameFile(M.path() .. '/' .. rel, here) then
+    if refileTo(rel, nil, target) then vim.notify('Moved to ' .. rel) end
+    return
+  end
+  local items = {}
+  for _, f in ipairs(vaultFiles(M.path())) do
+    if not sameFile(f.path, here) then items[#items + 1] = f.rel end
+  end
+  table.sort(items)
+  vim.ui.select(items, { prompt = 'Move to', sort = true }, function(choice)
+    if choice and refileTo(choice, nil, target) then vim.notify('Moved to ' .. choice) end
+  end)
 end
 
 return M

@@ -30,10 +30,10 @@ local keyword_faces = {
 
 local CREATED = ':PROPERTIES:\n:CREATED:  %U\n:END:'
 
--- The questions of the templates below all show in the centre (Mia, 2026-11-08): a typed answer in the
--- input float, a choice in the fzf list (vim.ui.input / vim.ui.select, pure/fuzzyUtils.lua), through
--- org.nvim's utils, which wait for them inside the capture's coroutine. The questions of `l` and `f` are
--- asked in their target function, which org.nvim calls before it opens the target file: Esc there cancels
+-- Only `l` asks questions (the link and its title); the other templates open the capture buffer at once and the
+-- text is written there (Mia, 2026-11-08). The questions show in the centre: a typed answer in the input float
+-- (vim.ui.input, pure/fuzzyUtils.lua), through org.nvim's utils, which wait for it inside the capture's coroutine.
+-- They are asked in the target function, which org.nvim calls before it opens the target file: Esc there cancels
 -- the capture quietly (utils.abort) and leaves nothing behind. The template then only writes the answers.
 local orgUtils = require('org.utils')
 
@@ -47,13 +47,6 @@ local function ask(prompt, default)
   local answer = orgUtils.input({ prompt = prompt, default = default, ratio = CAPTURE_RATIO })
   if answer == nil then orgUtils.abort() end
   return vim.trim(answer)
-end
-
---- A choice from `items` in the fzf list; Esc cancels the capture.
-local function choose(prompt, items)
-  local choice = orgUtils.select(items, { prompt = prompt, ratio = CAPTURE_RATIO })
-  if choice == nil then orgUtils.abort() end
-  return choice
 end
 
 --- An answer as template text: org.nvim must not read a % in it as an escape (%a, %^{...}, %(...) ...).
@@ -74,24 +67,14 @@ end
 -- The answers of the running capture, from its target function to its template.
 local answers = {}
 
--- Task template: asks for a date first; Enter (or Esc) leaves the task without one.
--- The answer is read like org's own date prompt (today, +3d, fri, 2026-11-02).
-local function task_template()
-  local answer = vim.trim(orgUtils.input({ prompt = 'When? (Enter = no date; today, +3d, fri, 2026-11-02): ', ratio = CAPTURE_RATIO }) or '')
-  local planning = ''
-  if answer ~= '' then
-    local d = require('org.date').read_date(answer)
-    if d then
-      d.active = true
-      planning = 'SCHEDULED: ' .. d:to_string() .. '\n'
-    else
-      vim.notify('Could not read the date "' .. answer .. '"; the task has no date', vim.log.levels.WARN)
-    end
-  end
-  return '* TODO %?\n' .. planning .. CREATED
-end
+-- Task: no question; the buffer has an empty SCHEDULED: line to fill in by hand, in words ("today",
+-- "tomorrow", "fri", "+3d", "2026-11-20", or hoje / amanhã / oggi / domani...) or as a timestamp. When the
+-- entry is stored, the words become a timestamp, and a line left empty is dropped (an empty SCHEDULED: is not a
+-- date for org, only a stray line). See the store filter below.
+local TASK_TEMPLATE = '* TODO %?\nSCHEDULED: \n' .. CREATED
 
--- Link: the address (the clipboard by default) and a title, asked before the inbox is opened.
+-- Link: the address (the clipboard by default) and a title, asked before the inbox is opened. The capture
+-- buffer then opens in Normal mode (the template has no %? cursor), only to check what was typed.
 local function link_target()
   local clip = vim.trim((vim.fn.getreg('+') or ''):match('[^\r\n]*') or '')
   answers.link = { url = ask('Link: ', clip), title = ask('Title: ') }
@@ -100,43 +83,79 @@ end
 
 local function link_template()
   local a = answers.link or {}
-  return '* [[' .. literal(a.url or '') .. '][' .. literal(a.title or '') .. ']]\n' .. CREATED .. '\n%?'
+  return '* [[' .. literal(a.url or '') .. '][' .. literal(a.title or '') .. ']]\n' .. CREATED
 end
 
--- Source file: sources/<kind>.org, the kind picked in the fzf list (it was a numbered list); created with a
--- title. Then the title, the author, the status, who recommended it and where (those two may be left empty with
--- Enter), before the file is opened. The answers are properties: a columnview table at the top of the file (see
--- sources/books.org) lists them, and is made again on save (below the setup).
-local SOURCE_KINDS = { 'books', 'articles', 'videos', 'courses', 'podcasts', 'other' }
-local SOURCE_STATUS = { 'to-read', 'reading', 'done' }
-local function source_target()
-  local kind = choose('Source', SOURCE_KINDS)
-  answers.source = {
-    title = ask('Title: '),
-    author = ask('Author: '),
-    status = choose('Status', SOURCE_STATUS),
-    by = ask('Recommended by (Enter: none): '),
-    where = ask('Where (a link or a note; Enter: none): '),
-  }
-  local path = 'sources/' .. kind .. '.org'
-  local full = vim.fn.expand(vault) .. '/' .. path
-  if vim.fn.filereadable(full) == 0 then
-    vim.fn.writefile({ '#+TITLE: ' .. kind:sub(1, 1):upper() .. kind:sub(2), '' }, full)
-  end
-  return path
-end
-
---- A property line `:KEY:     value`, the value at column 12 like `:CREATED:  `; '' when the value is empty.
-local function property(key, value)
-  if not value or value == '' then return '' end
-  return ('%-11s%s\n'):format(':' .. key .. ':', literal(value))
-end
-
+-- Source: no question; the buffer has every property of a source, empty, to fill in (the render hides the
+-- empty ones). :TYPE: says where the entry goes when it is stored: `:TYPE: Books` sends it to the note
+-- sources/books.org (any case: books, Books, BOOKS), whose columnview table then lists it; no :TYPE:, or a type
+-- with no note of that name in sources/, sends it to the inbox. No note is made: make it, then move the entry
+-- with <leader>vm. TYPE is in no table (no #+COLUMNS lists it). The empty properties stay in the entry.
+local SOURCE_PROPERTIES = { 'TYPE', 'AUTHOR', 'STATUS', 'GENRE', 'LANGUAGE', 'BY', 'WHERE', 'RATING', 'NOTES' }
 local function source_template()
-  local a = answers.source or {}
-  return '* ' .. literal(a.title or '') .. '\n:PROPERTIES:\n:CREATED:  %U\n'
-    .. property('AUTHOR', a.author) .. property('STATUS', a.status)
-    .. property('BY', a.by) .. property('WHERE', a.where) .. ':END:\n%?'
+  local lines = { '* %?', ':PROPERTIES:' }
+  for _, key in ipairs(SOURCE_PROPERTIES) do
+    lines[#lines + 1] = ('%-11s%s'):format(':' .. key .. ':', key == 'STATUS' and 'to-read' or '')
+  end
+  vim.list_extend(lines, { ':CREATED:  %U', ':END:' })
+  return table.concat(lines, '\n')
+end
+
+-- What a store filter does with the entry of a capture, before org.nvim stores it (org.capture.store_filters:
+-- `fun(tpl, lines, ctx)` returns the lines and, to send the entry elsewhere, a target). The templates opt in with
+-- two fields of this config: `route_by_type` (f) and `read_planning` (t).
+
+-- Words of the planning lines in Portuguese and Italian, read as org.nvim's English ones.
+local DATE_WORDS = { hoje = 'today', ['amanhã'] = 'tomorrow', amanha = 'tomorrow', ontem = 'yesterday', agora = 'now',
+  oggi = 'today', domani = 'tomorrow', ieri = 'yesterday', ora = 'now' }
+
+--- The SCHEDULED: / DEADLINE: lines of `lines` in words become timestamps; an empty one is dropped.
+local function readPlanning(lines)
+  local out = {}
+  for _, l in ipairs(lines) do
+    local key, text = l:match('^%s*(SCHEDULED):%s*(.-)%s*$')
+    if not key then key, text = l:match('^%s*(DEADLINE):%s*(.-)%s*$') end
+    if not key or text:match('^[<%[]') then
+      out[#out + 1] = l
+    elseif text ~= '' then
+      local d = require('org.date').read_date(DATE_WORDS[vim.fn.tolower(text)] or text)
+      if d then
+        d.active = true
+        out[#out + 1] = key .. ': ' .. d:to_string()
+      else
+        vim.notify(('Could not read the date "%s": the %s line is kept as it was'):format(text, key), vim.log.levels.WARN)
+        out[#out + 1] = l
+      end
+    end -- an empty one is left out
+  end
+  return out
+end
+
+require('org.capture').store_filters.pure_vault = function(tpl, lines)
+  if tpl.read_planning then lines = readPlanning(lines) end
+  if tpl.route_by_type then
+    local type
+    for _, l in ipairs(lines) do
+      type = l:match('^%s*:[Tt][Yy][Pp][Ee]:%s*(.-)%s*$')
+      if type then break end
+    end
+    local rel = type and type ~= '' and require('pure.vault').sourceFile(type)
+    if rel then return lines, { target = rel } end
+    if type and type ~= '' then
+      vim.notify(('No note sources/%s.org: the entry goes to the inbox'):format(vim.fn.tolower(type)), vim.log.levels.WARN)
+    end
+  end
+  return lines
+end
+
+-- The names of the source properties in org.nvim's completion of property names (after a ":" at the start of a
+-- line in a drawer), in capitals like the template writes them. Property names are not case sensitive for org
+-- (Author and AUTHOR are the same property), but one spelling keeps the notes alike.
+do
+  local names = require('org.completion').properties
+  for _, key in ipairs(SOURCE_PROPERTIES) do
+    if not vim.tbl_contains(names, key) then names[#names + 1] = key end
+  end
 end
 
 require('org').setup({
@@ -185,8 +204,9 @@ require('org').setup({
       },
       t = {
         description = 'Task',
-        template = task_template,
+        template = TASK_TEMPLATE,
         target = 'tasks.org',
+        read_planning = true,
         empty_lines = 1,
       },
       T = {
@@ -205,8 +225,8 @@ require('org').setup({
       f = {
         description = 'Source',
         template = source_template,
-        target = source_target,
-        hook = restorePercent,
+        target = 'inbox.org',
+        route_by_type = true,
         empty_lines = 1,
       },
       j = {
