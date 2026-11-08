@@ -14,6 +14,7 @@ Generated from the running config; the source is `lua/configs/keymaps.lua`.
 | `<leader>-` | n | Shorter window |
 | `<leader>.` | n | Narrower window |
 | `<leader><leader>` | n | Find files, two levels up |
+| `<leader>a` | n | Agenda: the org agenda's menu (`a` week, `t` open items, `m` match, `s` search), floating; same as `<leader>ma`. Until 2026-11-08 `<leader>a` was the AI (now `<leader>l`) and `<leader>l` the LSP (now `<leader>L`) |
 | `<leader>D` | n, x | Delete without yanking |
 | `<leader>E` | n | Explore home |
 | `<leader>h` | n | Toggle word highlight (short form) |
@@ -27,28 +28,28 @@ Generated from the running config; the source is `lua/configs/keymaps.lua`.
 | `<leader>v` | x | Substitute, very magic |
 | `<leader>y` | n, x | Yank to clipboard |
 
-## `<leader>a` – AI (LLMs)
+## `<leader>l` – AI (LLMs)
 
 See [llm.md](llm.md).
 
 | Key | Mode | What |
 |---|---|---|
-| `<leader>aa` | n, x | Chat: show / hide (like <leader>tt) |
-| `<leader>ab` | n | Run the ```` ```llm ```` block under the cursor |
-| `<leader>ac` | n, x | Review the code |
-| `<leader>ad` | n | Daily note: next step and the measured day (the action `Daily note` of the vault's `ai/actions`) |
-| `<leader>ah` | n | Past answers |
-| `<leader>ai` | n, x | Write here (visual: rewrite) |
-| `<leader>ap` | n | Personas: pick one from the list, open its chat (`/name`, see [llm.md](llm.md#personas)) |
-| `<leader>aj` | n | Job assistant: the chat with the `/job` persona, waiting for your question (see [llm.md](llm.md#personas-name)) |
-| `<leader>am` | n | Select model (Ollama / Claude / agy) |
-| `<leader>ar` | n, x | Repeat the last request |
-| `<leader>as` | n | Stop |
-| `<leader>aq` | n | Quit the AI: stop, unload models, close Ollama |
-| `<leader>at` | n | Thinking of <leader>ai (show / hide) |
-| `<leader>au` | n | User context file (what the LLMs know about you) |
-| `<leader>aw` | n | Weekly note: the week in one place (the action `Week review` of the vault's `ai/actions`) |
-| `<leader>ax` | n, x | Actions (claude/ folder of the vault) |
+| `<leader>la` | n, x | Chat: show / hide (like <leader>tt) |
+| `<leader>lb` | n | Run the ```` ```llm ```` block under the cursor |
+| `<leader>lc` | n, x | Review the code |
+| `<leader>ld` | n | Daily note: next step and the measured day (the action `Daily note` of the vault's `ai/actions`) |
+| `<leader>lh` | n | Past answers |
+| `<leader>li` | n, x | Write here (visual: rewrite) |
+| `<leader>lp` | n | Personas: pick one from the list, open its chat (`/name`, see [llm.md](llm.md#personas)) |
+| `<leader>lj` | n | Job assistant: the chat with the `/job` persona, waiting for your question (see [llm.md](llm.md#personas-name)) |
+| `<leader>lm` | n | Select model (Ollama / Claude / agy) |
+| `<leader>lr` | n, x | Repeat the last request |
+| `<leader>ls` | n | Stop |
+| `<leader>lq` | n | Quit the AI: stop, unload models, close Ollama |
+| `<leader>lt` | n | Thinking of <leader>li (show / hide) |
+| `<leader>lu` | n | User context file (what the LLMs know about you) |
+| `<leader>lw` | n | Weekly note: the week in one place (the action `Week review` of the vault's `ai/actions`) |
+| `<leader>lx` | n, x | Actions (claude/ folder of the vault) |
 
 ## `<leader>b` – Buffers
 
@@ -132,14 +133,14 @@ See [llm.md](llm.md).
 | `<leader>jh` | n | Jump back |
 | `<leader>jl` | n | Jump forward |
 
-## `<leader>l` – LSP
+## `<leader>L` – LSP
 
 | Key | Mode | What |
 |---|---|---|
-| `<leader>la` | n | LSP code action |
-| `<leader>ldb` | x | Print selection via lua |
-| `<leader>lr` | n | LSP rename |
-| `<leader>ls` | n | LSP workspace symbols |
+| `<leader>La` | n | LSP code action |
+| `<leader>Ldb` | x | Print selection via lua |
+| `<leader>Lr` | n | LSP rename |
+| `<leader>Ls` | n | LSP workspace symbols |
 
 ## `<leader>M` – Manim
 

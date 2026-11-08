@@ -1,7 +1,7 @@
 -- =============================================================================
 --  LLMs: Claude, Ollama, agy
 -- =============================================================================
---  Language models driven from keys. Three backends, picked with <leader>am:
+--  Language models driven from keys. Three backends, picked with <leader>lm:
 --  Claude (the `claude` command of Claude Code), Ollama (local models) and
 --  agy (Antigravity's CLI). Every request goes with its context: the file,
 --  where the cursor is, the selection and the LSP diagnostics.
@@ -10,24 +10,24 @@
 --  renamed when Ollama and agy came, as asked in the vault's Improvment.md.
 --  pure/claude.lua is left as a one-line alias of this module.)
 --
---    <leader>ai   write: the answer goes straight into the buffer, below the
+--    <leader>li   write: the answer goes straight into the buffer, below the
 --                 cursor line (or in place of a blank line); in visual mode
 --                 it replaces the selection. Shown dimmed while it is
 --                 written, then real text: one `u` takes it back.
---    <leader>aa   the chat: shown / hidden, like <leader>tt; the question is
+--    <leader>la   the chat: shown / hidden, like <leader>tt; the question is
 --                 typed in its box. [ ] older / newer answers, n new chat.
---    <leader>ac   review the code (or the selection) in the chat.
---    <leader>ar   the last request again, with the current context.
---    <leader>ah   past answers.
---    <leader>am   select the model (Ollama / Claude / agy).
---    <leader>at   the thinking of <leader>ai and of actions.
---    <leader>au   the file about you that every request reads.
---    <leader>as   stop what is running.
---    <leader>ab   run the ```llm block under the cursor again.
---    <leader>ax   the actions: markdown files of the vault's claude/ folder (see
+--    <leader>lc   review the code (or the selection) in the chat.
+--    <leader>lr   the last request again, with the current context.
+--    <leader>lh   past answers.
+--    <leader>lm   select the model (Ollama / Claude / agy).
+--    <leader>lt   the thinking of <leader>li and of actions.
+--    <leader>lu   the file about you that every request reads.
+--    <leader>ls   stop what is running.
+--    <leader>lb   run the ```llm block under the cursor again.
+--    <leader>lx   the actions: markdown files of the vault's claude/ folder (see
 --                 "Actions" below).
 --
---  Personas: /name at the start of any request (the chat, <leader>ai, an
+--  Personas: /name at the start of any request (the chat, <leader>li, an
 --  action, a block) makes a persona of the actions' Personas/ folder answer:
 --  its instructions, context and tools. M.chatWith(name) opens the chat with
 --  one, waiting for the first question (see "Personas" below).
@@ -48,7 +48,7 @@
 --
 --    when: sunday   not before that weekday (of the note's week, for a
 --                   weekly note named like 2026-W39)
---    run: manual    only with <leader>ab
+--    run: manual    only with <leader>lb
 --
 --  Never in the templates or the trash, and a note named after a date runs
 --  only in its own period (a daily on its day, a weekly in its week or the
@@ -114,7 +114,7 @@ local function parseModel(spec)
     local m = target:sub(8)
     return { backend = 'ollama', model = m, id = target, name = m }
   elseif target:match('^agy:') then
-    -- Antigravity's CLI (agy), added to <leader>am beside Ollama and Claude.
+    -- Antigravity's CLI (agy), added to <leader>lm beside Ollama and Claude.
     -- "agy:" alone: agy's own default model.
     local m = target:sub(5)
     local model = m ~= '' and m or nil
@@ -229,7 +229,7 @@ local function agyModels(cb)
   local cached = readAgyCache()
   if cached then
     -- Refreshed at most once a day: `agy models` starts helper processes of
-    -- its own whose console window flashed on screen at every <leader>am
+    -- its own whose console window flashed on screen at every <leader>lm
     -- (Neovim hides only the window of the process it starts itself).
     local stat = vim.uv.fs_stat(agy_cache_file)
     if not stat or os.time() - stat.mtime.sec > 24 * 3600 then fetchAgyModels(function() end) end
@@ -493,7 +493,7 @@ local function runClaude(opts, model)
   return stop
 end
 
---- Run with agy (Antigravity's CLI), added to <leader>am. Same shape as
+--- Run with agy (Antigravity's CLI), added to <leader>lm. Same shape as
 --- runClaude: print mode, streamed JSON.
 ---
 --- The prompt goes on stdin as one stream-json "user" event, not as -p's
@@ -603,7 +603,7 @@ local function runAgy(opts, model)
         -- It happened in testing: SUCCESS with no answer at all. Said so,
         -- rather than an empty window or nothing written with no reason.
         if vim.trim(answer) == '' then
-          return opts.on_done('agy returned an empty answer; try again (<leader>ar)', '', session)
+          return opts.on_done('agy returned an empty answer; try again (<leader>lr)', '', session)
         end
         -- Tokens as runClaude reports them (tokens()): agy's context
         -- includes the cache it read.
@@ -1096,7 +1096,7 @@ local function startOllama(cb, force)
   end)
 end
 
--- For <leader>am's "(offline) start Ollama" line, defined above this.
+-- For <leader>lm's "(offline) start Ollama" line, defined above this.
 M.startOllama = startOllama
 
 --- Ollama models this Neovim asked for, to unload when it quits.
@@ -1113,7 +1113,7 @@ local ollama_used = {}
 --   3. the Ollama started here goes, with its model processes.
 -- All synchronous (:wait), or Neovim is gone before they run.
 --
--- The same is M.shutdown (<leader>aq), without quitting: the GPU freed while
+-- The same is M.shutdown (<leader>lq), without quitting: the GPU freed while
 -- Neovim stays open (Improvment.md). The next Ollama request asks to start
 -- it again (vim.g.pure_ollama_autostart). Returns what it did.
 --- Ollama's part alone (also the idle timer's, below): the models used here
@@ -1162,7 +1162,7 @@ end
 --  Ollama: idle timer and start with Neovim
 -- -----------------------------------------------------------------------------
 --  vim.g.pure_ollama_idle_minutes (default 15; false or 0: never): that long
---  without an Ollama request, ollamaOff() frees the GPU, as <leader>aq does
+--  without an Ollama request, ollamaOff() frees the GPU, as <leader>lq does
 --  but without stopping other requests. Counted from the end of the last
 --  request (or from Ollama's start here); never while one is running.
 --  vim.g.pure_ollama_start_with_nvim (default false): Ollama started in the
@@ -1222,7 +1222,7 @@ vim.api.nvim_create_autocmd('VimLeavePre', {
   end,
 })
 
---- <leader>aq: stop every request, unload the Ollama models used here and
+--- <leader>lq: stop every request, unload the Ollama models used here and
 --- close the Ollama started here, without quitting Neovim.
 function M.shutdown()
   local stopped, unloaded, server = shutdown()
@@ -1577,7 +1577,7 @@ local function runOllama(opts, model)
         table.insert(messages, { role = 'assistant', content = history_text, tool_calls = #calls > 0 and calls or nil })
         if #calls == 0 then
           -- The answer is the last round's text: "let me read the file",
-          -- said before a tool call, is not part of it (in <leader>ai it
+          -- said before a tool call, is not part of it (in <leader>li it
           -- would have been written into the buffer).
           return finish(nil, said ~= '' and said or table.concat(text))
         end
@@ -1633,7 +1633,7 @@ end
 --  The model can add to it: what it puts in <remember>...</remember> in its
 --  answer is appended to the file (dated) and taken out of the answer, so it
 --  is never shown or written into a buffer. vim.g.pure_llm_memory = false
---  turns that off (the file is still read). <leader>au opens it.
+--  turns that off (the file is still read). <leader>lu opens it.
 
 local function userContextFile()
   local p = vim.g.pure_llm_user_context
@@ -2048,7 +2048,7 @@ local TOOL_STATES = { Read = 'reading…', Edit = 'editing…', MultiEdit = 'edi
   Move = 'moving a file…' }
 
 -- Personas (/name, see the "Personas" section below, which needs the
--- actions folder): the chat, <leader>ai, actions and blocks reach them here.
+-- actions folder): the chat, <leader>li, actions and blocks reach them here.
 local persona = {}
 
 --- The first prompt of a chat question `q`, with the persona `p` or none:
@@ -2086,7 +2086,7 @@ end
 local function answerWindow(title, model_spec)
   local buf = vim.api.nvim_create_buf(false, true)
   vim.bo[buf].filetype = 'markdown'
-  -- 'hide', not 'wipe': <leader>aa hides the chat and shows it again later
+  -- 'hide', not 'wipe': <leader>la hides the chat and shows it again later
   -- with its whole conversation (see M.ask); q wipes it for good.
   vim.bo[buf].bufhidden = 'hide'
   vim.b[buf].pure_mdview = true
@@ -2153,7 +2153,7 @@ end
 --- A dimmed status line under 0-based `row` of `buf` with the seconds since
 --- it started, ticking every second: "  qwen3.5:9b is writing… 12s". Added
 --- (Improvment.md) so every LLM command working in the buffer shows how long
---- it has been going, as the <leader>aa window's title already did.
+--- it has been going, as the <leader>la window's title already did.
 --- `s.state` is the text before the seconds, `s.extra` more virtual lines
 --- under it (the streamed text, the thinking); `s.draw()` after changing
 --- them; `s.stop()` removes it. `s.id` is the extmark, which follows edits.
@@ -2185,13 +2185,13 @@ local function statusMark(buf, row, state)
   return s
 end
 
--- <leader>at: the thinking of <leader>ai (write), which has no window of its
+-- <leader>lt: the thinking of <leader>li (write), which has no window of its
 -- own to put a t key in, and plain t in a buffer you edit is the t{char}
 -- motion. `writing[buf]` is the write running in that buffer (its toggle);
 -- `last_thought[buf]` the thinking of the last one, kept after it is done.
 local writing, last_thought = {}, {}
 
---- <leader>at: a write running in this buffer shows all its thinking, or
+--- <leader>lt: a write running in this buffer shows all its thinking, or
 --- goes back to the short form; with none running, the last write's
 --- thinking opens in a window (q closes it).
 function M.toggleThinking()
@@ -2272,7 +2272,7 @@ local function askInto(w, question, prompt, opts)
   local extra = opts.extra or {}
   local m_label = modelLabel(extra.model)
   -- Busy from here until on_done, whatever the outcome: an error or a stop
-  -- (<leader>as) ends the request too. "Waiting" used to mean "no answer
+  -- (<leader>ls) ends the request too. "Waiting" used to mean "no answer
   -- yet", so after an error the chat waited for good (Improvment.md).
   w.busy = true
   local stop = run({
@@ -2300,7 +2300,7 @@ local function askInto(w, question, prompt, opts)
       stopTimer()
       w.busy = false
       if err then
-        -- <leader>as (M.stop) stops the process itself, not through w.stop:
+        -- <leader>ls (M.stop) stops the process itself, not through w.stop:
         -- the backends then end with 'stopped'.
         stopped = stopped or err == 'stopped'
         if not stopped then
@@ -2356,7 +2356,7 @@ local function askInto(w, question, prompt, opts)
 end
 
 --- The chats, each shown, hidden (kept with its conversation) or absent,
---- by slot: `ask` for <leader>aa and the windows of the other requests, a
+--- by slot: `ask` for <leader>la and the windows of the other requests, a
 --- persona's command for M.chatWith. Each keeps its own conversation and
 --- context; they share the screen's middle, so showing one hides the
 --- others. A new chat in a slot replaces the one there.
@@ -2547,7 +2547,7 @@ local function openAnswer(kind, question, prompt, cwd, preset, extra, fresh)
     vim.api.nvim_create_autocmd('WinClosed', { pattern = tostring(b), once = true,
       callback = function() vim.schedule(function() pcall(vim.api.nvim_win_close, a, true) end) end })
   end
-  --- Off screen, kept: its key (<leader>aa, or the persona's) shows it again.
+  --- Off screen, kept: its key (<leader>la, or the persona's) shows it again.
   function w.hide()
     for _, win in ipairs({ w.input.win, w.win }) do
       if win and vim.api.nvim_win_is_valid(win) then pcall(vim.api.nvim_win_close, win, true) end
@@ -2609,7 +2609,7 @@ local function openAnswer(kind, question, prompt, cwd, preset, extra, fresh)
   vim.keymap.set('n', 'i', w.focusInput, o)
 
   -- [ / ]: the previous / next answer of this session's history, in this
-  -- same window, without going through <leader>ah (Improvment.md). A follow-up
+  -- same window, without going through <leader>lh (Improvment.md). A follow-up
   -- (a) then continues the answer shown.
   local function showEntry(i)
     local h = history[i]
@@ -2645,7 +2645,7 @@ local function openAnswer(kind, question, prompt, cwd, preset, extra, fresh)
   return w
 end
 
---- <leader>aa, like <leader>tt for the terminal: the chat is shown, or
+--- <leader>la, like <leader>tt for the terminal: the chat is shown, or
 --- hidden (kept, with an answer still coming), or opened empty with the
 --- cursor in its box, where the question is typed. The vim.ui.input prompt
 --- at the top of the screen is gone (Improvment.md). In visual mode the
@@ -2677,10 +2677,10 @@ function M.ask(question, range)
   openAnswer('ask', nil, nil, workdir(buf), nil, nil, { ctx = context(buf, range), buf = buf, slot = 'ask' })
 end
 
---- The persona `name`'s own chat (/name), apart from <leader>aa's, with its
+--- The persona `name`'s own chat (/name), apart from <leader>la's, with its
 --- own conversation and context: opened with its greeting and the box
 --- waiting for the first question (nothing is asked before it); called
---- again, hidden or shown, like <leader>aa. Showing it hides the others.
+--- again, hidden or shown, like <leader>la. Showing it hides the others.
 function M.chatWith(name)
   local p = persona.find(name)
   if not p then
@@ -2814,18 +2814,18 @@ function M.write(instruction, range, extra)
     local streamed, thought = '', ''
     -- The ghost lines under the status: the thinking (its last lines while
     -- it thinks, one "▸ thought" line once the text comes, all of it when
-    -- opened with <leader>at, see M.toggleThinking), then the text so far.
+    -- opened with <leader>lt, see M.toggleThinking), then the text so far.
     local open = false
     local function redraw()
       local lines = {}
       if thought ~= '' and (open or vim.g.pure_llm_thinking ~= 'hide') then
         if open then
           lines = thinkingLines(thought)
-          table.insert(lines, 1, { { '  ▾ thinking (<leader>at: hide)', 'Comment' } })
+          table.insert(lines, 1, { { '  ▾ thinking (<leader>lt: hide)', 'Comment' } })
         elseif streamed == '' then
           lines = thinkingLines(thought, 8)
         else
-          lines = { { { '  ▸ thought (<leader>at: show)', 'Comment' } } }
+          lines = { { { '  ▸ thought (<leader>lt: show)', 'Comment' } } }
         end
       end
       if streamed ~= '' then
@@ -2840,7 +2840,7 @@ function M.write(instruction, range, extra)
     local function clear()
       ghost.stop()
       writing[buf] = nil
-      -- Kept, so <leader>at can still show it once the text is in.
+      -- Kept, so <leader>lt can still show it once the text is in.
       if thought ~= '' then last_thought[buf] = { text = thought, model = m_label } end
       for _, id in ipairs({ a_mark, hl }) do
         if id then pcall(vim.api.nvim_buf_del_extmark, buf, ns, id) end
@@ -2938,7 +2938,7 @@ end
 --  Actions
 -- -----------------------------------------------------------------------------
 --  Requests you make often, one markdown file each, in a folder of the vault
---  (`claude/` by default, vim.g.pure_llm_actions): <leader>ax lists
+--  (`claude/` by default, vim.g.pure_llm_actions): <leader>lx lists
 --  them, and the one picked runs with the context of now (the note, the
 --  selection, the cursor). A file is an action when its frontmatter has a
 --  description; other files of the folder are left alone.
@@ -2951,7 +2951,7 @@ end
 --    dirs: vault, ~/Downloads   where it may change files
 --    confirm: auto           auto (only outside git) | always | never
 --    model: haiku            this action only
---    key: <leader>a1         its own key
+--    key: <leader>l1         its own key
 --    context: stats.lua      more context: the text() of a Lua file of this
 --                            folder, or of a module lua/pure/<name>
 --    ---
@@ -3122,7 +3122,7 @@ end
 --  Who answers, apart from what is asked: a persona's instructions, the
 --  context it needs and its tools, called by starting a request with /name:
 --  in the chat (it stays for the follow-ups until another /name), at
---  <leader>ai, in an action's text or a ```llm block. One markdown file each
+--  <leader>li, in an action's text or a ```llm block. One markdown file each
 --  in the `Personas` folder of the actions folder (vim.g.pure_llm_personas),
 --  in the actions' format; the file name is the command (job.md: /job) and
 --  `aliases` adds more. M.chatWith(name) opens the chat with one, its
@@ -3259,8 +3259,8 @@ function M.runAction(a, ctx)
     vim.notify(label .. ': ' .. a.description .. '…')
     local used, t0 = {}, vim.uv.hrtime()
     local status = statusMark(buf, vim.api.nvim_win_get_cursor(0)[1] - 1, label .. ' · ' .. a.description .. '…')
-    -- Its thinking under the status, as <leader>ai shows it: the last lines
-    -- while it thinks, all of it with <leader>at, and kept for <leader>at
+    -- Its thinking under the status, as <leader>li shows it: the last lines
+    -- while it thinks, all of it with <leader>lt, and kept for <leader>lt
     -- afterwards. Before, an action's thinking showed nowhere.
     local thought, open = '', false
     local function redraw()
@@ -3268,7 +3268,7 @@ function M.runAction(a, ctx)
         status.extra = nil
       elseif open then
         status.extra = thinkingLines(thought)
-        table.insert(status.extra, 1, { { '  ▾ thinking (<leader>at: hide)', 'Comment' } })
+        table.insert(status.extra, 1, { { '  ▾ thinking (<leader>lt: hide)', 'Comment' } })
       else
         status.extra = thinkingLines(thought, 8)
       end
@@ -3643,7 +3643,7 @@ local function runBlock(buf, block)
       os.date('%Y-%m-%d, %A'), vaultHints(), table.concat(lines, '\n'), p and request or block.prompt)
 
   local m_label = modelLabel(block.options.model)
-  -- With the seconds going (statusMark), as <leader>aa's window shows them.
+  -- With the seconds going (statusMark), as <leader>la's window shows them.
   local status = statusMark(buf, block.last, m_label .. ' is answering…')
   local tick = vim.b[buf].changedtick
   run({
