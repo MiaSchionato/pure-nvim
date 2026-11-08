@@ -75,7 +75,8 @@ inside it (`<leader>nf`, `<leader>fe`) to go further.
 the template picker…) gets this same fzf window.
 **`vim.ui.input`** – questions get a small floating window (`Enter` answers,
 `Esc` / `q` cancels).
-Both take an extra `ratio` in their options (the size of the window, as
+`vim.ui.select` also takes `sort = true` (rank the matches by fzf's score instead of
+the caller's order: `<leader>vm`'s long list of notes). Both take an extra `ratio` in their options (the size of the window, as
 `createWindow`'s): the org capture passes one so its lists, questions and capture
 buffer have the same width and top edge ([org.md](org.md)). Unset, nothing changes.
 

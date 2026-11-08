@@ -266,6 +266,7 @@ map('n', '<leader>vq', vault.capture, func.getOpts(opts, "Quick capture: seed, t
 map('n', '<leader>q', vault.capture, func.getOpts(opts, "Quick capture: seed, task, link, journal, source"))
 map('n', '<leader>vn', vault.grow, func.getOpts(opts, "Grow the idea: SEED > SPROUT > PLANT > TREE"))
 map('n', '<leader>vc', vault.compost, func.getOpts(opts, "Let the idea go: compost"))
+map('n', '<leader>vm', vault.move, func.getOpts(opts, "Move this heading to another note (its :TYPE: note in sources/, or pick one)"))
 map('n', '<leader>vi', vault.insertLink, func.getOpts(opts, "Insert a link to a node"))
 map('n', '<leader>vb', vault.backlinks, func.getOpts(opts, "Backlinks (notes linking here)"))
 map('n', '<leader>vr', vault.rename, func.getOpts(opts, "Rename this note (title and file)"))
