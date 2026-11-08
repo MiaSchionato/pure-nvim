@@ -23,16 +23,19 @@ The keys of the quick capture (Win+Q) of the Emacs side:
 | Key | Goes to |
 |---|---|
 | `s` | a `SEED` in `inbox.org` |
-| `t` | a `TODO` in `tasks.org`; asks for a date first, Enter or Esc = none (`today`, `+3d`, `fri`, `2026-11-02`) |
+| `t` | a `TODO` in `tasks.org`; no question: the buffer has an empty `SCHEDULED:` line, filled in words (`today`, `tomorrow`, `fri`, `+3d`, `2026-11-20`, also `hoje`, `amanhã`, `oggi`, `domani`) that become a timestamp when stored; left empty, the line is dropped |
 | `T` | a `TODO` with a `DEADLINE` (date picked in org.nvim's date float) |
-| `l` | a link in `inbox.org`; asks the address (the clipboard is the default) and the title |
-| `f` | a source in `sources/<kind>.org`; asks the kind (fzf list), the title, the author, the status (fzf list), who recommended it and where (Enter leaves those two out); written as properties (`AUTHOR`, `STATUS`, `BY`, `WHERE`) |
+| `l` | a link in `inbox.org`; asks the address (the clipboard is the default) and the title; the buffer then opens in Normal mode, to check them |
+| `f` | a source; no question: the buffer has every source property, empty (`TYPE AUTHOR STATUS GENRE LANGUAGE BY WHERE RATING NOTES`, `STATUS` = `to-read`); when stored, `:TYPE: Books` (any case) sends it to `sources/books.org`; no `:TYPE:`, or no note of that name in `sources/`, sends it to `inbox.org` (nothing is made; `<leader>vm` moves it later) |
 
-Every question shows in the centre: a typed answer in the input float, a choice in
-the fzf list (`vim.ui.input` / `vim.ui.select`, `pure/fuzzyUtils.lua`), through
-org.nvim's `utils.input` / `utils.select`. The questions of `l` and `f` are asked in
-their target function, before org.nvim opens the target file, so Esc in any of them
-cancels the capture and leaves nothing behind. A `%` in an answer stays a `%`
+Only `l` asks questions, in the input float in the centre (`vim.ui.input`,
+`pure/fuzzyUtils.lua`, through org.nvim's `utils.input`), in its target function,
+before org.nvim opens the inbox, so Esc cancels the capture and leaves nothing behind.
+The `:TYPE:` of `f` and the words of `t`'s `SCHEDULED:` are read by a store filter
+(`org.capture.store_filters.pure_vault`, in `lua/plugins/org.lua`) just before the
+entry is stored, so org.nvim's "Captured to ..." names the file it went to. The source
+property names are added to org.nvim's completion of property names (after `:` in a
+drawer); property names are not case sensitive for org (`Author` = `AUTHOR`). A `%` in an answer stays a `%`
 (org.nvim would read `%a`, `%^{...}` as escapes: the template carries it as a
 private-use character and its hook puts the `%` back).
 The lists, the questions and the capture buffer share one size (`CAPTURE_RATIO`,
