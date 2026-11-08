@@ -95,7 +95,7 @@ local SOURCE_PROPERTIES = { 'TYPE', 'AUTHOR', 'STATUS', 'GENRE', 'LANGUAGE', 'BY
 local function source_template()
   local lines = { '* %?', ':PROPERTIES:' }
   for _, key in ipairs(SOURCE_PROPERTIES) do
-    lines[#lines + 1] = ('%-11s%s'):format(':' .. key .. ':', key == 'STATUS' and 'to-read' or '')
+    lines[#lines + 1] = (':%s:'):format(key) .. string.rep(' ', 9 - #key) -- every one empty, STATUS too (Mia)
   end
   vim.list_extend(lines, { ':CREATED:  %U', ':END:' })
   return table.concat(lines, '\n')
