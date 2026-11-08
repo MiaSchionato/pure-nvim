@@ -19,7 +19,7 @@
 --  working folder with :bcd, so :terminal, :grep and :! run there.
 --
 --  Settings (configs.lua):
---    vim.g.pure_scratch_filetype  'org' (default): the notes of Flora; any filetype works
+--    vim.g.pure_scratch_filetype  'org' (default): the notes of the vault; any filetype works
 --    vim.g.pure_scratch_file      the path (default stdpath('data')/scratch.<ext>)
 --    vim.g.pure_scratch_keep      true keeps the note when Neovim exits (default: it is deleted)
 --    vim.g.pure_scratch_message   the text of a new, empty note

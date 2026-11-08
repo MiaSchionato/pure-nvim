@@ -28,8 +28,8 @@ end
 --- Guarantee a single trailing slash.
 ---
 --- The pickers build the final file name with `path .. selection`, so a caller
---- passing ".../Atlas" instead of ".../Atlas/" silently produced
---- ".../Atlasnote.md". Normalising here keeps every call site in keymaps.lua
+--- passing ".../vault" instead of ".../vault/" silently produced
+--- ".../vaultnote.md". Normalising here keeps every call site in keymaps.lua
 --- from having to remember the slash.
 --- @param path string|nil
 --- @return string|nil

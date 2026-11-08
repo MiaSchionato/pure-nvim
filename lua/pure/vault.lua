@@ -1,7 +1,7 @@
 -- =============================================================================
---  Flora: the org vault (<leader>v)
+--  The vault: the org notes (<leader>v)
 -- =============================================================================
---  Flora is the org port of the Atlas vault. This module holds what the
+--  The vault is a folder of org notes (it was Markdown once). This module holds what the
 --  <leader>v group does with it, the way Doom's `SPC v` does (the Emacs side is
 --  C:\doom\config\config.el and .config\emacs\lisp\org-vault.el):
 --
@@ -25,17 +25,33 @@
 --
 --  Notes link to each other by :ID: (org-roam), so renaming or moving a file
 --  breaks no link. The nodes come from org.nvim's roam extension
---  (lua/plugins/org.lua); this module only asks it. vim.g.flora_dir changes
---  the folder (default ~/Flora).
+--  (lua/plugins/org.lua); this module only asks it. The folder is the one
+--  setting vim.g.pure_vault (configs.lua), else the answer the Markdown note
+--  engine remembered (pure/zettelkasten.lua).
 -- =============================================================================
 
 local M = {}
 
-local function warn(msg) vim.notify('Flora: ' .. msg, vim.log.levels.WARN) end
+local function warn(msg) vim.notify('Vault: ' .. msg, vim.log.levels.WARN) end
+
+--- The vault folder (normalized), or nil when no setting names one. No check, no warning.
+function M.dir()
+  local dir = vim.g.pure_vault
+  if not dir or dir == '' then
+    local ok, zet = pcall(require, 'pure.zettelkasten')
+    dir = ok and zet.vaultPath() or nil
+  end
+  if not dir or dir == '' then return nil end
+  return vim.fs.normalize(vim.fn.expand(dir))
+end
 
 --- The vault folder, or nil (with a warning) when it is not there.
 function M.path()
-  local dir = vim.fs.normalize(vim.fn.expand(vim.g.flora_dir or '~/Flora'))
+  local dir = M.dir()
+  if not dir then
+    warn('no vault folder: set vim.g.pure_vault')
+    return nil
+  end
   if vim.fn.isdirectory(dir) == 0 then
     warn('folder not found: ' .. dir)
     return nil
@@ -269,7 +285,7 @@ function M.find()
   local lines = {}
   for _, e in ipairs(findEntries(root)) do lines[#lines + 1] = findLine(e) end
   require('pure.fuzzyUtils').pickList(lines, {
-    title = ' Flora ',
+    title = ' Vault ',
     ratio = 0.8,
     -- Enter on a title that matches nothing returns the query itself (no tab in it): a new seed.
     fzf = "--ansi --delimiter '\\t' --with-nth 1 --tiebreak=index --bind enter:accept-or-print-query",
@@ -394,7 +410,7 @@ end
 --  Sync
 -- -----------------------------------------------------------------------------
 --- Save the notes of the vault and commit; with an upstream, pull and push too
---- (pure/vaultsync.lua). Flora may have no remote: then it stays a commit.
+--- (pure/vaultsync.lua). The vault may have no remote: then it stays a commit.
 function M.sync()
   local dir = M.path()
   if not dir then return end
@@ -411,8 +427,8 @@ function M.sync()
       ('Sync from %s, %s'):format(vim.uv.os_gethostname(), os.date('%Y-%m-%d %H:%M')) }, { text = true },
       function(res)
         vim.schedule(function()
-          if res.code == 0 then vim.notify('Flora: committed (no upstream, nothing pushed)')
-          elseif (res.stdout or ''):find('nothing %a* ?to commit') then vim.notify('Flora: nothing to commit')
+          if res.code == 0 then vim.notify('Vault: committed (no upstream, nothing pushed)')
+          elseif (res.stdout or ''):find('nothing %a* ?to commit') then vim.notify('Vault: nothing to commit')
           else warn('commit failed: ' .. vim.trim((res.stderr or '') .. (res.stdout or ''))) end
         end)
       end)
@@ -477,7 +493,7 @@ function M.preview()
   M.closePreview()
   if was then return end
   local path, row = target()
-  if not path then return vim.notify('Flora: no link to a note under the cursor') end
+  if not path then return vim.notify('Vault: no link to a note under the cursor') end
   local lines = nodeLines(path, row)
   local width = math.min(80, vim.o.columns - 4)
   local height = math.min(#lines, 16)
