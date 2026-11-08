@@ -20,7 +20,7 @@ When a module changes, update its page here in the same commit.
 | [notes.md](notes.md) | Links between notes: follow, complete `[[`, rename without breaking links, backlinks |
 | [linkview.md](linkview.md) | Preview and quick edit of the note a link points to, in a floating window |
 | [zettelkasten.md](zettelkasten.md) | Obsidian vault, note templates, daily / weekly / monthly notes |
-| [org.md](org.md) | org.nvim on the Flora vault: agenda, keywords, capture templates, org-roam |
+| [org.md](org.md) | org.nvim on the vault: agenda, keywords, capture templates, org-roam |
 | [markdown.md](markdown.md) | How markdown is drawn: headings, tasks, tables, wikilinks, frontmatter, footnotes |
 | [keyhint.md](keyhint.md) | The window that lists the keys after `<leader>` |
 | [fuzzy.md](fuzzy.md) | The fzf pickers: files, grep, buffers, help, explorer, `vim.ui.select` |
@@ -101,7 +101,7 @@ where to change them.
 
 | Setting | Default | Page |
 |---|---|---|
-| `vim.g.pure_vault` | asked on first start (`'~/Flora'` in configs.lua) | [zettelkasten](zettelkasten.md) |
+| `vim.g.pure_vault` | asked on first start (set in configs.lua; also read by `pure/vault.lua`, `plugins/org.lua`, `lsp/orgls.lua`) | [zettelkasten](zettelkasten.md) |
 | `vim.g.pure_templates` | `'Templates'` (`'archive/templates'` in configs.lua) | [zettelkasten](zettelkasten.md) |
 | `vim.g.pure_folder_templates` | `{}` | [notes](notes.md) |
 | `vim.g.pure_outside_folders` | `{}` (name = folder outside the vault, or `{ dir, cipher, idle, fido2 }` for an encrypted one) | [notes](notes.md) |
@@ -122,7 +122,7 @@ where to change them.
 | `vim.g.pure_llm_model` | `'claude:default'` (a pick with `<leader>am` wins) | [llm](llm.md) |
 | `vim.g.pure_claude_cmd` | `'claude'` | [llm](llm.md) |
 | `vim.g.pure_ollama_cmd` | `'ollama'`, else `ollama.exe` | [llm](llm.md) |
-| `vim.g.pure_llm_actions` | `'claude'` (folder of the vault); here `~/Flora/ai/actions` | [llm](llm.md) |
+| `vim.g.pure_llm_actions` | `'claude'` (folder of the vault); here the vault's `ai/actions` | [llm](llm.md) |
 | `vim.g.pure_llm_blocks` | on | [llm](llm.md) |
 | `vim.g.pure_url_titles` | on (a pasted URL becomes a link with the page title, org and markdown) | [org](org.md) |
 | `vim.g.pure_manim_cmd` | `'manim'` | [manim](manim.md) |

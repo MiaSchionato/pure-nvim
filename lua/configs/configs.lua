@@ -188,16 +188,16 @@ g.pure_links_complete = true
 -- -----------------------------------------------------------------------------
 -- The vault. Unset (default): asked for on a fresh install and remembered in
 -- stdpath('data'); :ZettelVault changes it. Setting it here overrides that.
--- Changed: the Flora vault (org), the same folder as pure/flora.lua and
--- lua/plugins/org.lua. It was the Markdown vault ~/Atlas until 2026-11-05.
+-- Changed: the org vault; pure/vault.lua, lua/plugins/org.lua and lsp/orgls.lua
+-- read this one setting. It was a Markdown vault until 2026-11-05.
 -- The LLM tools, backlinks, vault sync, the Todoist archive and the pickers
 -- use it. The Markdown note engine (pure/zettelkasten.lua: templates,
--- periodic notes, trash) was made for Atlas; its automatic parts are off
+-- periodic notes, trash) was made for the Markdown vault; its automatic parts are off
 -- below (pure_trash_cleanup, pure_periodic_on_start).
 g.pure_vault = '~/Flora'
 
 -- Folder of the templates, inside the vault. Default: 'Templates'.
--- Changed: Flora's (the org versions of the Atlas templates).
+-- Changed: the vault's (the org versions of the Markdown templates).
 g.pure_templates = 'archive/templates'
 
 -- Folders whose new notes are born with a template: a link to a note that
@@ -264,7 +264,7 @@ g.pure_quotes = '6-Archive/Periodic/Quotes.md'
 -- template send notes) each time Neovim starts, as Obsidian's TrashCleaner
 -- did. true: everything; a number: only what was not modified for that many
 -- days; false: never. Deleted for good, not moved to the recycle bin.
--- Default: false. Changed: true for Atlas; false since the vault is Flora
+-- Default: false. Changed: true for the Markdown vault; false since the vault is org
 -- (2026-11-05), whose trash is not this module's to empty.
 g.pure_trash_cleanup = false
 
@@ -274,9 +274,9 @@ g.pure_trash_cleanup = false
 -- week whose Monday Neovim was not opened still gets its note). Periods
 -- left out are made only when opened. (g.pure_daily_on_start = true, the
 -- older option, makes the daily alone.) Default: none. Changed: all three
--- for Atlas; none since the vault is Flora (2026-11-05): its journal is
--- org-roam's dailies (pure/flora.lua, <leader>v), and these would be
--- Markdown notes in Atlas' folders.
+-- for the Markdown vault; none since the vault is org (2026-11-05): its journal is
+-- org-roam's dailies (pure/vault.lua, <leader>v), and these would be
+-- Markdown notes in the old vault's folders.
 g.pure_periodic_on_start = {}
 
 -- -----------------------------------------------------------------------------
@@ -345,12 +345,12 @@ g.pure_todoist_confirm = 'never'
 
 -- Folder where the task list and a timestamped history of every change are
 -- kept (tasks.md, history.md, tasks.json), relative to the vault so it moves
--- with it. Unset or '' (default): no archive. Changed: set (Flora's archive
--- folder, where the migration put the Atlas one, since 2026-11-05).
+-- with it. Unset or '' (default): no archive. Changed: set (the vault's archive
+-- folder, where the migration put the old one, since 2026-11-05).
 g.pure_todoist_archive = 'archive/Todoist/'
 
 -- Syntax of that archive: 'md' (tasks.md, history.md) or 'org' (tasks.org,
--- history.org). Default: 'md'. Changed: 'org', the Flora vault's.
+-- history.org). Default: 'md'. Changed: 'org', the vault's.
 g.pure_todoist_archive_format = 'org'
 
 -- Write the tasks of each ```todoist block into its note as text, refreshed
@@ -430,7 +430,7 @@ g.pure_url_titles = true
 g.pure_llm_blocks = true
 
 -- Folder of the actions (<leader>ax): a name inside the vault, or an absolute path (~ works).
--- Default: 'claude'. Changed: the actions of the Flora vault (before: '8-AI', a folder of the old Atlas vault).
+-- Default: 'claude'. Changed: the actions folder of the vault (before: '8-AI', a folder of the old Markdown vault).
 g.pure_llm_actions = '~/Flora/ai/actions'
 
 -- Folders (inside the vault, or absolute) no cloud model (Claude, agy) may
@@ -442,7 +442,7 @@ g.pure_llm_actions = '~/Flora/ai/actions'
 g.pure_llm_private = { '~/Private' }
 
 -- Folder of the personas (/name): a name inside the actions folder, or an absolute path (~ works).
--- Default: 'Personas'. Changed: the personas of the Flora vault, next to the actions folder.
+-- Default: 'Personas'. Changed: the personas folder of the vault, next to the actions folder.
 g.pure_llm_personas = '~/Flora/ai/personas'
 
 -- A model's thinking: 'show' (dimmed while it thinks, folded after: t in the

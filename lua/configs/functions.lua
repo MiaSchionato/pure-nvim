@@ -708,7 +708,7 @@ local home = vim.uv.os_homedir():gsub("\\", "/") .. "/"
 
 --- The vault folder with a trailing slash.
 local function vaultDir()
-  local vault = vim.fs.normalize(vim.fn.expand(vim.g.flora_dir or '~/Flora'))
+  local vault = require('pure.vault').dir()
   return vault and (vault .. '/') or nil
 end
 
@@ -721,7 +721,7 @@ M.dirs = {
   ['~'] = home,
   ['.'] = home .. '.config/',
   n     = home .. '.config/nvim/',
-  -- The vault (org), vim.g.flora_dir or ~/Flora (pure/flora.lua).
+  -- The vault (org): vim.g.pure_vault (pure/vault.lua).
   v     = vaultDir,
   p     = home .. 'Projects',
   -- The file new notes go to (<leader>oi opens it): vim.g.orgls_inbox, as in lsp/orgls.lua, or inbox.org.

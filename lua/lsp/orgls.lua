@@ -2,11 +2,11 @@
 --  orgls: what the org notes of a vault know about each other
 -- =============================================================================
 --  One file for the part of the setup that answers "what is in the vault, where does this link go, is it
---  right". It was spread over pure/flora.lua (reading the vault) and pure/links.lua (finding, linking,
+--  right". It was spread over pure/vault.lua (reading the vault) and pure/links.lua (finding, linking,
 --  checking); it is merged here, the code as it was, so a language server can be built from one place.
 --
 --  Order:
---    1. The vault    path, parsing a note, the entries (notes, headings, aliases)   (from pure/flora.lua)
+--    1. The vault    path, parsing a note, the entries (notes, headings, aliases)   (from pure/vault.lua)
 --    2. The rest     pure/links.lua in its own order: text helpers, search, IDs and aliases, writing the
 --                    link, the [[ menu, resolving a spec, reconcile (diagnostics), the alias of a link,
 --                    omnifunc, <CR>/<Tab>, attach
@@ -14,12 +14,12 @@
 --    4. The server   an in-process language server (textDocument/hover); the file returns its config,
 --                    which configs/lspConfigs.lua loads ('orgls' is in its list)
 --
---  NOT moved: the fzf picker (flora.find, links.pick: <leader>vf and <leader>vi) and the other vault
---  commands (rename, delete, sync, backlinks, preview, quick edit). They are the picker's, not the vault's.
+--  NOT moved: the fzf picker (vault.find, links.pick: <leader>vf and <leader>vi) and the other vault
+--  commands (rename, delete, sync, backlinks, preview). They are the picker's, not the vault's.
 --  The original modules are untouched and still the ones in use for the [[ menu and the checks. Do not call
 --  M.setup() while pure.links is loaded: both use the same buffer variable, autocmd groups and namespaces.
 --
---  Changes from the originals: completefunc/omnifunc point to this module; `pure.flora.path()` and
+--  Changes from the originals: completefunc/omnifunc point to this module; `pure.vault.path()` and
 --  `_find.entries` became the local M.path / findEntries; the load-time autocmds went into M.setup(); the
 --  entries carry the :ID: of the note or heading (`id`); the duplicate M and header were dropped; the exports
 --  for tests lost `pick`.
@@ -27,7 +27,7 @@
 --  Settings (configs.lua):
 --    vim.g.pure_links_complete   false turns the [[ menu off (default on)
 --    vim.g.pure_links_reconcile  false turns the check of hand-written links off
---    vim.g.orgls_vault           the vault folder (see vaultDir; the personal default is in that one function)
+--    vim.g.orgls_vault           the vault folder (default: vim.g.pure_vault, the setting of this config)
 --    vim.g.orgls_inbox           the file new notes are made in, relative to the vault (default inbox.org)
 --    vim.g.orgls_new_keyword     the todo keyword of a new note (default SEED)
 -- =============================================================================
@@ -38,14 +38,14 @@ local api = vim.api
 local style = require('pure.pickerstyle')
 
 -- =============================================================================
---  1. The vault (from pure/flora.lua)
+--  1. The vault (from pure/vault.lua)
 -- =============================================================================
 local function warn(msg) vim.notify('orgls: ' .. msg, vim.log.levels.WARN) end
 
---- The vault folder, normalized. The one place that names a default: vim.g.orgls_vault, else the setting this
---- config already had (vim.g.flora_dir), else the personal default. A separate project drops the last two.
+--- The vault folder, normalized: vim.g.orgls_vault, else the setting this config already has (vim.g.pure_vault).
+--- A separate project drops the second one.
 local function vaultDir()
-  return vim.fs.normalize(vim.fn.expand(vim.g.orgls_vault or vim.g.flora_dir or '~/Flora'))
+  return vim.fs.normalize(vim.fn.expand(vim.g.orgls_vault or vim.g.pure_vault or ''))
 end
 
 --- The vault folder, or nil (with a warning) when it is not there.

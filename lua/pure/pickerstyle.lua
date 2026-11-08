@@ -1,7 +1,7 @@
 -- =============================================================================
 --  Picker style  (the look of <leader>vf, for every picker)
 -- =============================================================================
---  <leader>vf (pure/flora.lua) set the look: the name in colour on the left, then
+--  <leader>vf (pure/vault.lua) set the look: the name in colour on the left, then
 --  (dim, to the right) the folder and how long ago the file was written; the
 --  colours are PureNoteFile, PureNoteAlias, PureNoteSep (pure/notecolors.lua).
 --  The other pickers (pure/fuzzyUtils.lua) draw their lines with this module.

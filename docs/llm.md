@@ -121,7 +121,7 @@ answer, never change them.
 
 ## Actions: `<leader>ax`
 
-The requests you make often, one markdown file each, in `~/Flora/ai/actions`
+The requests you make often, one markdown file each, in the vault's `ai/actions`
 (`vim.g.pure_llm_actions` in `configs/configs.lua`: a folder of the vault by name,
 any case, or an absolute path; unset it is the `claude` folder of the vault). `<leader>ax`
 lists them in the fzf picker by title (the file name, as Obsidian shows
@@ -264,7 +264,7 @@ any request with `/name` and that persona answers it:
 A text starting with something that is not a persona (`/usr/bin`) is left as
 it is.
 
-Each persona is one markdown file in `~/Flora/ai/personas`
+Each persona is one markdown file in the vault's `ai/personas`
 (`vim.g.pure_llm_personas`: a `Personas` folder of the actions folder by name, or
 an absolute path, as here), in the actions' format.
 The file name is the command (`job.md`: `/job`); the folder is not listed as
@@ -493,8 +493,8 @@ vim.g.pure_claude_cmd = 'claude'      -- Claude Code command, if not in the PATH
 vim.g.pure_ollama_cmd = 'ollama'      -- ollama command; without one, `ollama`, else Windows'
                                       -- ollama.exe (from WSL: the Windows Ollama is used)
 vim.g.pure_llm_blocks = true          -- false: blocks run only with <leader>ab
-vim.g.pure_llm_actions = '~/Flora/ai/actions'    -- folder of the actions (a name in the vault, or a path); default 'claude'
-vim.g.pure_llm_personas = '~/Flora/ai/personas'  -- folder of the personas (/name); default 'Personas' in the actions folder
+vim.g.pure_llm_actions = '~/vault/ai/actions'    -- folder of the actions (a name in the vault, or a path); default 'claude'
+vim.g.pure_llm_personas = '~/vault/ai/personas'  -- folder of the personas (/name); default 'Personas' in the actions folder
 vim.g.pure_llm_thinking = 'show'      -- 'hide': never show a model's thinking
 vim.g.pure_llm_user_context = nil     -- the user context file (false: none)
 vim.g.pure_llm_memory = true          -- false: models never write to it

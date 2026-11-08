@@ -86,10 +86,10 @@ end
 --  The nodes (the same entries as <leader>vf)
 -- -----------------------------------------------------------------------------
 local function allEntries()
-  local flora = require('pure.flora')
-  local root = flora.path()
+  local vault = require('pure.vault')
+  local root = vault.path()
   if not root then return {} end
-  return flora._find.entries(root)
+  return vault._find.entries(root)
 end
 
 --- `[[a*b`: the text after [[ split into (headings only, words of the note, query). Whatever follows `||` is
@@ -249,7 +249,7 @@ end
 
 --- A SEED called `title` at the end of the inbox, without opening it: (file, lnum).
 local function createSeed(title)
-  local root = require('pure.flora').path()
+  local root = require('pure.vault').path()
   if not root then return nil end
   local inbox = root .. '/inbox.org'
   local buf = vim.fn.bufnr(inbox)
@@ -1031,16 +1031,16 @@ end
 --  <leader>vi: the picker of <leader>vf, inserting a link at the cursor
 -- -----------------------------------------------------------------------------
 function M.pick()
-  local flora = require('pure.flora')
-  local root = flora.path()
+  local vault = require('pure.vault')
+  local root = vault.path()
   if not root then return end
   local buf, win = api.nvim_get_current_buf(), api.nvim_get_current_win()
   local cursor = api.nvim_win_get_cursor(win)
   require('pure.notecolors').apply()
-  local entries = flora._find.entries(root)
+  local entries = vault._find.entries(root)
   local lines = {}
   for i, e in ipairs(entries) do
-    lines[#lines + 1] = flora._find.line(e):match('^([^\t]*)') .. '\t' .. i
+    lines[#lines + 1] = vault._find.line(e):match('^([^\t]*)') .. '\t' .. i
   end
   require('pure.fuzzyUtils').pickList(lines, {
     title = ' Link to ',

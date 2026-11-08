@@ -204,12 +204,12 @@ function M.drawDashboard()
 
   -- Set your keymaps for the dashboard buffer
   local opts = { buffer = buf, silent = true, nowait = true }
-  -- Today's journal of the Flora vault (org-roam dailies, like <leader>vJ).
-  vim.keymap.set('n', 'd', function() require('pure.flora').journalToday() end, opts)
+  -- Today's journal of the vault (org-roam dailies, like <leader>vJ).
+  vim.keymap.set('n', 'd', function() require('pure.vault').journalToday() end, opts)
   vim.keymap.set('n', 'l', M.lastNote, opts)
   vim.keymap.set('n', 'n', function() require('pure.scratch').open() end, opts)
   -- A seed in the vault's inbox (like <leader>vq s).
-  vim.keymap.set('n', 'v', function() require('pure.flora').newSeed() end, opts)
+  vim.keymap.set('n', 'v', function() require('pure.vault').newSeed() end, opts)
   -- In a tab of its own, q closes that tab; from the last one it quits.
   vim.keymap.set('n', 'q', function()
     vim.cmd(#vim.api.nvim_list_tabpages() > 1 and 'tabclose' or 'qa')

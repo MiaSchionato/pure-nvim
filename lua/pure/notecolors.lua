@@ -39,7 +39,7 @@ local task_links = {
   Cancelled = 'NonText',
 }
 
--- The Flora finder (pure/flora.lua): a note, an alias, the separators and the path on the right. Ethereal: the colours of
+-- The vault finder (pure/vault.lua): a note, an alias, the separators and the path on the right. Ethereal: the colours of
 -- Doom's vault-open.el (my/vf-note, my/vf-alias, my/vf-sep).
 local finder_links = { PureNoteFile = 'Directory', PureNoteAlias = 'Special', PureNoteSep = 'Comment' }
 local ethereal_finder = { PureNoteFile = '#4f8a96', PureNoteAlias = '#c89dc1', PureNoteSep = '#6d7db6' }

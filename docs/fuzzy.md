@@ -28,7 +28,7 @@ split and make fzf quit.)
 | `<leader>gl` | git log | shows the picked commit in a split (`q` closes) |
 | `<leader>n…` | new file | straight into its folder, asking only the name (`nh` home, `n.` ~/.config, `nn` nvim, `ne` here; `vim.g.pure_new_file_ask_name = false`: an unnamed buffer there instead). `nf` picks the folder first; `nv` is a note in the vault's inbox; `nd` a new folder here |
 
-**One look for every picker** (`lua/pure/pickerstyle.lua`): the style of `<leader>vf` (the Flora
+**One look for every picker** (`lua/pure/pickerstyle.lua`): the style of `<leader>vf` (the vault
 finder). The name is in colour on the left (`PureNoteFile`), then, dim to the right (`PureNoteSep`),
 its folder and how long ago it was written. What you type matches the name, the folder and the age.
 The full path (and the line) ride along as hidden fields. Files (`ff`, `fn`, `f.`, `f~`), recent files
@@ -95,7 +95,7 @@ equal matches, the earlier one in the list wins). fd cannot sort and reading the
 minutes, so the list is made in tiers, one fd run each (`--changed-within 1h`, then changed within 1d and
 before 1h, ... then everything older than the last limit); fzf shows the first tier at once while the
 others are still being listed. Inside a tier the order is the one of the folder walk. Buffers (last used
-first), recent files and the Flora finder (`<leader>vf`, notes written last first) are sorted exactly.
+first), recent files and the vault finder (`<leader>vf`, notes written last first) are sorted exactly.
 The whole home folder (17 000 files) is listed in under a second; an earlier version that read the time
 of every recent file took over a minute.
 
