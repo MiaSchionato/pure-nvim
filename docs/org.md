@@ -172,11 +172,13 @@ as it is.
 ## Flora keys (`<leader>v`, `lua/pure/flora.lua`)
 
 The group of the old Atlas vault now works on Flora, like Doom's `SPC v`:
-find a node (`f`), a file (`F`), grep (`g`), new seed (`n`), new note (`N`),
-capture templates (`t`), insert a link (`i`), backlinks (`b`), rename (`r`),
+find a node (`f`), a file (`F`), grep (`g`), quick capture (`q`: the template
+menu, a new seed is its `s`), grow the idea (`n`) and compost it (`c`) as Doom does,
+new note (`N`), insert a link (`i`), backlinks (`b`), rename (`r`),
 delete to `archive/trash/` (`d`), journal line (`j`), today (`J`), explore (`e`),
-save and commit (`s`), preview and quick edit the linked note (`p`, `q`, in org
-notes). The list is in [keymaps.md](keymaps.md). Links are by `:ID:`, so renaming
+save and commit (`s`), preview the linked note (`p`, in org notes). Until
+2026-11-08 the capture menu was `t`, `n` was a new seed and `q` the quick edit of
+the linked note (removed). The list is in [keymaps.md](keymaps.md). Links are by `:ID:`, so renaming
 or moving a note breaks none. The Atlas functions are left in
 `pure/zettelkasten.lua` and `pure/notes.lua` as commands, without keys.
 
