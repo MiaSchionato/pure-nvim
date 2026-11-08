@@ -50,6 +50,16 @@ and closes the window; `:q` closes it and drops the entry; `<C-c><C-k>` aborts.
 org.nvim's window modes are strings only, so `lua/plugins/org.lua` wraps its window
 opener (`org.ui.open_buffer_window`) for that one mode; every other window is org.nvim's.
 
+## States per note (`#+TODO:`)
+
+The config has two sets of states: the tasks' (`TODO NEXT DOING WAITING | DONE CANCELLED`) and
+the garden's (`SEED SPROUT PLANT TREE FLOWER | COMPOST`). A note with a `#+TODO:` line of its own
+keeps only that set, as in Emacs: `inbox.org` and `garden/<year>.org` have the garden's,
+`tasks.org` the tasks'. So the state menu (`<leader>vt`, org.nvim's `<leader>mS` or `<C-c><C-t>`)
+and `t` in the agenda (which uses the note of the entry) offer only the right ones there; notes
+without the line (`projects/`...) offer both. A new `garden/<year>.org` made by `<leader>vn` gets
+the garden's line. A keyword of the other set in such a note is plain text.
+
 ## Agenda (`<leader>a`)
 
 `<leader>a` (or org.nvim's own `<leader>ma`) opens the agenda's menu: `a` the week, `t` every

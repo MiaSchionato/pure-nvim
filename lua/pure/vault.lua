@@ -12,6 +12,7 @@
 --    n  grow the idea (SEED > SPROUT > PLANT > TREE; a seed of the inbox moves to garden/<year>.org)
 --    c  compost the idea (COMPOST, moved to archive/compost.org; nothing is erased)
 --    m  move this heading to another note (the sources/ note of its :TYPE:, or one picked in the fzf list)
+--    t  TODO state menu (the states of this note)   a  the agenda (its menu)
 --    N  new note in its own file       i  insert a link to a node
 --    b  backlinks                      r  rename this note (title and file)
 --    d  delete this note (to archive/trash/, nothing is erased)
@@ -313,6 +314,10 @@ M.capture = org('capture')
 M.newSeed = org('capture s')
 M.journalLine = org('capture j')
 M.journalToday = org('roam_dailies_goto_today')
+-- The TODO state menu of the heading (org.nvim's todo_select, <leader>mS): it lists the states of the heading's
+-- note, so the garden stages in inbox.org and garden/, the task states in tasks.org (their #+TODO: lines).
+M.todoState = org('todo_select')
+M.agenda = org('agenda')
 
 function M.findFile()
   local dir = M.path()
@@ -518,6 +523,9 @@ end
 --  The stages are the second keyword set of lua/plugins/org.lua.
 
 local LADDER = { 'SEED', 'SPROUT', 'PLANT', 'TREE' }
+-- The garden's states as a #+TODO: line: inbox.org and garden/<year>.org carry it, so their headings offer only
+-- these (tasks.org carries the task states). The same words as the second set of lua/plugins/org.lua.
+local GARDEN_TODO = '#+TODO: SEED(s) SPROUT(p) PLANT(l) TREE(r) FLOWER(f) | COMPOST(c)'
 
 --- The headline at the cursor of an org note of the vault, or nil (with a warning).
 local function ideaHere()
@@ -541,11 +549,14 @@ end
 
 --- Move the subtree at the cursor (or at `target`, { bufnr, lnum }) to the top level of `rel` (a file of the
 --- vault, made when missing, titled `title`), then save.
-local function refileTo(rel, title, target)
+local function refileTo(rel, title, target, header)
   local path = M.path() .. '/' .. rel
   if not vim.uv.fs_stat(path) then
     vim.fn.mkdir(vim.fn.fnamemodify(path, ':h'), 'p')
-    vim.fn.writefile({ '#+title: ' .. (title or vim.fn.fnamemodify(rel, ':t:r')), '' }, path)
+    local head = { '#+title: ' .. (title or vim.fn.fnamemodify(rel, ':t:r')) }
+    vim.list_extend(head, header or {})
+    head[#head + 1] = ''
+    vim.fn.writefile(head, path)
   end
   local ok = pcall(require('org.refile').refile, target,
     { dest = { filename = path, path = rel }, save = true, note = false })
@@ -572,7 +583,8 @@ function M.grow()
   require('org.todo').change_state(nil, nextStage)
   if state == 'SEED' and sameFile(vim.api.nvim_buf_get_name(0), M.path() .. '/inbox.org') then
     local year = os.date('%Y')
-    if refileTo('garden/' .. year .. '.org', year) then vim.notify(nextStage .. ': moved to the garden') end
+    -- A new year's file gets the garden's states, like garden/2026.org (see GARDEN_TODO).
+    if refileTo('garden/' .. year .. '.org', year, nil, { GARDEN_TODO }) then vim.notify(nextStage .. ': moved to the garden') end
   else
     vim.cmd('silent write')
     vim.notify(nextStage)
