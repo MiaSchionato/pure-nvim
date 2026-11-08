@@ -30,10 +30,49 @@ local keyword_faces = {
 
 local CREATED = ':PROPERTIES:\n:CREATED:  %U\n:END:'
 
--- Task template: asks for a date first; Enter leaves the task without one.
+-- The questions of the templates below all show in the centre (Mia, 2026-11-08): a typed answer in the
+-- input float, a choice in the fzf list (vim.ui.input / vim.ui.select, pure/fuzzyUtils.lua), through
+-- org.nvim's utils, which wait for them inside the capture's coroutine. The questions of `l` and `f` are
+-- asked in their target function, which org.nvim calls before it opens the target file: Esc there cancels
+-- the capture quietly (utils.abort) and leaves nothing behind. The template then only writes the answers.
+local orgUtils = require('org.utils')
+
+--- A typed answer in the input float; Esc cancels the capture.
+local function ask(prompt, default)
+  local answer = orgUtils.input({ prompt = prompt, default = default })
+  if answer == nil then orgUtils.abort() end
+  return vim.trim(answer)
+end
+
+--- A choice from `items` in the fzf list; Esc cancels the capture.
+local function choose(prompt, items)
+  local choice = orgUtils.select(items, { prompt = prompt })
+  if choice == nil then orgUtils.abort() end
+  return choice
+end
+
+--- An answer as template text: org.nvim must not read a % in it as an escape (%a, %^{...}, %(...) ...).
+--- Each % becomes a private-use character org.nvim leaves alone, and the template's hook (`restorePercent`,
+--- run on the capture buffer once it is filled) turns it back. A backslash before the % would stay in the
+--- text wherever org.nvim sees no escape ("100% done" became "100\% done").
+local PERCENT = '\238\128\128' -- U+E000
+local function literal(text) return (text:gsub('%%', PERCENT)) end
+local function restorePercent(buf)
+  local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+  local changed = false
+  for i, l in ipairs(lines) do
+    if l:find(PERCENT, 1, true) then lines[i], changed = l:gsub(PERCENT, '%%'), true end
+  end
+  if changed then vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines) end
+end
+
+-- The answers of the running capture, from its target function to its template.
+local answers = {}
+
+-- Task template: asks for a date first; Enter (or Esc) leaves the task without one.
 -- The answer is read like org's own date prompt (today, +3d, fri, 2026-11-02).
 local function task_template()
-  local answer = vim.trim(vim.fn.input('When? (Enter = no date; today, +3d, fri, 2026-11-02): '))
+  local answer = vim.trim(orgUtils.input({ prompt = 'When? (Enter = no date; today, +3d, fri, 2026-11-02): ' }) or '')
   local planning = ''
   if answer ~= '' then
     local d = require('org.date').read_date(answer)
@@ -47,18 +86,37 @@ local function task_template()
   return '* TODO %?\n' .. planning .. CREATED
 end
 
--- Source file: sources/<kind>.org, the kind asked for; created with a title.
+-- Link: the address (the clipboard by default) and a title, asked before the inbox is opened.
+local function link_target()
+  local clip = vim.trim((vim.fn.getreg('+') or ''):match('[^\r\n]*') or '')
+  answers.link = { url = ask('Link: ', clip), title = ask('Title: ') }
+  return 'inbox.org'
+end
+
+local function link_template()
+  local a = answers.link or {}
+  return '* [[' .. literal(a.url or '') .. '][' .. literal(a.title or '') .. ']]\n' .. CREATED .. '\n%?'
+end
+
+-- Source file: sources/<kind>.org, the kind picked in the fzf list (it was a numbered list); created with a
+-- title. Then the title, the author and the status, before the file is opened.
 local SOURCE_KINDS = { 'books', 'articles', 'videos', 'courses', 'podcasts', 'other' }
+local SOURCE_STATUS = { 'to-read', 'reading', 'done' }
 local function source_target()
-  local choices = { 'Source:' }
-  for i, kind in ipairs(SOURCE_KINDS) do choices[#choices + 1] = i .. '. ' .. kind end
-  local kind = SOURCE_KINDS[vim.fn.inputlist(choices)] or 'other'
+  local kind = choose('Source', SOURCE_KINDS)
+  answers.source = { title = ask('Title: '), author = ask('Author: '), status = choose('Status', SOURCE_STATUS) }
   local path = 'sources/' .. kind .. '.org'
   local full = vim.fn.expand(vault) .. '/' .. path
   if vim.fn.filereadable(full) == 0 then
     vim.fn.writefile({ '#+TITLE: ' .. kind:sub(1, 1):upper() .. kind:sub(2), '' }, full)
   end
   return path
+end
+
+local function source_template()
+  local a = answers.source or {}
+  return '* ' .. literal(a.title or '') .. '\n:PROPERTIES:\n:CREATED:  %U\n:AUTHOR:   ' .. literal(a.author or '')
+    .. '\n:STATUS:   ' .. (a.status or '') .. '\n:END:\n%?'
 end
 
 require('org').setup({
@@ -119,15 +177,16 @@ require('org').setup({
       },
       l = {
         description = 'Link',
-        template = '* [[%^{Link|%x}][%^{Title}]]\n' .. CREATED .. '\n%?',
-        target = 'inbox.org',
+        template = link_template,
+        target = link_target,
+        hook = restorePercent,
         empty_lines = 1,
       },
       f = {
         description = 'Source',
-        template = '* %^{Title}\n:PROPERTIES:\n:CREATED:  %U\n:AUTHOR:   %^{Author}\n'
-          .. ':STATUS:   %^{Status|to-read|reading|done}\n:END:\n%?',
+        template = source_template,
         target = source_target,
+        hook = restorePercent,
         empty_lines = 1,
       },
       j = {

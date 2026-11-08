@@ -23,10 +23,18 @@ The keys of the quick capture (Win+Q) of the Emacs side:
 | Key | Goes to |
 |---|---|
 | `s` | a `SEED` in `inbox.org` |
-| `t` | a `TODO` in `tasks.org`; asks for a date first, Enter = none (`today`, `+3d`, `fri`, `2026-11-02`) |
-| `T` | a `TODO` with a `DEADLINE` (date picked in the calendar) |
-| `l` | a link in `inbox.org` (the clipboard is the default address) |
-| `f` | a source in `sources/<kind>.org`; asks the kind, the title, author and status |
+| `t` | a `TODO` in `tasks.org`; asks for a date first, Enter or Esc = none (`today`, `+3d`, `fri`, `2026-11-02`) |
+| `T` | a `TODO` with a `DEADLINE` (date picked in org.nvim's date float) |
+| `l` | a link in `inbox.org`; asks the address (the clipboard is the default) and the title |
+| `f` | a source in `sources/<kind>.org`; asks the kind (fzf list), the title, the author and the status (fzf list) |
+
+Every question shows in the centre: a typed answer in the input float, a choice in
+the fzf list (`vim.ui.input` / `vim.ui.select`, `pure/fuzzyUtils.lua`), through
+org.nvim's `utils.input` / `utils.select`. The questions of `l` and `f` are asked in
+their target function, before org.nvim opens the target file, so Esc in any of them
+cancels the capture and leaves nothing behind. A `%` in an answer stays a `%`
+(org.nvim would read `%a`, `%^{...}` as escapes: the template carries it as a
+private-use character and its hook puts the `%` back).
 | `j` | a line `* HH:MM text` in `journal/<year>.org`, under today's date |
 
 The text is written in a centred floating window (`capture.window = 'pure_float'`: the
