@@ -531,10 +531,14 @@ end
 --  The stages are the second keyword set of lua/plugins/org.lua.
 
 local LADDER = { 'SEED', 'SPROUT', 'PLANT', 'TREE' }
--- The garden's states as a #+TODO: line: the seedbed, the nursery and every note of garden/ carry it, so their
--- headings offer only these (tasks.org carries the task states). The same words as the second set of
--- lua/plugins/org.lua. FRUIT was FLOWER until 2026-11-08: a tree bears fruit (Mia).
+-- The garden's states as a #+TODO: line: the seedbed carries only it, so its headings offer only these (tasks.org
+-- carries only the task states). The same words as the second set of lua/plugins/org.lua. FRUIT was FLOWER until
+-- 2026-11-08: a tree bears fruit (Mia).
 local GARDEN_TODO = '#+TODO: SEED(s) SPROUT(p) PLANT(l) TREE(r) FRUIT(f) | COMPOST(c)'
+-- The nursery and the notes of garden/ carry both sets, the garden's first (Mia, 2026-11-09: only the seedbed and
+-- tasks.org keep one set; every other note has both).
+local TASKS_TODO = '#+TODO: TODO(t) NEXT(n) DOING(d) WAITING(w@) | DONE(x!) CANCELLED(c@)'
+local NOTE_TODO = { GARDEN_TODO, TASKS_TODO }
 
 --- A new note of garden/ for the idea `title` (a path from the vault's root): named after the title, _2, _3...
 --- when the name is taken. Plants, trees and fruits live in notes of their own.
@@ -607,10 +611,10 @@ function M.grow()
   local title = vim.trim(ok and plain or '')
   require('org.todo').change_state(nil, nextStage)
   if state == 'SEED' and sameFile(vim.api.nvim_buf_get_name(0), M.path() .. '/' .. M.seedbed()) then
-    if refileTo(M.NURSERY, 'Nursery', nil, { GARDEN_TODO }) then vim.notify(nextStage .. ': moved to the nursery') end
+    if refileTo(M.NURSERY, 'Nursery', nil, NOTE_TODO) then vim.notify(nextStage .. ': moved to the nursery') end
   elseif state == 'SPROUT' then
     local rel = ownNote(title)
-    if refileTo(rel, title, nil, { GARDEN_TODO }) then vim.notify(nextStage .. ': a note of its own, ' .. rel) end
+    if refileTo(rel, title, nil, NOTE_TODO) then vim.notify(nextStage .. ': a note of its own, ' .. rel) end
   else
     vim.cmd('silent write')
     vim.notify(nextStage)
@@ -705,13 +709,13 @@ function M.routeNode(lines)
       return out, 'archive/compost.org'
     end
     if place == 'nursery' then
-      ensureNote(M.NURSERY, { '#+TITLE: Nursery', GARDEN_TODO })
+      ensureNote(M.NURSERY, { '#+TITLE: Nursery', unpack(NOTE_TODO) })
       return out, M.NURSERY
     end
     -- A note of its own, named after the title (a new name when one is taken: _2, _3...).
     local title = heading and vim.trim(out[heading]:gsub('^%*+%s+', ''):gsub('^%u+%s+', '', 1)) or ''
     local rel = ownNote(title)
-    ensureNote(rel, { '#+title: ' .. title, GARDEN_TODO })
+    ensureNote(rel, { '#+title: ' .. title, unpack(NOTE_TODO) })
     return out, rel
   end
   local source = key ~= '' and M.sourceFile(type) or nil

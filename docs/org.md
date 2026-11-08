@@ -53,11 +53,12 @@ opener (`org.ui.open_buffer_window`) for that one mode; every other window is or
 
 The config has two sets of states: the tasks' (`TODO NEXT DOING WAITING | DONE CANCELLED`) and
 the garden's (`SEED SPROUT PLANT TREE FRUIT | COMPOST`). A note with a `#+TODO:` line of its own
-keeps only that set, as in Emacs: `seedbed.org`, `garden/nursery.org` and the notes of `garden/` have the garden's,
-`tasks.org` the tasks'. So the state menu (`<leader>vt`, org.nvim's `<leader>mS` or `<C-c><C-t>`)
-and `t` in the agenda (which uses the note of the entry) offer only the right ones there; notes
-without the line (`projects/`...) offer both. A new note made by `<leader>vn` or the node capture gets
-the garden's line. A keyword of the other set in such a note is plain text.
+keeps only those sets, as in Emacs: `seedbed.org` has only the garden's, `tasks.org` only the tasks'.
+So the state menu (`<leader>vt` or `<leader>T`, org.nvim's `<leader>mS` or `<C-c><C-t>`) and `t` in
+the agenda (which uses the note of the entry) offer only the right ones there; a keyword of the other
+set in those two is plain text. Every other note has both: `garden/nursery.org` and the notes of
+`garden/` with both lines (the garden's first), notes without a line (`projects/`...) by default. A new
+note made by grow (`<leader>vn`) or the node capture gets both lines.
 
 ## Agenda (`<leader>a`)
 
