@@ -4,7 +4,7 @@
 --  One Neovim answers at a fixed address, so something outside (the Flow
 --  Launcher plugin "nv") can open a file in it instead of starting another:
 --
---    nvim --server /tmp/nvim-remote.sock --remote 'vault/inbox.org'
+--    nvim --server /tmp/nvim-remote.sock --remote 'vault/seedbed.org'
 --
 --  The first Neovim started owns the address; the ones after it find it
 --  taken and are left alone (they are still reachable by their own

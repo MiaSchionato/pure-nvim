@@ -9,7 +9,7 @@
 --    F  find a file of the vault
 --    g  grep the vault
 --    q  quick capture (the template menu: node, task, link, journal; a node goes where its :TYPE: says)
---    n  grow the idea (SEED > SPROUT > PLANT > TREE; a seed of the inbox moves to garden/<year>.org)
+--    n  grow the idea (SEED > SPROUT > PLANT > TREE; a seed of the seedbed moves to the nursery, a sprout to a note of its own)
 --    c  compost the idea (COMPOST, moved to archive/compost.org; nothing is erased)
 --    m  move this heading to another note (the sources/ note of its :TYPE:, or one picked in the fzf list)
 --    t  TODO state menu (the states of this note)   a  the agenda (its menu)
@@ -35,6 +35,13 @@
 local M = {}
 
 local function warn(msg) vim.notify('Vault: ' .. msg, vim.log.levels.WARN) end
+
+--- The seedbed: the note where new things land (seeds, links, sources with no type), from the vault's root.
+--- The setting vim.g.orgls_inbox (configs.lua); it was inbox.org until 2026-11-08.
+function M.seedbed() return vim.g.orgls_inbox or 'seedbed.org' end
+--- The nursery: where the sprouts grow (garden/<year>.org until 2026-11-08). Plants, trees and fruits have a
+--- note of their own in garden/.
+M.NURSERY = 'garden/nursery.org'
 
 --- The vault folder (normalized), or nil when no setting names one. No check, no warning.
 function M.dir()
@@ -265,11 +272,11 @@ local function findLine(e)
   return table.concat({ visible .. string.rep(' ', math.max(70 - width, 2)) .. paint('PureNoteSep', meta), e.file, e.lnum }, '\t')
 end
 
---- A new seed in the inbox, then open it.
+--- A new seed in the seedbed, then open it.
 local function newSeed(title)
   local root = M.path()
   if not root then return end
-  local inbox = root .. '/inbox.org'
+  local inbox = root .. '/' .. M.seedbed()
   local lines = vim.fn.filereadable(inbox) == 1 and vim.fn.readfile(inbox) or {}
   if #lines > 0 and lines[#lines] ~= '' then lines[#lines + 1] = '' end
   local first = #lines + 1
@@ -316,7 +323,7 @@ M.newSeed = org('capture n')
 M.journalLine = org('capture j')
 M.journalToday = org('roam_dailies_goto_today')
 -- The TODO state menu of the heading (org.nvim's todo_select, <leader>mS): it lists the states of the heading's
--- note, so the garden stages in inbox.org and garden/, the task states in tasks.org (their #+TODO: lines).
+-- note, so the garden stages in the seedbed and garden/, the task states in tasks.org (their #+TODO: lines).
 M.todoState = org('todo_select')
 M.agenda = org('agenda')
 
@@ -524,9 +531,23 @@ end
 --  The stages are the second keyword set of lua/plugins/org.lua.
 
 local LADDER = { 'SEED', 'SPROUT', 'PLANT', 'TREE' }
--- The garden's states as a #+TODO: line: inbox.org and garden/<year>.org carry it, so their headings offer only
--- these (tasks.org carries the task states). The same words as the second set of lua/plugins/org.lua.
-local GARDEN_TODO = '#+TODO: SEED(s) SPROUT(p) PLANT(l) TREE(r) FLOWER(f) | COMPOST(c)'
+-- The garden's states as a #+TODO: line: the seedbed, the nursery and every note of garden/ carry it, so their
+-- headings offer only these (tasks.org carries the task states). The same words as the second set of
+-- lua/plugins/org.lua. FRUIT was FLOWER until 2026-11-08: a tree bears fruit (Mia).
+local GARDEN_TODO = '#+TODO: SEED(s) SPROUT(p) PLANT(l) TREE(r) FRUIT(f) | COMPOST(c)'
+
+--- A new note of garden/ for the idea `title` (a path from the vault's root): named after the title, _2, _3...
+--- when the name is taken. Plants, trees and fruits live in notes of their own.
+local function ownNote(title)
+  local base = slug(title)
+  if base == '' then base = os.date('%Y%m%d%H%M%S') end
+  local rel, n = 'garden/' .. base .. '.org', 1
+  while vim.uv.fs_stat(M.dir() .. '/' .. rel) do
+    n = n + 1
+    rel = ('garden/%s_%d.org'):format(base, n)
+  end
+  return rel
+end
 
 --- The headline at the cursor of an org note of the vault, or nil (with a warning).
 local function ideaHere()
@@ -570,8 +591,9 @@ local function refileTo(rel, title, target, header)
   return ok
 end
 
---- One stage up: SEED > SPROUT > PLANT > TREE. A SEED of the inbox becomes a
---- SPROUT and moves to garden/<year>.org. A FLOWER is not a next step.
+--- One stage up: SEED > SPROUT > PLANT > TREE. A SEED of the seedbed becomes a SPROUT and moves to the
+--- nursery; a SPROUT becomes a PLANT and moves to a note of its own in garden/ (a plant is an idea of its own;
+--- a tree is a plant grown big, in the same note). A FRUIT is not a next step.
 function M.grow()
   local hl = ideaHere()
   if not hl then return end
@@ -581,11 +603,14 @@ function M.grow()
   if not at then return warn('a ' .. state .. ' is not on the ladder of the garden') end
   local nextStage = LADDER[at + 1]
   if not nextStage then return vim.notify('Already a ' .. state) end
+  local ok, plain = pcall(function() return hl:plain_title() end)
+  local title = vim.trim(ok and plain or '')
   require('org.todo').change_state(nil, nextStage)
-  if state == 'SEED' and sameFile(vim.api.nvim_buf_get_name(0), M.path() .. '/inbox.org') then
-    local year = os.date('%Y')
-    -- A new year's file gets the garden's states, like garden/2026.org (see GARDEN_TODO).
-    if refileTo('garden/' .. year .. '.org', year, nil, { GARDEN_TODO }) then vim.notify(nextStage .. ': moved to the garden') end
+  if state == 'SEED' and sameFile(vim.api.nvim_buf_get_name(0), M.path() .. '/' .. M.seedbed()) then
+    if refileTo(M.NURSERY, 'Nursery', nil, { GARDEN_TODO }) then vim.notify(nextStage .. ': moved to the nursery') end
+  elseif state == 'SPROUT' then
+    local rel = ownNote(title)
+    if refileTo(rel, title, nil, { GARDEN_TODO }) then vim.notify(nextStage .. ': a note of its own, ' .. rel) end
   else
     vim.cmd('silent write')
     vim.notify(nextStage)
@@ -617,21 +642,21 @@ local function ensureNote(rel, lines)
 end
 
 --- Where each garden :TYPE: of the node capture goes: the state its heading gets and the note.
----   'inbox' / 'year' (garden/<year>.org) / 'own' (a note of its own in garden/, named after the title) / 'compost'
+---   'seedbed' / 'nursery' / 'own' (a note of its own in garden/, named after the title) / 'compost'
 local GARDEN_TYPES = {
-  seed = { 'SEED', 'inbox' },
-  sprout = { 'SPROUT', 'year' },
-  plant = { 'PLANT', 'year' },
+  seed = { 'SEED', 'seedbed' },
+  sprout = { 'SPROUT', 'nursery' },
+  plant = { 'PLANT', 'own' },
   tree = { 'TREE', 'own' },
-  flower = { 'FLOWER', 'own' },
+  fruit = { 'FRUIT', 'own' },
   compost = { 'COMPOST', 'compost' },
 }
-local GARDEN_KEYWORDS = { 'SEED', 'SPROUT', 'PLANT', 'TREE', 'FLOWER', 'COMPOST' }
+local GARDEN_KEYWORDS = { 'SEED', 'SPROUT', 'PLANT', 'TREE', 'FRUIT', 'COMPOST' }
 
 --- The lines of a node capture, rewritten for where they go, and that place (a path from the root of the vault;
 --- nil keeps the template's target, the inbox). Used by the store filter of lua/plugins/org.lua (Mia, 2026-11-08):
----   :TYPE: seed / sprout / plant / tree / flower / compost (any case): the heading gets that state and goes to the
----     inbox, garden/<year>.org, a note of its own in garden/ (tree and flower: grown ideas), or archive/compost.org;
+---   :TYPE: seed / sprout / plant / tree / fruit / compost (any case): the heading gets that state and goes to the
+---     seedbed, the nursery, a note of its own in garden/ (plant, tree, fruit), or archive/compost.org;
 ---     the TYPE line is dropped (the state says it, and changes later).
 ---   :TYPE: <the name of a note of sources/>: that note; TYPE stays (<leader>vm reads it).
 ---   no TYPE, or a type with no note: the inbox as a SEED; an unknown TYPE stays, for <leader>vm once its note exists.
@@ -674,33 +699,25 @@ function M.routeNode(lines)
     local state, place = garden[1], garden[2]
     dropType()
     setState(state)
-    if place == 'inbox' then return out, nil end
+    if place == 'seedbed' then return out, nil end
     if place == 'compost' then
       ensureNote('archive/compost.org', { '#+TITLE: Compost' })
       return out, 'archive/compost.org'
     end
-    if place == 'year' then
-      local year = os.date('%Y')
-      local rel = 'garden/' .. year .. '.org'
-      ensureNote(rel, { '#+title: ' .. year, GARDEN_TODO })
-      return out, rel
+    if place == 'nursery' then
+      ensureNote(M.NURSERY, { '#+TITLE: Nursery', GARDEN_TODO })
+      return out, M.NURSERY
     end
     -- A note of its own, named after the title (a new name when one is taken: _2, _3...).
     local title = heading and vim.trim(out[heading]:gsub('^%*+%s+', ''):gsub('^%u+%s+', '', 1)) or ''
-    local base = slug(title)
-    if base == '' then base = os.date('%Y%m%d%H%M%S') end
-    local rel, n = 'garden/' .. base .. '.org', 1
-    while vim.uv.fs_stat(M.dir() .. '/' .. rel) do
-      n = n + 1
-      rel = ('garden/%s_%d.org'):format(base, n)
-    end
+    local rel = ownNote(title)
     ensureNote(rel, { '#+title: ' .. title, GARDEN_TODO })
     return out, rel
   end
   local source = key ~= '' and M.sourceFile(type) or nil
   if source then return out, source end
   if key ~= '' then
-    vim.notify(('No note sources/%s.org: the entry goes to the inbox as a SEED'):format(key), vim.log.levels.WARN)
+    vim.notify(('No note sources/%s.org: the entry goes to the seedbed as a SEED'):format(key), vim.log.levels.WARN)
   end
   setState('SEED')
   return out, nil
@@ -743,6 +760,59 @@ function M.move()
   vim.ui.select(items, { prompt = 'Move to', sort = true }, function(choice)
     if choice and refileTo(choice, nil, target) then vim.notify('Moved to ' .. choice) end
   end)
+end
+
+-- -----------------------------------------------------------------------------
+--  The linked note, editable (the second K)
+-- -----------------------------------------------------------------------------
+--- The note a link of an org note points to, itself: its real buffer (editable, :w saves it, drawn as org by
+--- pure/render-org.lua like any note) in a floating window where the hover `hoverWin` was (made bigger when it is
+--- small), at the heading the link names. q closes it (asking to save when it was changed). The second K of
+--- configs/functions.lua followOrHover calls it; the link is read by lsp/orgls.lua. false when the cursor is not on
+--- a link to a note (K then does what it did). (Mia, 2026-11-08.)
+function M.editLinkedNote(hoverWin)
+  local ok, mod = pcall(function() return require('lsp.orgls')._module end)
+  if not ok or not mod then return false end
+  local line, col = vim.api.nvim_get_current_line(), vim.api.nvim_win_get_cursor(0)[2]
+  local link = mod._linkAt(line, col)
+  local target = link and mod._linkTarget(vim.api.nvim_get_current_buf(), link.inner)
+  if not target or not target.file then return false end
+  local W, H = vim.o.columns, vim.o.lines
+  local row, column, width, height = 1, 1, 0, 0
+  if hoverWin and vim.api.nvim_win_is_valid(hoverWin) then
+    local pos = vim.api.nvim_win_get_position(hoverWin)
+    row, column = pos[1], pos[2]
+    width, height = vim.api.nvim_win_get_width(hoverWin), vim.api.nvim_win_get_height(hoverWin)
+    pcall(vim.api.nvim_win_close, hoverWin, true)
+  end
+  width = math.min(math.max(width, math.min(80, W - 4)), W - 2)
+  height = math.min(math.max(height, math.min(20, H - 6)), H - 4)
+  row = math.max(0, math.min(row, H - height - 3))
+  column = math.max(0, math.min(column, W - width - 2))
+  local buf = vim.fn.bufadd(target.file)
+  vim.fn.bufload(buf)
+  vim.bo[buf].buflisted = true
+  local win = vim.api.nvim_open_win(buf, true, {
+    relative = 'editor', row = row, col = column, width = width, height = height,
+    border = 'rounded', title = ' ' .. (target.label or vim.fn.fnamemodify(target.file, ':t:r')) .. ' ', title_pos = 'center',
+  })
+  pcall(vim.api.nvim_win_set_cursor, win, { target.lnum or 1, 0 })
+  pcall(vim.cmd, 'normal! zvzt')
+  -- q closes this window only (the buffer is the note itself: the key is taken back when the window closes).
+  vim.keymap.set('n', 'q', function()
+    if vim.api.nvim_get_current_win() ~= win then return vim.api.nvim_feedkeys('q', 'n', false) end
+    if vim.bo[buf].modified then
+      local c = vim.fn.confirm('Save ' .. vim.fn.fnamemodify(target.file, ':t') .. '?', '&Yes\n&No\n&Cancel', 1)
+      if c == 1 then vim.api.nvim_buf_call(buf, function() vim.cmd('silent write') end)
+      elseif c ~= 2 then return end
+    end
+    pcall(vim.api.nvim_win_close, win, true)
+  end, { buffer = buf, desc = 'Close the linked note' })
+  vim.api.nvim_create_autocmd('WinClosed', {
+    pattern = tostring(win), once = true,
+    callback = function() pcall(vim.keymap.del, 'n', 'q', { buffer = buf }) end,
+  })
+  return true
 end
 
 return M
