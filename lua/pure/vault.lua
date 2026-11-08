@@ -578,8 +578,13 @@ function M.grow()
 end
 
 --- An idea let go of: COMPOST, then moved to archive/compost.org (nothing is erased).
+--- Asks first, No by default, like <leader>vd (Mia, 2026-11-08).
 function M.compost()
-  if not ideaHere() then return end
+  local hl = ideaHere()
+  if not hl then return end
+  local ok, title = pcall(function() return hl:plain_title() end)
+  title = ok and title or vim.trim(hl.title or '')
+  if vim.fn.confirm('Compost "' .. title .. '" (move it to archive/compost.org)?', '&Yes\n&No', 2) ~= 1 then return end
   require('org.todo').change_state(nil, 'COMPOST')
   if refileTo('archive/compost.org', 'Compost') then vim.notify('COMPOST: moved to archive/compost.org') end
 end
