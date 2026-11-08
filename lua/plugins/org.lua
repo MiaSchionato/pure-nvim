@@ -94,6 +94,10 @@ require('org').setup({
   },
 
   capture = {
+    -- The capture buffer opens in this config's floating window (see 'pure_float'
+    -- below the setup), not in a split. :w (or <C-c><C-c>) stores the entry and
+    -- closes it. Default: 'split'.
+    window = 'pure_float',
     templates = {
       s = {
         description = 'Seed',
@@ -156,6 +160,26 @@ require('org').setup({
     },
   },
 })
+
+-- The capture window ('pure_float', set as capture.window above): this config's centred floating window
+-- (configs/functions.lua createWindow), the same as the terminals and the link view, instead of org.nvim's
+-- split. org.nvim's own window modes are strings only, so its window opener is wrapped and the new mode
+-- handled here; every other mode goes to the original. org.nvim's key hint bar (" Capture: finish <C-c><C-c>
+-- refile <C-c><C-w> abort <C-c><C-k>  (:w finishes)") is left out. The keys stay: :w or <C-c><C-c> stores the
+-- entry and closes the window, <C-c><C-k> aborts. (Mia, 2026-11-08.)
+local CAPTURE_RATIO = 0.6
+local orgUi = require('org.ui')
+local openBufferWindow = orgUi.open_buffer_window
+orgUi.open_buffer_window = function(buf, mode, opts)
+  if mode ~= 'pure_float' then return openBufferWindow(buf, mode, opts) end
+  local title = opts and opts.title and (' ' .. opts.title .. ' ') or ' '
+  local win = require('configs.functions').createWindow(title, CAPTURE_RATIO, { buf = buf })
+  -- org.nvim writes its hint into the winbar right after this returns: clear it once it has.
+  vim.schedule(function()
+    if vim.api.nvim_win_is_valid(win) then vim.wo[win].winbar = '' end
+  end)
+  return win
+end
 
 -- In a table <Tab> / <S-Tab> go to the next / previous cell, but while the completion menu is open they pick the
 -- next / previous suggestion, as everywhere else. org.nvim's action steps aside (an action that returns false is
