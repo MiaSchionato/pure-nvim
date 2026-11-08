@@ -104,12 +104,20 @@ local function link_template()
 end
 
 -- Source file: sources/<kind>.org, the kind picked in the fzf list (it was a numbered list); created with a
--- title. Then the title, the author and the status, before the file is opened.
+-- title. Then the title, the author, the status, who recommended it and where (those two may be left empty with
+-- Enter), before the file is opened. The answers are properties: a columnview table at the top of the file (see
+-- sources/books.org) lists them, and is made again on save (below the setup).
 local SOURCE_KINDS = { 'books', 'articles', 'videos', 'courses', 'podcasts', 'other' }
 local SOURCE_STATUS = { 'to-read', 'reading', 'done' }
 local function source_target()
   local kind = choose('Source', SOURCE_KINDS)
-  answers.source = { title = ask('Title: '), author = ask('Author: '), status = choose('Status', SOURCE_STATUS) }
+  answers.source = {
+    title = ask('Title: '),
+    author = ask('Author: '),
+    status = choose('Status', SOURCE_STATUS),
+    by = ask('Recommended by (Enter: none): '),
+    where = ask('Where (a link or a note; Enter: none): '),
+  }
   local path = 'sources/' .. kind .. '.org'
   local full = vim.fn.expand(vault) .. '/' .. path
   if vim.fn.filereadable(full) == 0 then
@@ -118,10 +126,17 @@ local function source_target()
   return path
 end
 
+--- A property line `:KEY:     value`, the value at column 12 like `:CREATED:  `; '' when the value is empty.
+local function property(key, value)
+  if not value or value == '' then return '' end
+  return ('%-11s%s\n'):format(':' .. key .. ':', literal(value))
+end
+
 local function source_template()
   local a = answers.source or {}
-  return '* ' .. literal(a.title or '') .. '\n:PROPERTIES:\n:CREATED:  %U\n:AUTHOR:   ' .. literal(a.author or '')
-    .. '\n:STATUS:   ' .. (a.status or '') .. '\n:END:\n%?'
+  return '* ' .. literal(a.title or '') .. '\n:PROPERTIES:\n:CREATED:  %U\n'
+    .. property('AUTHOR', a.author) .. property('STATUS', a.status)
+    .. property('BY', a.by) .. property('WHERE', a.where) .. ':END:\n%?'
 end
 
 require('org').setup({
@@ -244,6 +259,36 @@ orgUi.open_buffer_window = function(buf, mode, opts)
   end)
   return win
 end
+
+-- Dynamic blocks (#+BEGIN: ... #+END:, e.g. the columnview table of sources/books.org) are made again each time
+-- a note of the vault that holds one is saved, so a table follows its headings without C-c C-c. A write hook of
+-- org.nvim (org.write_hooks), not a BufWritePre: org.nvim writes the target of a capture, a refile or an archive
+-- with :noautocmd, and its write hooks run for those saves and for :w alike. Silent (org.nvim's own update_all
+-- says "Updated N dynamic block(s)" every time). Notes outside the vault are left alone, as in Emacs.
+-- (Mia, 2026-11-08.)
+local function inVaultFile(path)
+  local dir = require('pure.vault').dir()
+  if not dir or path == '' then return false end
+  local p, d = vim.fs.normalize(path), vim.fs.normalize(dir)
+  if vim.fn.has('win32') == 1 then p, d = p:lower(), d:lower() end
+  return p:sub(1, #d + 1) == d .. '/'
+end
+require('org.write_hooks').register('pure-dynamic-blocks', {
+  filetype = 'org',
+  pre = function(bufnr)
+    if not inVaultFile(vim.api.nvim_buf_get_name(bufnr)) then return end
+    local starts = {}
+    for i, l in ipairs(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)) do
+      if l:match('^%s*#%+[Bb][Ee][Gg][Ii][Nn]:%s') then starts[#starts + 1] = i end
+    end
+    if #starts == 0 then return end
+    local dblock = require('org.dblock')
+    for k = #starts, 1, -1 do -- bottom to top, so the lines above stay where they are
+      local block = dblock.find_at(bufnr, starts[k])
+      if block then pcall(dblock.update_block, bufnr, block) end
+    end
+  end,
+})
 
 -- In a table <Tab> / <S-Tab> go to the next / previous cell, but while the completion menu is open they pick the
 -- next / previous suggestion, as everywhere else. org.nvim's action steps aside (an action that returns false is

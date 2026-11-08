@@ -26,7 +26,7 @@ The keys of the quick capture (Win+Q) of the Emacs side:
 | `t` | a `TODO` in `tasks.org`; asks for a date first, Enter or Esc = none (`today`, `+3d`, `fri`, `2026-11-02`) |
 | `T` | a `TODO` with a `DEADLINE` (date picked in org.nvim's date float) |
 | `l` | a link in `inbox.org`; asks the address (the clipboard is the default) and the title |
-| `f` | a source in `sources/<kind>.org`; asks the kind (fzf list), the title, the author and the status (fzf list) |
+| `f` | a source in `sources/<kind>.org`; asks the kind (fzf list), the title, the author, the status (fzf list), who recommended it and where (Enter leaves those two out); written as properties (`AUTHOR`, `STATUS`, `BY`, `WHERE`) |
 
 Every question shows in the centre: a typed answer in the input float, a choice in
 the fzf list (`vim.ui.input` / `vim.ui.select`, `pure/fuzzyUtils.lua`), through
@@ -46,6 +46,26 @@ a split, and without org.nvim's key hint bar. `:w` or `<C-c><C-c>` stores the en
 and closes the window; `:q` closes it and drops the entry; `<C-c><C-k>` aborts.
 org.nvim's window modes are strings only, so `lua/plugins/org.lua` wraps its window
 opener (`org.ui.open_buffer_window`) for that one mode; every other window is org.nvim's.
+
+## Tables made from headings (dynamic blocks)
+
+A `#+BEGIN: columnview ... #+END:` block builds a table from the properties of the
+headings (the columns are the file's `#+COLUMNS:`), as in Emacs. `sources/books.org`
+has one: a heading per book, the table at the top. Every dynamic block of a note of
+the vault is made again when the note is saved, so the table follows its headings:
+by hand (`:w`) and when org.nvim writes the file itself (a capture, a refile). It is
+a write hook of org.nvim (`org.write_hooks`, in `lua/plugins/org.lua`), because
+org.nvim writes those with `:noautocmd`; silent. `C-c C-c` on the block (or
+`<leader>mxU`) updates it by hand, in Doom too. Notes outside the vault are left alone.
+
+```org
+#+COLUMNS: %ITEM(Book) %AUTHOR(Author) %STATUS(Status) %BY(Recommended by) %WHERE(Where)
+#+BEGIN: columnview :id global :maxlevel 1
+#+END:
+```
+
+`:link t` is left out on purpose: org.nvim writes the link with the absolute path of
+the file, which differs between machines and from Doom's.
 
 ## Org-roam
 
