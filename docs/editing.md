@@ -26,6 +26,11 @@ Typing the closer when it is already next to the cursor steps over it, and
 `<BS>` between an empty pair deletes both. In normal mode, `dl` deletes the
 character under the cursor and its pair.
 
+In org notes `:` pairs too, for property names (`:AUTHOR:`) and tags (`:tag:`), but only where
+one can start: at the start of the line or after a space. After a letter or a digit it stays a
+single `:` (`14:00`, `id:`, `Nota:`); a `:` already next to the cursor is stepped over, and
+`<BS>` between `::` deletes both.
+
 When a completion already ends in closers, the ones added with the opener are
 dropped: accepting a note after `[[` gives `[[Note]]`, not `[[Note]]]]`. Closers
 that belong to something opened before the completion stay, so completing

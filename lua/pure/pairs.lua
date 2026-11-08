@@ -139,7 +139,29 @@ vim.keymap.set('i', '<BS>', function()
   if pair[left] == right then
     return "<BS><Del>"
   end
+  -- An empty org pair of colons (below).
+  if vim.bo.filetype == 'org' and left == ':' and right == ':' then
+    return "<BS><Del>"
+  end
   return "<BS>"
 end, { expr = true })
+
+-- ':' pairs in org notes, for the property names (:AUTHOR:) and the tags (:tag:), Mia 2026-11-08. Only where a
+-- property or a tag can start: at the start of the line (after its indent) or after a space. After a letter or a
+-- digit it stays one ':' (14:00, id:, https:, "Nota: ..."). A ':' already next to the cursor is stepped over, as the
+-- quotes are, and <BS> between '::' deletes both (above). Buffer-local, org notes only.
+vim.api.nvim_create_autocmd('FileType', {
+  group = vim.api.nvim_create_augroup('PurePairsOrgColon', { clear = true }),
+  pattern = 'org',
+  callback = function(args)
+    vim.keymap.set('i', ':', function()
+      if nextChar() == ':' then return '<Right>' end
+      local col = vim.api.nvim_win_get_cursor(0)[2]
+      local before = vim.api.nvim_get_current_line():sub(1, col)
+      if before:match('^%s*$') or before:match('%s$') then return '::<Left>' end
+      return ':'
+    end, { expr = true, noremap = true, buffer = args.buf, desc = 'Colon pair (org: properties and tags)' })
+  end,
+})
 
 return M
