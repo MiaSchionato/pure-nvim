@@ -59,6 +59,9 @@ o.listchars:append({ extends = "⟩", precedes = "⟨" }) -- ...these when 'list
 o.scrolloff = 5             -- lines kept above / below the cursor
 o.showmatch = true          -- briefly jump to the matching bracket when typed
 o.mouse = ""                -- mouse off
+-- Grey background behind "TODO:" and the rest of its line (configs/autocmds.lua).
+-- Default true; <leader>tb toggles it and the choice is saved (it wins over this).
+g.pure_todo_bg = true
 
 -- Concealed markup (e.g. markdown's ** and `): shown as is by default;
 -- markdown buffers turn conceal on for themselves (pure/render-md.lua).

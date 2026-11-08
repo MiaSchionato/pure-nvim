@@ -604,6 +604,27 @@ function M.toggleHeadingBand()
 end
 
 -- -----------------------------------------------------------------------------
+--  The background of "TODO:" lines (configs/autocmds.lua): <leader>tb
+-- -----------------------------------------------------------------------------
+--  On unless vim.g.pure_todo_bg is false; the choice is saved like the other toggles.
+--  Off clears the PureTodo group, so the match stays but draws nothing.
+function M.todoBackground()
+  return M.get('todo_bg', vim.g.pure_todo_bg ~= false)
+end
+
+function M.applyTodoBackground()
+  local hl = M.todoBackground() and { bg = 'grey', fg = 'NvimLightGrey2' } or {}
+  vim.api.nvim_set_hl(0, 'PureTodo', hl)
+end
+
+function M.toggleTodoBackground()
+  local on = not M.todoBackground()
+  M.set('todo_bg', on)
+  M.applyTodoBackground()
+  vim.notify('TODO background ' .. (on and 'on' or 'off'))
+end
+
+-- -----------------------------------------------------------------------------
 --  The automatic hover (configs/lspConfigs.lua): <leader>tk
 -- -----------------------------------------------------------------------------
 --  On unless vim.g.lsp_auto_hover is false; the choice is saved like the other toggles.
