@@ -14,10 +14,10 @@ precedence:
 2. the `OBSIDIAN_VAULT` environment variable;
 3. the saved answer.
 
-In this configuration it is the Flora vault (`g.pure_vault = '~/Flora'`, org),
-the same folder as [org.md](org.md); until 2026-11-05 it was the Markdown vault
-`~/Atlas`. The templates, periodic notes and trash below were made for Atlas;
-with Flora their automatic parts are off (`pure_periodic_on_start = {}`,
+In this configuration it is an org vault (`g.pure_vault` in `configs.lua`),
+the same folder as [org.md](org.md); until 2026-11-05 it was a Markdown vault.
+The templates, periodic notes and trash below were made for the Markdown vault;
+with the org one their automatic parts are off (`pure_periodic_on_start = {}`,
 `pure_trash_cleanup = false`).
 
 `:ZettelVault` asks again at any time. The vault is used by the `<leader>v`
@@ -151,7 +151,7 @@ Day steps are counted from noon, so a daylight saving change can never turn
 **The current periodic notes are made when Neovim starts** (with a UI, never
 in `--headless`), without opening them: each period listed in
 `vim.g.pure_periodic_on_start` (empty in `configs.lua` since the vault is
-Flora; it was `{ 'Daily', 'Weekly', 'Monthly' }`) gets today's, this week's or this month's note. They are there
+org; it was `{ 'Daily', 'Weekly', 'Monthly' }`) gets today's, this week's or this month's note. They are there
 from the start, for Obsidian, for the daily's links to its week and month, or
 a Claude action that writes in them, not only once opened. It is the
 *current* one, not a trigger on the exact day: a week whose Monday Neovim was
@@ -181,7 +181,7 @@ would replace what the other machine sent instead of being refused.
 ## Trash
 
 With `vim.g.pure_trash_cleanup` set (`false` in `configs.lua` since the vault
-is Flora), everything in
+is org), everything in
 the Delete template's folder (`0-Inbox/Trash`) is deleted each time Neovim
 starts with a UI, as Obsidian's TrashCleaner script did. A number instead of
 `true` keeps what was modified in the last that many days; `false` turns it

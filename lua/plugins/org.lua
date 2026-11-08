@@ -1,10 +1,11 @@
--- org.nvim set up like the Doom Emacs of the Flora vault: the same agenda files,
+-- org.nvim set up like the Doom Emacs of the vault: the same agenda files,
 -- the same TODO / idea keywords, the quick-capture templates (s t T l f j) and
 -- org-roam (the `roam` extension of org.nvim) on the same vault. The Doom side
--- is C:\doom\config\config.el; the vault layout is Flora/CLAUDE.md.
+-- is C:\doom\config\config.el; the vault layout is the vault's CLAUDE.md.
 vim.pack.add({ { src = 'https://github.com/xheisenbugx/org.nvim', name = 'org' } })
 
-local vault = '~/Flora'
+-- The vault folder: the one setting vim.g.pure_vault (configs.lua, loaded before this file).
+local vault = require('pure.vault').dir() or '~'
 
 -- Task states, then the idea stages of the garden (SEED > SPROUT > PLANT > TREE,
 -- FLOWER; COMPOST is let go). Keys and logging marks as in Doom.

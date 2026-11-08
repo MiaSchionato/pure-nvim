@@ -21,7 +21,7 @@ local sur = require('pure.surround')
 local term = require('pure.terms')
 local lsp = vim.lsp.buf
 local diag = vim.diagnostic
-local flora = require('pure.flora')
+local vault = require('pure.vault')
 -- Picker targets (explore <leader>e_, find <leader>f_, new file <leader>n_) and their helpers: configs/functions.lua.
 local dirs = func.dirs
 local file = func.fileDirs
@@ -228,7 +228,7 @@ map("n", "<leader>nh", inDir(fzf.NewFileIn, dirs['~']), func.getOpts(opts, "New 
 map("n", "<leader>n.", inDir(fzf.NewFileIn, dirs['.']), func.getOpts(opts, "New file in ~/.config"))
 map("n", "<leader>nn", inDir(fzf.NewFileIn, dirs.n), func.getOpts(opts, "New file in nvim config"))
 -- A seed in the vault's inbox (the quick capture's `s`, <leader>vq s).
-map("n", "<leader>nv", function() require('pure.flora').newSeed() end, func.getOpts(opts, "New seed in the vault's inbox"))
+map("n", "<leader>nv", function() require('pure.vault').newSeed() end, func.getOpts(opts, "New seed in the vault's inbox"))
 map("n", "<leader>nd", function() fzf.NewFolder(here()) end, func.getOpts(opts, "New folder here"))
 -- <leader>nt (template) and <leader>nr (rename note) moved to the vault group
 -- (the capture menu <leader>vq, and <leader>vr): they act on a note, they do not make a new file.
@@ -246,39 +246,39 @@ map('n', '<leader>Mi', function() require('pure.manim').interactive() end,
 func.getOpts(opts, "Live window at this line: mouse camera, Python shell (toggle)"))
 
 -- =============================================================================
---  Vault  (<leader>v, pure/flora.lua)
+--  Vault  (<leader>v, pure/vault.lua)
 -- =============================================================================
 --  Everything that works on the vault (org), in one group, as Doom's
---  `SPC v`. It replaced the group of the Atlas vault (Markdown), which is no
+--  `SPC v`. It replaced the group of the old Markdown vault, which is no
 --  longer used: its functions are still in pure/zettelkasten.lua and
 --  pure/notes.lua, as commands only. <leader>ev, <leader>fv and <leader>gv
 --  follow, beside the other folders of their group.
-map('n', '<leader>vf', flora.find, func.getOpts(opts, "Find a note, heading or alias (a title that matches nothing makes a seed)"))
-map('n', '<leader>fv', flora.find, func.getOpts(opts, "Find a note, heading or alias (same as <leader>vf)"))
-map('n', '<leader>vF', flora.findFile, func.getOpts(opts, "Find a file of the vault"))
-map('n', '<leader>vg', flora.grep, func.getOpts(opts, "Grep the vault"))
-map('n', '<leader>vN', flora.newNote, func.getOpts(opts, "New note in its own file"))
+map('n', '<leader>vf', vault.find, func.getOpts(opts, "Find a note, heading or alias (a title that matches nothing makes a seed)"))
+map('n', '<leader>fv', vault.find, func.getOpts(opts, "Find a note, heading or alias (same as <leader>vf)"))
+map('n', '<leader>vF', vault.findFile, func.getOpts(opts, "Find a file of the vault"))
+map('n', '<leader>vg', vault.grep, func.getOpts(opts, "Grep the vault"))
+map('n', '<leader>vN', vault.newNote, func.getOpts(opts, "New note in its own file"))
 -- 2026-11-08 (Mia): the capture menu moved from <leader>vt to <leader>vq (vt is gone); n and c are
 -- Doom's grow and compost; a new seed is the capture's `s` (n was "new seed"). The quick edit of the
 -- linked note, which was <leader>vq, was removed.
-map('n', '<leader>vq', flora.capture, func.getOpts(opts, "Quick capture: seed, task, link, journal, source"))
-map('n', '<leader>vn', flora.grow, func.getOpts(opts, "Grow the idea: SEED > SPROUT > PLANT > TREE"))
-map('n', '<leader>vc', flora.compost, func.getOpts(opts, "Let the idea go: compost"))
-map('n', '<leader>vi', flora.insertLink, func.getOpts(opts, "Insert a link to a node"))
-map('n', '<leader>vb', flora.backlinks, func.getOpts(opts, "Backlinks (notes linking here)"))
-map('n', '<leader>vr', flora.rename, func.getOpts(opts, "Rename this note (title and file)"))
-map('n', '<leader>vd', flora.delete, func.getOpts(opts, "Delete this note (to archive/trash/)"))
-map('n', '<leader>vj', flora.journalLine, func.getOpts(opts, "Journal line (today)"))
-map('n', '<leader>vJ', flora.journalToday, func.getOpts(opts, "Today in the journal"))
-map('n', '<leader>ve', flora.explore, func.getOpts(opts, "Explore the vault"))
-map('n', '<leader>vs', flora.sync, func.getOpts(opts, "Save the notes and commit (sync if there is an upstream)"))
+map('n', '<leader>vq', vault.capture, func.getOpts(opts, "Quick capture: seed, task, link, journal, source"))
+map('n', '<leader>vn', vault.grow, func.getOpts(opts, "Grow the idea: SEED > SPROUT > PLANT > TREE"))
+map('n', '<leader>vc', vault.compost, func.getOpts(opts, "Let the idea go: compost"))
+map('n', '<leader>vi', vault.insertLink, func.getOpts(opts, "Insert a link to a node"))
+map('n', '<leader>vb', vault.backlinks, func.getOpts(opts, "Backlinks (notes linking here)"))
+map('n', '<leader>vr', vault.rename, func.getOpts(opts, "Rename this note (title and file)"))
+map('n', '<leader>vd', vault.delete, func.getOpts(opts, "Delete this note (to archive/trash/)"))
+map('n', '<leader>vj', vault.journalLine, func.getOpts(opts, "Journal line (today)"))
+map('n', '<leader>vJ', vault.journalToday, func.getOpts(opts, "Today in the journal"))
+map('n', '<leader>ve', vault.explore, func.getOpts(opts, "Explore the vault"))
+map('n', '<leader>vs', vault.sync, func.getOpts(opts, "Save the notes and commit (sync if there is an upstream)"))
 -- <leader>vp: preview the linked note. Markdown notes keep pure/linkview.lua's
 -- global key; in org notes this one wins. (The quick edit, <leader>vq, was removed.)
 vim.api.nvim_create_autocmd('FileType', {
   pattern = 'org',
-  group = vim.api.nvim_create_augroup('FloraKeys', { clear = true }),
+  group = vim.api.nvim_create_augroup('VaultKeys', { clear = true }),
   callback = function(args)
-    map('n', '<leader>vp', flora.preview, { buffer = args.buf, desc = 'Preview the linked note' })
+    map('n', '<leader>vp', vault.preview, { buffer = args.buf, desc = 'Preview the linked note' })
   end,
 })
 
@@ -300,7 +300,7 @@ map('n', '<leader>am', llm('selectModel'), func.getOpts(opts, "Select model (Oll
 map('n', '<leader>at', llm('toggleThinking'), func.getOpts(opts, "Thinking of <leader>ai (show / hide)"))
 -- The file about you that every request reads (outside any git repository).
 map('n', '<leader>au', func.openUserContext, func.getOpts(opts, "User context file (what the LLMs know about you)"))
-map({ 'n', 'x' }, '<leader>ax', llm('pickAction'), func.getOpts(opts, "Actions (~/Flora/ai/actions)"))
+map({ 'n', 'x' }, '<leader>ax', llm('pickAction'), func.getOpts(opts, "Actions (the folder vim.g.pure_llm_actions)"))
 map('n', '<leader>ab', llm('runBlockAtCursor'), func.getOpts(opts, "Run the ```llm block under the cursor"))
 map('n', '<leader>ad', function() require('pure.llm').runNamed('Daily note') end,
 func.getOpts(opts, "Daily note: next step and the measured day"))
@@ -330,7 +330,7 @@ map('n', "<leader>gp", git('push'), func.getOpts(opts, "Git push"))
 map('n', "<leader>gP", git('pull'), func.getOpts(opts, "Git pull"))
 map('n', "<leader>gb", git('blameLine'), func.getOpts(opts, "Git blame current line"))
 map('n', "<leader>gB", git('switchBranch'), func.getOpts(opts, "Git switch branch"))
-map('n', "<leader>gv", function() require('pure.flora').sync() end, func.getOpts(opts, "Vault: save the notes and commit"))
+map('n', "<leader>gv", function() require('pure.vault').sync() end, func.getOpts(opts, "Vault: save the notes and commit"))
 
 -- =============================================================================
 --  LSP

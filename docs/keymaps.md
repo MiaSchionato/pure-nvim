@@ -36,7 +36,7 @@ See [llm.md](llm.md).
 | `<leader>aa` | n, x | Chat: show / hide (like <leader>tt) |
 | `<leader>ab` | n | Run the ```` ```llm ```` block under the cursor |
 | `<leader>ac` | n, x | Review the code |
-| `<leader>ad` | n | Daily note: next step and the measured day (the action `Daily note` of `~/Flora/ai/actions`) |
+| `<leader>ad` | n | Daily note: next step and the measured day (the action `Daily note` of the vault's `ai/actions`) |
 | `<leader>ah` | n | Past answers |
 | `<leader>ai` | n, x | Write here (visual: rewrite) |
 | `<leader>ap` | n | Personas: pick one from the list, open its chat (`/name`, see [llm.md](llm.md#personas)) |
@@ -47,7 +47,7 @@ See [llm.md](llm.md).
 | `<leader>aq` | n | Quit the AI: stop, unload models, close Ollama |
 | `<leader>at` | n | Thinking of <leader>ai (show / hide) |
 | `<leader>au` | n | User context file (what the LLMs know about you) |
-| `<leader>aw` | n | Weekly note: the week in one place (the action `Week review` of `~/Flora/ai/actions`) |
+| `<leader>aw` | n | Weekly note: the week in one place (the action `Week review` of the vault's `ai/actions`) |
 | `<leader>ax` | n, x | Actions (claude/ folder of the vault) |
 
 ## `<leader>b` – Buffers
@@ -103,7 +103,7 @@ See [llm.md](llm.md).
 | `<leader>f"` | n | Registers (Enter: make it the register p pastes) |
 | `<leader>fl` | n | Notes linking here (backlinks, also <leader>vb) |
 | `<leader>fn` | n | Find in nvim config |
-| `<leader>fv` | n | Find a note, heading or alias in Flora (same as `<leader>vf`) |
+| `<leader>fv` | n | Find a note, heading or alias in the vault (same as `<leader>vf`) |
 | `<leader>f~` | n | Find in home |
 
 ## `<leader>g` – Git
@@ -207,7 +207,7 @@ options and says "Line numbers on/off" once.
 | `<leader>tg` | n | Toggle Gemini terminal |
 | `<leader>tt` | n | Toggle terminal |
 
-## `<leader>v` – Flora (the org vault, `pure/flora.lua`)
+## `<leader>v` – the vault (org notes, `pure/vault.lua`)
 
 | Key | Mode | What |
 |---|---|---|
@@ -228,7 +228,7 @@ options and says "Line numbers on/off" once.
 | `<leader>vs` | n | Save the notes and commit (pull and push when there is an upstream) |
 | `<leader>vp` | n | Preview the linked note (org notes; markdown keeps `linkview`) |
 
-`<leader>ev`, `<leader>fv`, `<leader>nv` and `<leader>gv` follow Flora too.
+`<leader>ev`, `<leader>fv`, `<leader>nv` and `<leader>gv` follow the vault too.
 
 ## `<leader>w` – Tabs, window view
 

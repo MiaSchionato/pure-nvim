@@ -1,7 +1,7 @@
 # Org notes (`lua/plugins/org.lua`)
 
-[org.nvim](https://github.com/xheisenbugx/org.nvim) on the Flora vault
-(`~/Flora`), set up to behave like the Doom Emacs of the same vault. It is
+[org.nvim](https://github.com/xheisenbugx/org.nvim) on the vault
+(`vim.g.pure_vault`), set up to behave like the Doom Emacs of the same vault. It is
 independent of the Markdown modules (`notes`, `zettelkasten`): those act on
 `markdown` buffers, org.nvim on `org` ones. Neovim 0.11 or newer.
 
@@ -134,7 +134,7 @@ off by default (saved as `big_headings`; they show only while the rendering is o
 `require('pure.render-org').set_level('full'|'off')` sets the rendering directly.
 
 Tested in Kitsu (kitty for Windows) on the right monitor, with the real config, on a copy of the
-Flora garden notes: scrolling by lines and pages, fast `Ctrl-D/U/E/Y`, folds, inserting, toggling.
+vault's garden notes: scrolling by lines and pages, fast `Ctrl-D/U/E/Y`, folds, inserting, toggling.
 What that found and fixed (the same engine draws the Markdown headings):
 
 - **Scrolling through the rows a block reserves** (Neovim's `topfill`, or `skipcol` in a wrapped
@@ -169,9 +169,9 @@ terminal's paste is a paste). The paste makes one request to the pasted address,
 link would make. `vim.g.pure_url_titles = false` (`configs/configs.lua`, on by default) pastes the URL
 as it is.
 
-## Flora keys (`<leader>v`, `lua/pure/flora.lua`)
+## Vault keys (`<leader>v`, `lua/pure/vault.lua`)
 
-The group of the old Atlas vault now works on Flora, like Doom's `SPC v`:
+The group of the old Markdown vault now works on the org vault, like Doom's `SPC v`:
 find a node (`f`), a file (`F`), grep (`g`), quick capture (`q`: the template
 menu, a new seed is its `s`), grow the idea (`n`) and compost it (`c`) as Doom does,
 new note (`N`), insert a link (`i`), backlinks (`b`), rename (`r`),
@@ -179,7 +179,7 @@ delete to `archive/trash/` (`d`), journal line (`j`), today (`J`), explore (`e`)
 save and commit (`s`), preview the linked note (`p`, in org notes). Until
 2026-11-08 the capture menu was `t`, `n` was a new seed and `q` the quick edit of
 the linked note (removed). The list is in [keymaps.md](keymaps.md). Links are by `:ID:`, so renaming
-or moving a note breaks none. The Atlas functions are left in
+or moving a note breaks none. The Markdown vault's functions are left in
 `pure/zettelkasten.lua` and `pure/notes.lua` as commands, without keys.
 
 ## Links between notes (`[[`, `<leader>vi`, `lua/pure/links.lua`)
@@ -258,7 +258,7 @@ that look too ([fuzzy.md](fuzzy.md)).
 ## Find (`<leader>vf`)
 
 One picker for the whole vault, a port of Doom's `SPC v f` (`vault-open.el`), in
-`lua/pure/flora.lua` (fzf, coloured). A note (a file, named by its `#+title`) reads
+`lua/pure/vault.lua` (fzf, coloured). A note (a file, named by its `#+title`) reads
 `Note name`; a heading (down to level 4) reads `Note name › Heading`, the heading in the
 colour of its level; an alias (`:ROAM_ALIASES:`, of a note or a heading) reads
 `Alias → Note name › Heading`, in italics. On the right, dim: the path and how long ago the
@@ -275,16 +275,16 @@ level colours. It lists every note and heading, not only the ones with an `:ID:`
 
 ## `lua/lsp/orgls.lua`: the org language server (in-process)
 
-One file with the vault reading of `pure/flora.lua` and all of `pure/links.lua` (merged, code as it was), plus
+One file with the vault reading of `pure/vault.lua` and all of `pure/links.lua` (merged, code as it was), plus
 a small language server that needs no executable: its config is returned to `configs/lspConfigs.lua`
 (`'orgls'` is in its list), and it attaches to the org notes **inside the vault** only. Plan, steps and what was
-copied and why: Flora note `projects/setup/Org LSP.org`.
+copied and why: the vault's note `projects/setup/Org LSP.org`.
 
 | What | How |
 |---|---|
 | `K` on a link | `textDocument/hover` (the `K` map falls through to `lsp.hover()` when it is not a web link): the note, or the section for a heading link, as an org block (properties drawer left out, 40 lines at most); a link that names nothing says so (`No single note or heading named "x"`, `No note or heading with the id ...`). Links read: `[[id:ID][text]]`, `[[Note]]`, `[[Note#Heading]]` (with or without `\|\|alias`), `[[file:path]]`; web links give nothing. The server reads the open buffers, so unsaved text shows. |
 | Automatic hover | `configs/lspConfigs.lua`, for **every** attached server that has a hover (not only this one): once the cursor has rested `vim.g.lsp_auto_hover_delay` ms (default 500) the hover shows by itself, silent when there is nothing. A timer of its own, so `updatetime` is untouched. `vim.g.lsp_auto_hover = false` turns it off; `<leader>tk` toggles it (saved across restarts, `configs/functions.lua`). |
-| `<leader>vp` | unchanged: still `flora.preview`, not the LSP. |
+| `<leader>vp` | unchanged: still `vault.preview`, not the LSP. |
 
 The module has no side effects when loaded, so it can be required next to `pure.links`; the editor side that
 `pure/links.lua` runs at load (the `[[` menu, alias saving) is `require('lsp.orgls')._module.setup()`, **not
