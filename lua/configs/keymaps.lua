@@ -448,8 +448,9 @@ map("n", "dd", func.smartDd, { expr = true, desc = "Smart dd" })
 -- Open
 -- =============================================================================
 -- Terminal
-map('n', '<leader>ot', term.toggleTerminal, func.getOpts(opts, "Toggle terminal"))
-map('n', '<leader>oc', function() term.toggleTerminal("claude") end, func.getOpts(opts, "Toggle terminal Claude"))
+-- <leader>of: f for float (it was <leader>ot); <leader>oC: Claude (it was <leader>oc). (Mia, 2026-11-08.)
+map('n', '<leader>of', term.toggleTerminal, func.getOpts(opts, "Toggle the floating terminal"))
+map('n', '<leader>oC', function() term.toggleTerminal("claude") end, func.getOpts(opts, "Toggle terminal Claude"))
 map('n', '<leader>om', "<CMD>tabnew | terminal nu<CR>i", func.getOpts(opts, "New tab on terminal mode"))
 map('t', '<S-Del>', [[<C-\><C-n>]], func.getOpts(opts, "Leave terminal mode"))
 
@@ -458,7 +459,20 @@ map('n', '<leader>od', '<cmd>Todoist<cr>', func.getOpts(opts, "Todoist all tasks
 map('n', '<leader>oD', '<cmd>Todoist today | overdue<cr>', func.getOpts(opts, "Todoist today and overdue"))
 
 -- Vault
-map('n', '<leader>oi', function() vim.cmd('edit ' .. vim.fn.fnameescape(dirs.inbox())) end, func.getOpts(opts, "Open the vault's inbox"))
+-- The notes of the vault one opens often. The descriptions name what a note is for, not its file, so they stay
+-- true when a file is renamed (the paths are in pure/vault.lua and here). (Mia, 2026-11-08.)
+local function openNote(rel)
+  return function()
+    local root = vault.path()
+    if root then vim.cmd('edit ' .. vim.fn.fnameescape(root .. '/' .. (type(rel) == 'function' and rel() or rel))) end
+  end
+end
+map('n', '<leader>oi', function() vim.cmd('edit ' .. vim.fn.fnameescape(dirs.inbox())) end, func.getOpts(opts, "Open the vault's inbox (where new things land)"))
+map('n', '<leader>on', openNote(vault.NURSERY), func.getOpts(opts, "Open the sprouts' note (where young ideas grow)"))
+map('n', '<leader>ot', openNote('tasks.org'), func.getOpts(opts, "Open the tasks"))
+map('n', '<leader>ob', openNote('sources/books.org'), func.getOpts(opts, "Open the books (sources)"))
+map('n', '<leader>oq', openNote('sources/quotes.org'), func.getOpts(opts, "Open the quotes (sources)"))
+map('n', '<leader>oc', openNote('sources/concepts.org'), func.getOpts(opts, "Open the concepts (sources)"))
 
 -- =============================================================================
 --  Debug

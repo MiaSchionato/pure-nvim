@@ -789,8 +789,15 @@ end
 
 --- On a link, K follows it (pure/notes.lua): in markdown any link, elsewhere
 --- only web links, since [[x]] in code is not a note. Else LSP hover.
+--- K: follow a link, else the LSP hover. In an org note, a second K while the hover of a link is open opens the
+--- linked note itself in its place (pure/vault.lua editLinkedNote: editable, drawn as org) instead of entering the
+--- read-only hover. (Mia, 2026-11-08.)
 function M.followOrHover()
   if require('pure.notes').follow(vim.bo.filetype ~= 'markdown') then return end
+  if vim.bo.filetype == 'org' then
+    local hoverWin = vim.b.lsp_floating_preview
+    if hoverWin and vim.api.nvim_win_is_valid(hoverWin) and require('pure.vault').editLinkedNote(hoverWin) then return end
+  end
   vim.lsp.buf.hover()
 end
 

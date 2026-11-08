@@ -167,30 +167,22 @@ See [manim.md](manim.md).
 | `<leader>nn` | n | New file in nvim config |
 | `<leader>nv` | n | New note in the vault's inbox |
 
-## `<leader>o` – Toggles
-
-Every toggle says what it did in a notice ("Wrap on", "Wrap off", ...); `<leader>tn` flips both number
-options and says "Line numbers on/off" once.
+## `<leader>o` – Open
 
 | Key | Mode | What |
 |---|---|---|
-| `<leader>oc` | n | Toggle signcolumn |
-| `<leader>od` | n | Toggle diagnostics |
-| `<leader>oh` | n | Toggle word highlight |
-| `<leader>oi` | n | Toggle inlay hints |
-| `<leader>tm` | n | Toggle note rendering on / off (markdown or org, by the buffer), without the big headings |
-| `<leader>tM` | n | Toggle the big headings (OSC 66 / DECDHL) of markdown and org; off by default |
-| `<leader>tT` | n | Toggle shrinking of org tables wider than the window (columns cut with `…`, text untouched) |
-| `<leader>tW` | n | Toggle wrapping of org tables wider than the window into extra rows (a long cell continues on the next line; changes the text, off joins it back) |
-| `<leader>on` | n, x | Toggle line numbers |
-| `<leader>op` | n | Toggle Copilot |
-| `<leader>or` | n, x | Toggle relativenumber |
-| `<leader>os` | n | Toggle statusline |
-| `<leader>ot` | n | Toggle tabline |
-| `<leader>ow` | n | Toggle wrap |
-| `<leader>oH` | n | Toggle the coloured bar behind md and org headings |
-| `<leader>oxc` | n | Toggle transparency |
-| `<leader>oz` | n | Toggle zen mode |
+| `<leader>oi` | n | The vault's inbox, where new things land (`seedbed.org`) |
+| `<leader>on` | n | The sprouts' note, where young ideas grow (`garden/nursery.org`) |
+| `<leader>ot` | n | The tasks (`tasks.org`) |
+| `<leader>ob` | n | The books (`sources/books.org`) |
+| `<leader>oq` | n | The quotes (`sources/quotes.org`) |
+| `<leader>oc` | n | The concepts (`sources/concepts.org`) |
+| `<leader>of` | n | Toggle the floating terminal (was `<leader>ot`) |
+| `<leader>oC` | n | Toggle the Claude terminal (was `<leader>oc`) |
+| `<leader>om` | n | New tab in terminal mode |
+| `<leader>od` / `<leader>oD` | n | Todoist: all tasks / today and overdue |
+
+The descriptions say what a note is for, not its file name, so they stay true when a file is renamed.
 
 ## `<leader>s` – Split
 
@@ -199,14 +191,31 @@ options and says "Line numbers on/off" once.
 | `<leader>sh` | n | Split horizontally |
 | `<leader>sv` | n | Split vertically |
 
-## `<leader>t` – Terminal, Todoist
+## `<leader>t` – Toggles
+
+Every toggle says what it did in a notice ("Wrap on", "Wrap off", ...); `<leader>tn` flips both number
+options and says "Line numbers on/off" once.
 
 | Key | Mode | What |
 |---|---|---|
-| `<leader>tD` | n | Todoist today and overdue |
-| `<leader>td` | n | Todoist all tasks |
-| `<leader>tg` | n | Toggle Gemini terminal |
-| `<leader>tt` | n | Toggle terminal |
+| `<leader>tc` | n | Toggle signcolumn |
+| `<leader>td` | n | Toggle diagnostics |
+| `<leader>th` | n | Toggle word highlight (also `<leader>h`) |
+| `<leader>ti` | n | Toggle inlay hints |
+| `<leader>tm` | n | Toggle note rendering on / off (markdown or org, by the buffer), without the big headings |
+| `<leader>tM` | n | Toggle the big headings (OSC 66 / DECDHL) of markdown and org; off by default |
+| `<leader>tn` | n, x | Toggle line numbers |
+| `<leader>tp` | n | Toggle Copilot |
+| `<leader>tr` | n, x | Toggle relativenumber |
+| `<leader>tR` | n | Toggle reading mode (wide margins) |
+| `<leader>ts` | n | Toggle statusline |
+| `<leader>tt` | n | Toggle tabline |
+| `<leader>tT` | n | Toggle shrinking of org tables wider than the window (columns cut with `…`, text untouched) |
+| `<leader>tw` | n | Toggle wrap |
+| `<leader>tW` | n | Toggle wrapping of org tables wider than the window into extra rows (changes the text, off joins it back) |
+| `<leader>tH` | n | Toggle the coloured bar behind md and org headings |
+| `<leader>tx` | n | Toggle transparency |
+| `<leader>tz` | n | Toggle zen mode |
 
 ## `<leader>v` – the vault (org notes, `pure/vault.lua`)
 

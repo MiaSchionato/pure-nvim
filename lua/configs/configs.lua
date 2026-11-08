@@ -557,7 +557,7 @@ g.pure_indentscope_disable = false
 -- found; elsewhere 'shell'.
 g.pure_terminal_shell = 'nu.exe'
 
--- The bare floating terminal (<leader>ot): <Esc> leaves terminal mode at once,
+-- The bare floating terminal (<leader>of): <Esc> leaves terminal mode at once,
 -- and a second <Esc> within this many milliseconds closes it. <A-Esc> sends a
 -- real <Esc> to the shell. 0 or false: only <Esc><Esc> closes (and <Esc>
 -- reaches the shell). Terminals running a command (<leader>tc) always use

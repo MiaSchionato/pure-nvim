@@ -762,4 +762,57 @@ function M.move()
   end)
 end
 
+-- -----------------------------------------------------------------------------
+--  The linked note, editable (the second K)
+-- -----------------------------------------------------------------------------
+--- The note a link of an org note points to, itself: its real buffer (editable, :w saves it, drawn as org by
+--- pure/render-org.lua like any note) in a floating window where the hover `hoverWin` was (made bigger when it is
+--- small), at the heading the link names. q closes it (asking to save when it was changed). The second K of
+--- configs/functions.lua followOrHover calls it; the link is read by lsp/orgls.lua. false when the cursor is not on
+--- a link to a note (K then does what it did). (Mia, 2026-11-08.)
+function M.editLinkedNote(hoverWin)
+  local ok, mod = pcall(function() return require('lsp.orgls')._module end)
+  if not ok or not mod then return false end
+  local line, col = vim.api.nvim_get_current_line(), vim.api.nvim_win_get_cursor(0)[2]
+  local link = mod._linkAt(line, col)
+  local target = link and mod._linkTarget(vim.api.nvim_get_current_buf(), link.inner)
+  if not target or not target.file then return false end
+  local W, H = vim.o.columns, vim.o.lines
+  local row, column, width, height = 1, 1, 0, 0
+  if hoverWin and vim.api.nvim_win_is_valid(hoverWin) then
+    local pos = vim.api.nvim_win_get_position(hoverWin)
+    row, column = pos[1], pos[2]
+    width, height = vim.api.nvim_win_get_width(hoverWin), vim.api.nvim_win_get_height(hoverWin)
+    pcall(vim.api.nvim_win_close, hoverWin, true)
+  end
+  width = math.min(math.max(width, math.min(80, W - 4)), W - 2)
+  height = math.min(math.max(height, math.min(20, H - 6)), H - 4)
+  row = math.max(0, math.min(row, H - height - 3))
+  column = math.max(0, math.min(column, W - width - 2))
+  local buf = vim.fn.bufadd(target.file)
+  vim.fn.bufload(buf)
+  vim.bo[buf].buflisted = true
+  local win = vim.api.nvim_open_win(buf, true, {
+    relative = 'editor', row = row, col = column, width = width, height = height,
+    border = 'rounded', title = ' ' .. (target.label or vim.fn.fnamemodify(target.file, ':t:r')) .. ' ', title_pos = 'center',
+  })
+  pcall(vim.api.nvim_win_set_cursor, win, { target.lnum or 1, 0 })
+  pcall(vim.cmd, 'normal! zvzt')
+  -- q closes this window only (the buffer is the note itself: the key is taken back when the window closes).
+  vim.keymap.set('n', 'q', function()
+    if vim.api.nvim_get_current_win() ~= win then return vim.api.nvim_feedkeys('q', 'n', false) end
+    if vim.bo[buf].modified then
+      local c = vim.fn.confirm('Save ' .. vim.fn.fnamemodify(target.file, ':t') .. '?', '&Yes\n&No\n&Cancel', 1)
+      if c == 1 then vim.api.nvim_buf_call(buf, function() vim.cmd('silent write') end)
+      elseif c ~= 2 then return end
+    end
+    pcall(vim.api.nvim_win_close, win, true)
+  end, { buffer = buf, desc = 'Close the linked note' })
+  vim.api.nvim_create_autocmd('WinClosed', {
+    pattern = tostring(win), once = true,
+    callback = function() pcall(vim.keymap.del, 'n', 'q', { buffer = buf }) end,
+  })
+  return true
+end
+
 return M
