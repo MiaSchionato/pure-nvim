@@ -796,7 +796,19 @@ function M.editLinkedNote(hoverWin)
     relative = 'editor', row = row, col = column, width = width, height = height,
     border = 'rounded', title = ' ' .. (target.label or vim.fn.fnamemodify(target.file, ':t:r')) .. ' ', title_pos = 'center',
   })
-  pcall(vim.api.nvim_win_set_cursor, win, { target.lnum or 1, 0 })
+  -- A link to a heading lands on it. A link to the whole note names its first line, inside the properties drawer:
+  -- the cursor goes to the #+title line instead, else to the first heading (Mia, 2026-11-08).
+  local lnum = target.lnum or 1
+  local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+  if not (lines[lnum] or ''):match('^%*+%s') then
+    local titleAt, headingAt
+    for i, l in ipairs(lines) do
+      if not titleAt and l:match('^#%+[Tt][Ii][Tt][Ll][Ee]:') then titleAt = i end
+      if l:match('^%*+%s') then headingAt = i break end
+    end
+    lnum = titleAt or headingAt or lnum
+  end
+  pcall(vim.api.nvim_win_set_cursor, win, { lnum, 0 })
   pcall(vim.cmd, 'normal! zvzt')
   -- q closes this window only (the buffer is the note itself: the key is taken back when the window closes).
   vim.keymap.set('n', 'q', function()
