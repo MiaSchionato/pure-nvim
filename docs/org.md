@@ -35,10 +35,13 @@ their target function, before org.nvim opens the target file, so Esc in any of t
 cancels the capture and leaves nothing behind. A `%` in an answer stays a `%`
 (org.nvim would read `%a`, `%^{...}` as escapes: the template carries it as a
 private-use character and its hook puts the `%` back).
+The lists, the questions and the capture buffer share one size (`CAPTURE_RATIO`,
+0.8): the same width, left edge and top row, so each opens where the last one was;
+a question is one line at that top edge.
 | `j` | a line `* HH:MM text` in `journal/<year>.org`, under today's date |
 
 The text is written in a centred floating window (`capture.window = 'pure_float'`: the
-config's `createWindow`, 60% of the screen, the same look as the terminals), not in
+config's `createWindow`, 80% of the screen, the same look as the terminals), not in
 a split, and without org.nvim's key hint bar. `:w` or `<C-c><C-c>` stores the entry
 and closes the window; `:q` closes it and drops the entry; `<C-c><C-k>` aborts.
 org.nvim's window modes are strings only, so `lua/plugins/org.lua` wraps its window

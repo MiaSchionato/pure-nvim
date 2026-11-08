@@ -831,7 +831,9 @@ function M.setup()
       lines[i] = style.paint('PureNoteFile', (choice:gsub('[\r\n\t]+', ' '))) .. '\t' .. i
     end
     local prompt = vim.trim((opts.prompt or 'Select'):gsub(':%s*$', ''))
-    pickList(lines, { title = ' ' .. prompt .. ' ', fzf = style.FZF .. ' --no-sort' }, function(selection)
+    -- opts.ratio (not part of vim.ui.select): the size of the window, for a caller that lines its windows up
+    -- (the org capture, lua/plugins/org.lua). Unset: pickList's default.
+    pickList(lines, { title = ' ' .. prompt .. ' ', ratio = opts.ratio, fzf = style.FZF .. ' --no-sort' }, function(selection)
       local i = tonumber(style.last(selection))
       if i and items[i] ~= nil then return selected(items[i], i) end
       selected(nil, nil)
@@ -841,7 +843,9 @@ function M.setup()
   vim.ui.input = function(opts, callback)
     opts = opts or {}
     local prompt = opts.prompt or "Input: "
-    local win, buf = func.createWindow(prompt, 0.8)
+    -- One line at the top edge of a centred window of opts.ratio (not part of vim.ui.input; default 0.8), so a
+    -- question lines up with the other windows of that size (the org capture, lua/plugins/org.lua).
+    local win, buf = func.createWindow(prompt, opts.ratio or 0.8)
     vim.api.nvim_win_set_height(win, 1)
 
     if opts.default then

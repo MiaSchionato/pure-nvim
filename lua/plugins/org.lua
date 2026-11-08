@@ -37,16 +37,21 @@ local CREATED = ':PROPERTIES:\n:CREATED:  %U\n:END:'
 -- the capture quietly (utils.abort) and leaves nothing behind. The template then only writes the answers.
 local orgUtils = require('org.utils')
 
+-- The size of every window of a capture: the fzf lists, the questions and the capture buffer itself
+-- (createWindow's ratio). The same width, left edge and top row, so each one opens where the last one was;
+-- a question is one line at that top edge. 0.8: the size of the other fzf lists. (Mia, 2026-11-08.)
+local CAPTURE_RATIO = 0.8
+
 --- A typed answer in the input float; Esc cancels the capture.
 local function ask(prompt, default)
-  local answer = orgUtils.input({ prompt = prompt, default = default })
+  local answer = orgUtils.input({ prompt = prompt, default = default, ratio = CAPTURE_RATIO })
   if answer == nil then orgUtils.abort() end
   return vim.trim(answer)
 end
 
 --- A choice from `items` in the fzf list; Esc cancels the capture.
 local function choose(prompt, items)
-  local choice = orgUtils.select(items, { prompt = prompt })
+  local choice = orgUtils.select(items, { prompt = prompt, ratio = CAPTURE_RATIO })
   if choice == nil then orgUtils.abort() end
   return choice
 end
@@ -72,7 +77,7 @@ local answers = {}
 -- Task template: asks for a date first; Enter (or Esc) leaves the task without one.
 -- The answer is read like org's own date prompt (today, +3d, fri, 2026-11-02).
 local function task_template()
-  local answer = vim.trim(orgUtils.input({ prompt = 'When? (Enter = no date; today, +3d, fri, 2026-11-02): ' }) or '')
+  local answer = vim.trim(orgUtils.input({ prompt = 'When? (Enter = no date; today, +3d, fri, 2026-11-02): ', ratio = CAPTURE_RATIO }) or '')
   local planning = ''
   if answer ~= '' then
     local d = require('org.date').read_date(answer)
@@ -225,8 +230,8 @@ require('org').setup({
 -- split. org.nvim's own window modes are strings only, so its window opener is wrapped and the new mode
 -- handled here; every other mode goes to the original. org.nvim's key hint bar (" Capture: finish <C-c><C-c>
 -- refile <C-c><C-w> abort <C-c><C-k>  (:w finishes)") is left out. The keys stay: :w or <C-c><C-c> stores the
--- entry and closes the window, <C-c><C-k> aborts. (Mia, 2026-11-08.)
-local CAPTURE_RATIO = 0.6
+-- entry and closes the window, <C-c><C-k> aborts. Its size is CAPTURE_RATIO (above), the size of the capture's
+-- questions. (Mia, 2026-11-08.)
 local orgUi = require('org.ui')
 local openBufferWindow = orgUi.open_buffer_window
 orgUi.open_buffer_window = function(buf, mode, opts)
