@@ -29,6 +29,13 @@ The keys of the quick capture (Win+Q) of the Emacs side:
 | `f` | a source in `sources/<kind>.org`; asks the kind, the title, author and status |
 | `j` | a line `* HH:MM text` in `journal/<year>.org`, under today's date |
 
+The text is written in a centred floating window (`capture.window = 'pure_float'`: the
+config's `createWindow`, 60% of the screen, the same look as the terminals), not in
+a split, and without org.nvim's key hint bar. `:w` or `<C-c><C-c>` stores the entry
+and closes the window; `:q` closes it and drops the entry; `<C-c><C-k>` aborts.
+org.nvim's window modes are strings only, so `lua/plugins/org.lua` wraps its window
+opener (`org.ui.open_buffer_window`) for that one mode; every other window is org.nvim's.
+
 ## Org-roam
 
 The `roam` extension of org.nvim, not a separate plugin. It indexes the vault
