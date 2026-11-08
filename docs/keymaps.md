@@ -228,7 +228,7 @@ options and says "Line numbers on/off" once.
 | `<leader>vN` | n | New note in its own file |
 | `<leader>vq` | n | Quick capture: the template menu (`s` seed, `t` task, `T` task + deadline, `l` link, `f` source, `j` journal). Was `<leader>vt` until 2026-11-08 |
 | `<leader>vn` | n | Grow the idea at the cursor, as Doom's `SPC v n`: SEED > SPROUT > PLANT > TREE; a SEED of `seedbed.org` becomes a SPROUT and moves to `garden/nursery.org`; a SPROUT becomes a PLANT in a note of its own, `garden/<title>.org` (a new seed is `<leader>vq n`, the node capture with no `:TYPE:`) |
-| `<leader>vt` | n | TODO state menu of the heading (org.nvim's `todo_select`, `<leader>mS`): it offers the states of the note (`#+TODO:` line): the garden's in `seedbed.org` and `garden/`, the tasks' in `tasks.org`, both elsewhere |
+| `<leader>vt` | n | TODO state menu of the heading (org.nvim's `todo_select`, `<leader>mS`): it offers the states of the note (`#+TODO:` line): the garden's in `seedbed.org` and `garden/`, the tasks' in `tasks.org`, both elsewhere. Also `<leader>T` |
 | `<leader>va` | n | Agenda, its menu (same as `<leader>a` and `<leader>ma`) |
 | `<leader>vm` | n | Move the heading at the cursor (with what is under it) to another note: the note of `sources/` named by its `:TYPE:` (any case), or one picked in the fzf list; links are by `:ID:`, none breaks |
 | `<leader>vc` | n | Let the idea go, as Doom's `SPC v c`: asks first (No by default), then COMPOST, moved to `archive/compost.org` (nothing is erased) |
