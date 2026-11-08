@@ -263,6 +263,7 @@ map('n', '<leader>vN', vault.newNote, func.getOpts(opts, "New note in its own fi
 -- Doom's grow and compost; a new seed is the capture's `s` (n was "new seed"). The quick edit of the
 -- linked note, which was <leader>vq, was removed.
 map('n', '<leader>vq', vault.capture, func.getOpts(opts, "Quick capture: seed, task, link, journal, source"))
+map('n', '<leader>q', vault.capture, func.getOpts(opts, "Quick capture: seed, task, link, journal, source"))
 map('n', '<leader>vn', vault.grow, func.getOpts(opts, "Grow the idea: SEED > SPROUT > PLANT > TREE"))
 map('n', '<leader>vc', vault.compost, func.getOpts(opts, "Let the idea go: compost"))
 map('n', '<leader>vi', vault.insertLink, func.getOpts(opts, "Insert a link to a node"))
