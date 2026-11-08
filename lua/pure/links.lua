@@ -251,7 +251,7 @@ end
 local function createSeed(title)
   local root = require('pure.vault').path()
   if not root then return nil end
-  local inbox = root .. '/' .. require('pure.vault').seedbed()
+  local inbox = root .. '/' .. require('pure.vault').inbox()
   local buf = vim.fn.bufnr(inbox)
   local lines
   if buf ~= -1 and api.nvim_buf_is_loaded(buf) then
