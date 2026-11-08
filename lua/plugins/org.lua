@@ -8,7 +8,10 @@ vim.pack.add({ { src = 'https://github.com/xheisenbugx/org.nvim', name = 'org' }
 local vault = require('pure.vault').dir() or '~'
 
 -- Task states, then the idea stages of the garden (SEED > SPROUT > PLANT > TREE,
--- FLOWER; COMPOST is let go). Keys and logging marks as in Doom.
+-- FLOWER; COMPOST is let go). Keys and logging marks as in Doom. A note can keep only
+-- one set with a #+TODO: line of its own (org reads it, in Doom too): inbox.org and
+-- garden/<year>.org have the garden's, tasks.org the tasks', so the state menu
+-- (<leader>vt, t in the agenda) offers only those there. Notes without one have both.
 local todo_keywords = {
   'TODO(t) NEXT(n) DOING(d) WAITING(w@) | DONE(x!) CANCELLED(c@)',
   'SEED(s) SPROUT(p) PLANT(l) TREE(r) FLOWER(f) | COMPOST(c)',

@@ -218,6 +218,8 @@ options and says "Line numbers on/off" once.
 | `<leader>vN` | n | New note in its own file |
 | `<leader>vq` | n | Quick capture: the template menu (`s` seed, `t` task, `T` task + deadline, `l` link, `f` source, `j` journal). Was `<leader>vt` until 2026-11-08 |
 | `<leader>vn` | n | Grow the idea at the cursor, as Doom's `SPC v n`: SEED > SPROUT > PLANT > TREE; a SEED of `inbox.org` becomes a SPROUT and moves to `garden/<year>.org` (a new seed is `<leader>vq s`) |
+| `<leader>vt` | n | TODO state menu of the heading (org.nvim's `todo_select`, `<leader>mS`): it offers the states of the note (`#+TODO:` line): the garden's in `inbox.org` and `garden/`, the tasks' in `tasks.org`, both elsewhere |
+| `<leader>va` | n | Agenda, its menu (same as `<leader>a` and `<leader>ma`) |
 | `<leader>vm` | n | Move the heading at the cursor (with what is under it) to another note: the note of `sources/` named by its `:TYPE:` (any case), or one picked in the fzf list; links are by `:ID:`, none breaks |
 | `<leader>vc` | n | Let the idea go, as Doom's `SPC v c`: asks first (No by default), then COMPOST, moved to `archive/compost.org` (nothing is erased) |
 | `<leader>vi` | n | Insert a link to a node: the picker of `<leader>vf`, then `[[id:ID][Title]]` at the cursor (typing `[[` in an org note opens the same list as a menu, see [org.md](org.md)) |
