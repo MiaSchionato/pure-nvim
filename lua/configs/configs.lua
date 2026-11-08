@@ -196,6 +196,11 @@ g.pure_links_complete = true
 -- below (pure_trash_cleanup, pure_periodic_on_start).
 g.pure_vault = '~/Flora'
 
+-- The note of the vault where new things land: seeds, links, sources with no type (it was inbox.org until
+-- 2026-11-08). Read by pure/vault.lua (the captures, the seeds, grow), lsp/orgls.lua and <leader>oi.
+-- Default (lsp/orgls.lua): 'inbox.org'.
+g.orgls_inbox = 'seedbed.org'
+
 -- Folder of the templates, inside the vault. Default: 'Templates'.
 -- Changed: the vault's (the org versions of the Markdown templates).
 g.pure_templates = 'archive/templates'
@@ -552,7 +557,7 @@ g.pure_indentscope_disable = false
 -- found; elsewhere 'shell'.
 g.pure_terminal_shell = 'nu.exe'
 
--- The bare floating terminal (<leader>ot): <Esc> leaves terminal mode at once,
+-- The bare floating terminal (<leader>of): <Esc> leaves terminal mode at once,
 -- and a second <Esc> within this many milliseconds closes it. <A-Esc> sends a
 -- real <Esc> to the shell. 0 or false: only <Esc><Esc> closes (and <Esc>
 -- reaches the shell). Terminals running a command (<leader>tc) always use
