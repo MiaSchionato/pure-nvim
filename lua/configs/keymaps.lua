@@ -227,11 +227,11 @@ map("n", "<leader>ns", function() require('pure.scratch').open() end, func.getOp
 map("n", "<leader>nh", inDir(fzf.NewFileIn, dirs['~']), func.getOpts(opts, "New file in home"))
 map("n", "<leader>n.", inDir(fzf.NewFileIn, dirs['.']), func.getOpts(opts, "New file in ~/.config"))
 map("n", "<leader>nn", inDir(fzf.NewFileIn, dirs.n), func.getOpts(opts, "New file in nvim config"))
--- The same as <leader>vn: a note in the vault's inbox, asking only its name.
+-- A seed in the vault's inbox (the quick capture's `s`, <leader>vq s).
 map("n", "<leader>nv", function() require('pure.flora').newSeed() end, func.getOpts(opts, "New seed in the vault's inbox"))
 map("n", "<leader>nd", function() fzf.NewFolder(here()) end, func.getOpts(opts, "New folder here"))
--- <leader>nt (template) and <leader>nr (rename note) moved to <leader>vt and
--- <leader>vr: they act on a note, they do not make a new file.
+-- <leader>nt (template) and <leader>nr (rename note) moved to the vault group
+-- (the capture menu <leader>vq, and <leader>vr): they act on a note, they do not make a new file.
 
 -- =============================================================================
 --  Manim  (<leader>M, pure/manim.lua)
@@ -257,9 +257,13 @@ map('n', '<leader>vf', flora.find, func.getOpts(opts, "Find a note, heading or a
 map('n', '<leader>fv', flora.find, func.getOpts(opts, "Find a note, heading or alias (same as <leader>vf)"))
 map('n', '<leader>vF', flora.findFile, func.getOpts(opts, "Find a file of the vault"))
 map('n', '<leader>vg', flora.grep, func.getOpts(opts, "Grep the vault"))
-map('n', '<leader>vn', flora.newSeed, func.getOpts(opts, "New seed (inbox)"))
 map('n', '<leader>vN', flora.newNote, func.getOpts(opts, "New note in its own file"))
-map('n', '<leader>vt', flora.template, func.getOpts(opts, "Capture: pick a template"))
+-- 2026-11-08 (Mia): the capture menu moved from <leader>vt to <leader>vq (vt is gone); n and c are
+-- Doom's grow and compost; a new seed is the capture's `s` (n was "new seed"). The quick edit of the
+-- linked note, which was <leader>vq, was removed.
+map('n', '<leader>vq', flora.capture, func.getOpts(opts, "Quick capture: seed, task, link, journal, source"))
+map('n', '<leader>vn', flora.grow, func.getOpts(opts, "Grow the idea: SEED > SPROUT > PLANT > TREE"))
+map('n', '<leader>vc', flora.compost, func.getOpts(opts, "Let the idea go: compost"))
 map('n', '<leader>vi', flora.insertLink, func.getOpts(opts, "Insert a link to a node"))
 map('n', '<leader>vb', flora.backlinks, func.getOpts(opts, "Backlinks (notes linking here)"))
 map('n', '<leader>vr', flora.rename, func.getOpts(opts, "Rename this note (title and file)"))
@@ -268,14 +272,13 @@ map('n', '<leader>vj', flora.journalLine, func.getOpts(opts, "Journal line (toda
 map('n', '<leader>vJ', flora.journalToday, func.getOpts(opts, "Today in the journal"))
 map('n', '<leader>ve', flora.explore, func.getOpts(opts, "Explore the vault"))
 map('n', '<leader>vs', flora.sync, func.getOpts(opts, "Save the notes and commit (sync if there is an upstream)"))
--- <leader>vp / <leader>vq: the linked note, preview and quick edit. Markdown
--- notes keep pure/linkview.lua's global keys; in org notes these two win.
+-- <leader>vp: preview the linked note. Markdown notes keep pure/linkview.lua's
+-- global key; in org notes this one wins. (The quick edit, <leader>vq, was removed.)
 vim.api.nvim_create_autocmd('FileType', {
   pattern = 'org',
   group = vim.api.nvim_create_augroup('FloraKeys', { clear = true }),
   callback = function(args)
     map('n', '<leader>vp', flora.preview, { buffer = args.buf, desc = 'Preview the linked note' })
-    map('n', '<leader>vq', flora.quickEdit, { buffer = args.buf, desc = 'Quick edit the linked note' })
   end,
 })
 
