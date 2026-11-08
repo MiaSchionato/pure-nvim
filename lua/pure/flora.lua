@@ -8,13 +8,20 @@
 --    f  find a node (a file, a headline with an :ID:, an alias); a new title makes a note
 --    F  find a file of the vault
 --    g  grep the vault
---    n  new seed (inbox)               N  new note in its own file
---    t  capture template menu          i  insert a link to a node
+--    q  quick capture (the template menu: seed, task, link, journal, source)
+--    n  grow the idea (SEED > SPROUT > PLANT > TREE; a seed of the inbox moves to garden/<year>.org)
+--    c  compost the idea (COMPOST, moved to archive/compost.org; nothing is erased)
+--    N  new note in its own file       i  insert a link to a node
 --    b  backlinks                      r  rename this note (title and file)
 --    d  delete this note (to archive/trash/, nothing is erased)
 --    j  journal line (today)           J  today in the journal
 --    e  explore the vault              s  save the notes and commit (sync when there is an upstream)
---    p  preview the linked note        q  quick edit the linked note
+--    p  preview the linked note
+--
+--  Changed 2026-11-08 (Mia): the capture menu was <leader>vt and is now
+--  <leader>vq; n (grow) and c (compost) are Doom's `SPC v n` / `SPC v c`; a new
+--  seed is the quick capture's `s` (n was "new seed" before). The quick edit of
+--  the linked note (it was <leader>vq) was removed.
 --
 --  Notes link to each other by :ID: (org-roam), so renaming or moving a file
 --  breaks no link. The nodes come from org.nvim's roam extension
@@ -285,7 +292,7 @@ M._find = { entries = findEntries, line = findLine, newSeed = newSeed }
 M.newNote = org('roam_capture')
 M.insertLink = function() require('pure.links').pick() end
 M.backlinks = org('roam_buffer_toggle')
-M.template = org('capture')
+M.capture = org('capture')
 M.newSeed = org('capture s')
 M.journalLine = org('capture j')
 M.journalToday = org('roam_dailies_goto_today')
@@ -413,7 +420,8 @@ function M.sync()
 end
 
 -- -----------------------------------------------------------------------------
---  The linked note: preview (p) and quick edit (q)
+--  The linked note: preview (p). The quick edit (it was q) was removed on
+--  2026-11-08: <leader>vq is the quick capture now.
 -- -----------------------------------------------------------------------------
 --- Where the link under the cursor points: path, row (1-based) or nil.
 local function target()
@@ -486,30 +494,78 @@ function M.preview()
   })
 end
 
---- The linked note itself (the real buffer) in a floating window; q closes it.
-function M.quickEdit()
-  M.closePreview()
-  local path, row = target()
-  if not path then return vim.notify('Flora: no link to a note under the cursor') end
-  local buf = vim.fn.bufadd(path)
-  vim.fn.bufload(buf)
-  local width, height = math.floor(vim.o.columns * 0.7), math.floor(vim.o.lines * 0.6)
-  local win = vim.api.nvim_open_win(buf, true, {
-    relative = 'editor', width = width, height = height,
-    row = math.floor((vim.o.lines - height) / 2), col = math.floor((vim.o.columns - width) / 2),
-    style = 'minimal', border = 'rounded', title = ' ' .. vim.fn.fnamemodify(path, ':t:r') .. ' ',
-  })
-  pcall(vim.api.nvim_win_set_cursor, win, { row, 0 })
-  vim.keymap.set('n', 'q', function()
-    if vim.bo[buf].modified then
-      if vim.fn.confirm('Save ' .. vim.fn.fnamemodify(path, ':t') .. '?', '&Yes\n&No\n&Cancel', 1) == 1 then
-        vim.api.nvim_buf_call(buf, function() vim.cmd('silent write') end)
-      elseif vim.fn.confirm('Discard the changes?', '&Yes\n&No', 2) ~= 1 then
-        return
-      end
+-- -----------------------------------------------------------------------------
+--  The garden: grow (n) and compost (c), as Doom's `SPC v n` / `SPC v c`
+-- -----------------------------------------------------------------------------
+--  Ports of my/garden-grow and my/garden-compost (.config\emacs\lisp\org-garden.el).
+--  The stages are the second keyword set of lua/plugins/org.lua.
+
+local LADDER = { 'SEED', 'SPROUT', 'PLANT', 'TREE' }
+
+--- The headline at the cursor of an org note of the vault, or nil (with a warning).
+local function ideaHere()
+  local buf = vim.api.nvim_get_current_buf()
+  if vim.bo[buf].filetype ~= 'org' or not inVault(vim.api.nvim_buf_get_name(buf)) then
+    return warn('this buffer is not a note of the vault')
+  end
+  local ok, hl = pcall(function()
+    return require('org.files').get_buffer(buf):headline_at(vim.api.nvim_win_get_cursor(0)[1])
+  end)
+  if not ok or not hl then return warn('not under a heading') end
+  return hl
+end
+
+local function sameFile(a, b)
+  a = vim.fs.normalize(vim.uv.fs_realpath(a) or a)
+  b = vim.fs.normalize(vim.uv.fs_realpath(b) or b)
+  if vim.fn.has('win32') == 1 then a, b = a:lower(), b:lower() end
+  return a == b
+end
+
+--- Move the subtree at the cursor to the top level of `rel` (a file of the vault, made when missing), then save.
+local function refileTo(rel, title)
+  local path = M.path() .. '/' .. rel
+  if not vim.uv.fs_stat(path) then
+    vim.fn.mkdir(vim.fn.fnamemodify(path, ':h'), 'p')
+    vim.fn.writefile({ '#+title: ' .. title, '' }, path)
+  end
+  local ok = pcall(require('org.refile').refile, nil,
+    { dest = { filename = path, path = rel }, save = true, note = false })
+  -- Like org-save-all-org-buffers: the destination may be open in a window (refile saves only hidden ones).
+  for _, b in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.bo[b].modified and sameFile(vim.api.nvim_buf_get_name(b), path) then
+      vim.api.nvim_buf_call(b, function() vim.cmd('silent write') end)
     end
-    if vim.api.nvim_win_is_valid(win) then vim.api.nvim_win_close(win, true) end
-  end, { buffer = buf, desc = 'Close the quick edit' })
+  end
+  return ok
+end
+
+--- One stage up: SEED > SPROUT > PLANT > TREE. A SEED of the inbox becomes a
+--- SPROUT and moves to garden/<year>.org. A FLOWER is not a next step.
+function M.grow()
+  local hl = ideaHere()
+  if not hl then return end
+  local state = hl.todo
+  if not state then return warn('not an idea heading') end
+  local at = vim.tbl_contains(LADDER, state) and vim.fn.index(LADDER, state) + 1
+  if not at then return warn('a ' .. state .. ' is not on the ladder of the garden') end
+  local nextStage = LADDER[at + 1]
+  if not nextStage then return vim.notify('Already a ' .. state) end
+  require('org.todo').change_state(nil, nextStage)
+  if state == 'SEED' and sameFile(vim.api.nvim_buf_get_name(0), M.path() .. '/inbox.org') then
+    local year = os.date('%Y')
+    if refileTo('garden/' .. year .. '.org', year) then vim.notify(nextStage .. ': moved to the garden') end
+  else
+    vim.cmd('silent write')
+    vim.notify(nextStage)
+  end
+end
+
+--- An idea let go of: COMPOST, then moved to archive/compost.org (nothing is erased).
+function M.compost()
+  if not ideaHere() then return end
+  require('org.todo').change_state(nil, 'COMPOST')
+  if refileTo('archive/compost.org', 'Compost') then vim.notify('COMPOST: moved to archive/compost.org') end
 end
 
 return M

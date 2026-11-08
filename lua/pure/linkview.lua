@@ -22,7 +22,7 @@
 --                       link), 'key' (only on the key) or 'off' (nothing)
 --    linkview_delay     ms the cursor rests before 'auto' shows it (default 300)
 --    linkview_size      { width = 64, rows = 12 } at most, for the preview
---    linkview_keys      { preview = '<leader>vp', edit = '<leader>vq' }
+--    linkview_keys      { preview = '<leader>vp', edit = '<leader>vq' } (false: no key)
 -- =============================================================================
 
 local M = {}
@@ -316,8 +316,8 @@ end
 
 local keys = vim.tbl_extend('force', DEFAULT_KEYS, vim.g.linkview_keys or {})
 if mode() ~= 'off' then
-  vim.keymap.set('n', keys.preview, function() M.preview(false) end, { desc = 'Preview the linked note' })
-  vim.keymap.set('n', keys.edit, M.edit, { desc = 'Quick edit the linked note' })
+  if keys.preview then vim.keymap.set('n', keys.preview, function() M.preview(false) end, { desc = 'Preview the linked note' }) end
+  if keys.edit then vim.keymap.set('n', keys.edit, M.edit, { desc = 'Quick edit the linked note' }) end
 end
 
 local group = vim.api.nvim_create_augroup('LinkView', { clear = true })

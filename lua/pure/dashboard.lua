@@ -208,7 +208,7 @@ function M.drawDashboard()
   vim.keymap.set('n', 'd', function() require('pure.flora').journalToday() end, opts)
   vim.keymap.set('n', 'l', M.lastNote, opts)
   vim.keymap.set('n', 'n', function() require('pure.scratch').open() end, opts)
-  -- A seed in Flora's inbox (like <leader>vn).
+  -- A seed in the vault's inbox (like <leader>vq s).
   vim.keymap.set('n', 'v', function() require('pure.flora').newSeed() end, opts)
   -- In a tab of its own, q closes that tab; from the last one it quits.
   vim.keymap.set('n', 'q', function()

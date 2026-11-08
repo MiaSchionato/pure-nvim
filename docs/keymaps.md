@@ -214,9 +214,10 @@ options and says "Line numbers on/off" once.
 | `<leader>vf` | n | Find a note, a heading or an alias in one coloured picker (as Doom's `SPC v f`); a title that matches nothing makes a seed |
 | `<leader>vF` | n | Find a file of the vault |
 | `<leader>vg` | n | Grep the vault |
-| `<leader>vn` | n | New seed (inbox) |
 | `<leader>vN` | n | New note in its own file |
-| `<leader>vt` | n | Capture: pick a template |
+| `<leader>vq` | n | Quick capture: the template menu (`s` seed, `t` task, `T` task + deadline, `l` link, `f` source, `j` journal). Was `<leader>vt` until 2026-11-08 |
+| `<leader>vn` | n | Grow the idea at the cursor, as Doom's `SPC v n`: SEED > SPROUT > PLANT > TREE; a SEED of `inbox.org` becomes a SPROUT and moves to `garden/<year>.org` (a new seed is `<leader>vq s`) |
+| `<leader>vc` | n | Let the idea go, as Doom's `SPC v c`: COMPOST, moved to `archive/compost.org` (nothing is erased) |
 | `<leader>vi` | n | Insert a link to a node: the picker of `<leader>vf`, then `[[id:ID][Title]]` at the cursor (typing `[[` in an org note opens the same list as a menu, see [org.md](org.md)) |
 | `<leader>vb` | n | Backlinks (notes linking here) |
 | `<leader>vr` | n | Rename this note (title and file; links are by `:ID:`) |
@@ -226,7 +227,6 @@ options and says "Line numbers on/off" once.
 | `<leader>ve` | n | Explore the vault |
 | `<leader>vs` | n | Save the notes and commit (pull and push when there is an upstream) |
 | `<leader>vp` | n | Preview the linked note (org notes; markdown keeps `linkview`) |
-| `<leader>vq` | n | Quick edit the linked note (org notes) |
 
 `<leader>ev`, `<leader>fv`, `<leader>nv` and `<leader>gv` follow Flora too.
 

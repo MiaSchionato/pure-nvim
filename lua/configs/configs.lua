@@ -224,7 +224,7 @@ g.pure_fido2_id = '1ea8:fe29'
 -- Language of day and month names in template dates: 'en' (default) or 'pt'.
 g.pure_templates_locale = 'en'
 
--- Where new notes go (<leader>vn / <leader>nv), inside the vault.
+-- Where new notes go (the Markdown note engine's new note, pure/zettelkasten.lua), inside the vault.
 -- Default: '0-Inbox'.
 g.pure_inbox = '0-Inbox'
 
@@ -242,7 +242,7 @@ g.pure_periodic_folders = {
 -- Default: '6-Archive/Periodic/Quotes.md'.
 g.pure_quotes = '6-Archive/Periodic/Quotes.md'
 
--- Folder each template moves its note to (<leader>vt), by template name.
+-- Folder each template moves its note to (the Markdown note engine's template command), by template name.
 -- {{title}} becomes the note's title. Only the names listed change; false
 -- leaves that template's note where it is. Delete is also the trash
 -- (<leader>vd, g.pure_trash_cleanup) and Permanent is where the daily
@@ -316,7 +316,7 @@ g.pure_tasks_done = 'xX-'
 g.remote_socket = '/tmp/nvim-remote.sock'
 
 -- -----------------------------------------------------------------------------
---  Link view  (pure/linkview.lua, <leader>vp preview, <leader>vq quick edit)
+--  Link view  (pure/linkview.lua, <leader>vp preview)
 -- -----------------------------------------------------------------------------
 -- 'auto': the preview of the linked note shows when the cursor rests on a
 -- link, like the suggestion menu (and on its key). 'key': only on the key.
@@ -330,8 +330,10 @@ g.linkview_delay = 300
 -- The most the preview takes: columns and rows. Default below.
 g.linkview_size = { width = 64, rows = 12 }
 
--- The keys (give only the one you change). Default below.
-g.linkview_keys = { preview = '<leader>vp', edit = '<leader>vq' }
+-- The keys (give only the one you change; false: no key). Default:
+-- { preview = '<leader>vp', edit = '<leader>vq' }. Changed: no quick edit key
+-- (2026-11-08, Mia): <leader>vq is the vault's quick capture.
+g.linkview_keys = { preview = '<leader>vp', edit = false }
 
 -- -----------------------------------------------------------------------------
 --  Todoist  (pure/todoist.lua, <leader>td; the token: :TodoistToken)
