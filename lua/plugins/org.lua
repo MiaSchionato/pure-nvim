@@ -8,13 +8,13 @@ vim.pack.add({ { src = 'https://github.com/xheisenbugx/org.nvim', name = 'org' }
 local vault = require('pure.vault').dir() or '~'
 
 -- Task states, then the idea stages of the garden (SEED > SPROUT > PLANT > TREE,
--- FLOWER; COMPOST is let go). Keys and logging marks as in Doom. A note can keep only
--- one set with a #+TODO: line of its own (org reads it, in Doom too): inbox.org and
--- garden/<year>.org have the garden's, tasks.org the tasks', so the state menu
+-- FRUIT, a tree that bore fruit (FLOWER until 2026-11-08); COMPOST is let go). Keys and logging marks as in Doom. A note can keep only
+-- one set with a #+TODO: line of its own (org reads it, in Doom too): the seedbed, the
+-- nursery and the notes of garden/ have the garden's, tasks.org the tasks', so the state menu
 -- (<leader>vt, t in the agenda) offers only those there. Notes without one have both.
 local todo_keywords = {
   'TODO(t) NEXT(n) DOING(d) WAITING(w@) | DONE(x!) CANCELLED(c@)',
-  'SEED(s) SPROUT(p) PLANT(l) TREE(r) FLOWER(f) | COMPOST(c)',
+  'SEED(s) SPROUT(p) PLANT(l) TREE(r) FRUIT(f) | COMPOST(c)',
 }
 
 -- The Ethereal palette, as the Doom keyword faces.
@@ -27,7 +27,7 @@ local keyword_faces = {
   SPROUT = ':foreground #9be0a8 :weight bold',
   PLANT = ':foreground #6fcf97 :weight bold',
   TREE = ':foreground #ffcead :weight bold',
-  FLOWER = ':foreground #faaaa9 :weight bold',
+  FRUIT = ':foreground #faaaa9 :weight bold',
   COMPOST = ':foreground #6d7db6',
 }
 
@@ -81,7 +81,7 @@ local TASK_TEMPLATE = '* TODO %?\nSCHEDULED: \n' .. CREATED
 local function link_target()
   local clip = vim.trim((vim.fn.getreg('+') or ''):match('[^\r\n]*') or '')
   answers.link = { url = ask('Link: ', clip), title = ask('Title: ') }
-  return 'inbox.org'
+  return require('pure.vault').seedbed()
 end
 
 local function link_template()
@@ -91,10 +91,10 @@ end
 
 -- Node (`n`, which replaced `s` seed and `f` source, Mia 2026-11-08): no question; the buffer has every property,
 -- empty, to fill in. :TYPE: says what the entry is and where it goes when it is stored (any case):
---   seed -> the inbox as a SEED; sprout, plant -> garden/<year>.org; tree, flower -> a note of its own in garden/;
+--   seed -> the seedbed as a SEED; sprout -> the nursery; plant, tree, fruit -> a note of its own in garden/;
 --   compost -> archive/compost.org (each with that state, the TYPE line dropped);
 --   the name of a note of sources/ (books, quotes...) -> that note, whose columnview table lists it (TYPE kept);
---   none, or a type with no note -> the inbox as a SEED.
+--   none, or a type with no note -> the seedbed as a SEED.
 -- The properties left empty are dropped. pure.vault.routeNode does it (from the store filter below).
 local SOURCE_PROPERTIES = { 'TYPE', 'AUTHOR', 'STATUS', 'GENRE', 'LANGUAGE', 'BY', 'WHERE', 'RATING', 'NOTES' }
 local function node_template()
@@ -158,14 +158,14 @@ end
 
 require('org').setup({
   org_directory = vault,
-  default_notes_file = vault .. '/inbox.org',
+  default_notes_file = vault .. '/' .. require('pure.vault').seedbed(),
 
   -- org.nvim's keys live under <leader>m (its default is <leader>o, the Toggles group); Manim is <leader>M.
   mappings = { prefix = '<leader>m' },
 
   -- The agenda reads tasks, the inbox (it may hold dated things) and every
   -- file of projects/, like `my/garden-agenda-files` in Doom.
-  agenda_files = { vault .. '/tasks.org', vault .. '/inbox.org', vault .. '/projects/**/*.org' },
+  agenda_files = { vault .. '/tasks.org', vault .. '/' .. require('pure.vault').seedbed(), vault .. '/projects/**/*.org' },
 
   -- The agenda opens floating, in this config's window like the capture (see the window opener below the
   -- setup). Default: 'split'. (Mia, 2026-11-08.)
@@ -201,7 +201,7 @@ require('org').setup({
       n = {
         description = 'Node',
         template = node_template,
-        target = 'inbox.org',
+        target = require('pure.vault').seedbed(),
         route_node = true,
         empty_lines = 1,
       },

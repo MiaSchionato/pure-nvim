@@ -120,7 +120,7 @@ The first Neovim started listens at a fixed address, `/tmp/nvim-remote.sock`
 file in it instead of starting another one:
 
 ```
-nvim --server /tmp/nvim-remote.sock --remote 'vault/inbox.org'
+nvim --server /tmp/nvim-remote.sock --remote 'vault/seedbed.org'
 ```
 
 The Flow Launcher plugin `nv` does this. A Neovim started while another owns
