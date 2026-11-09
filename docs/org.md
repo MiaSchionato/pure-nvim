@@ -185,9 +185,26 @@ and the statusline shows the org glyph (Nerd Font `nf-custom-orgmode`) for org n
 Where the terminal can: kitty draws `*` (3x) and `**` (2x) with OSC 66, WezTerm with the
 double-height lines (DECDHL, only when the window spans the terminal's width), the others
 draw the icon and band. Same checks as the markdown headings: `vim.g.pure_org_headings`
-(or `vim.g.pure_md_headings` when nil): `auto`, `osc66`, `decdhl`, `off`;
-`:PureOrgHeadings [auto|osc66|decdhl|off]` changes it while Neovim runs. In WSL set it to
+(or `vim.g.pure_md_headings` when nil): `auto`, `osc66`, `decdhl`, `image`, `off`;
+`:PureOrgHeadings [auto|osc66|decdhl|image|off]` changes it while Neovim runs. In WSL set it to
 `decdhl` for WezTerm, as for markdown. The terminal code is a copy of `render-md.lua`'s.
+
+**Images (`image`)**, the choice of `auto` in a GUI with Neovim's `ext_images` UI extension
+(experimental, e.g. Zonvie with a Neovim that has it): each `*` (3 rows) and `**` (2 rows)
+headline becomes a PNG shown through `vim.ui.img`, in the headline's colour on the `Normal`
+background, with the bold face of the editor font. The image sits just above the headline,
+whose own line is hidden (`conceal_lines`) except while the cursor is on it, so it can be
+edited; the image stays. A headline on the first line of the file keeps its line, with the
+image under it. Images belong to the buffer: scrolling redraws nothing. A title too long for
+the window gets a smaller font.
+
+- The PNG is made by `scripts/org_heading_png.py` (Python 3 with Pillow: `py -3` on
+  Windows, else `python3`), in the background; cached in `stdpath('cache')/org-headings`
+  by text, colours, size and window width (a new colorscheme makes new ones).
+- The font: `vim.g.pure_org_heading_font` (a `.ttf` path), or the first
+  `JetBrainsMono*-Bold.ttf` among the system / user fonts. The cell shape is taken from
+  that font's metrics, so use the bold face of the GUI's own font.
+- Missing Python, Pillow or font: one warning, and the headlines stay as text.
 
 `<leader>tm` turns the rendering on and off; `<leader>tM` turns the big headlines (OSC 66 / DECDHL) on or off,
 off by default (saved as `big_headings`; they show only while the rendering is on).
