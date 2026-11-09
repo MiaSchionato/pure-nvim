@@ -387,14 +387,16 @@ local function dotAwareList(path, kind, styled)
       local filter = " --changed-within " .. limit .. (i > 1 and (" --changed-before " .. tiers[i - 1]) or "")
       -- The tag the awk reads as the age column: "@<1h ago<tab>path".
       -- One list item per line: writefile() turns a "\n" inside an item into a NUL.
+      -- awk, not sed: macOS's BSD sed writes "\t" in a replacement as a plain "t", so every path there
+      -- became "@<1h agot<path>" and the picker opened a file that does not exist.
       out[#out + 1] = "{"
       vim.list_extend(out, linesOf(filter))
-      out[#out + 1] = "} | sed 's/^/@<" .. limit .. " ago\\t/'"
+      out[#out + 1] = "} | awk '{ print \"@<" .. limit .. " ago\\t\" $0 }'"
     end
     local last = tiers[#tiers]
     out[#out + 1] = "{"
     vim.list_extend(out, linesOf(" --changed-before " .. last))
-    out[#out + 1] = "} | sed 's/^/@" .. last .. "+ ago\\t/'"
+    out[#out + 1] = "} | awk '{ print \"@" .. last .. "+ ago\\t\" $0 }'"
     return out
   end
 
