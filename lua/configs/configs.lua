@@ -320,8 +320,13 @@ g.pure_tasks_done = 'xX-'
 -- -----------------------------------------------------------------------------
 -- The first Neovim started listens at this address, so the Flow Launcher
 -- plugin (or `nvim --server ADDRESS --remote FILE`) opens a file in it.
--- '' or false: do not listen. Default: '/tmp/nvim-remote.sock'.
+-- '' or false: do not listen. Default: '/tmp/nvim-remote.sock'. Not on Windows.
 g.remote_socket = '/tmp/nvim-remote.sock'
+
+-- Every Neovim with a UI writes its address to this file when it gets the
+-- focus, so a program outside opens a file in the Neovim used last (on
+-- Windows too). '' or false: no file. Default: stdpath('data')/remote-address.
+-- g.remote_address_file = '~/.local/share/nvim/remote-address'
 
 -- -----------------------------------------------------------------------------
 --  Link view  (pure/linkview.lua, <leader>vp preview)
