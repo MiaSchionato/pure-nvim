@@ -115,9 +115,20 @@ elsewhere `'shell'`.
 
 ## Remote (`lua/pure/remote.lua`)
 
-The first Neovim started listens at a fixed address, `/tmp/nvim-remote.sock`
-(`vim.g.remote_socket`; `''` turns it off), so a program outside can open a
-file in it instead of starting another one:
+Two ways for a program outside (a launcher plugin, a script) to open a file
+in a Neovim that is already running instead of starting another one.
+
+**The address file.** Every Neovim with a UI writes its own address
+(`v:servername`) and process id to `stdpath('data')/remote-address`
+(`vim.g.remote_address_file`; `''` turns it off) when its UI attaches and
+each time it gets the focus, so the file names the Neovim used last. The
+program reads the first line and runs `nvim --server ADDRESS --remote FILE`.
+Nothing is fixed: any number of Neovims may be open, in a terminal or a GUI,
+and one left behind without a window is never the one named. A Neovim that
+quits removes its own entry. Works on Windows too.
+
+**The fixed address** (not on Windows). The first Neovim started also listens
+at `/tmp/nvim-remote.sock` (`vim.g.remote_socket`; `''` turns it off):
 
 ```
 nvim --server /tmp/nvim-remote.sock --remote 'vault/inbox.org'
@@ -125,7 +136,7 @@ nvim --server /tmp/nvim-remote.sock --remote 'vault/inbox.org'
 
 The Flow Launcher plugin `nv` does this. A Neovim started while another owns
 the address does not listen there; a socket left by a Neovim that died is
-replaced. Not on Windows (named pipes) and not in headless runs.
+replaced. Neither way is active in headless runs.
 
 ## Themes (`lua/themes/colorschemes.lua`, `colors/`)
 
