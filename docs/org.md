@@ -154,7 +154,9 @@ hands them to that drawing, so **no cookie is written into the note**. A table w
 own is left to org.nvim. In Insert mode a table shows in full. While a table is shrunk the window
 does not wrap (a raw row longer than the window would take extra screen rows under the drawing),
 and `wrap` comes back when none is. Saved as `table_shrink` (the toggles of `configs/functions.lua`);
-the code is "Narrowing wide tables" in `lua/pure/render-org.lua`.
+the code is "Narrowing wide tables" in `lua/pure/render-org.lua`. When a shrunk table is deleted,
+org.nvim forgets it but leaves its cell marks (inline virtual text), which pile up on the line where it
+was; the toggle clears the whole `org.table.shrink` namespace before each redraw, so they go away.
 
 **Wrapping wide tables into rows (`<leader>tW`).** The other way, and this one **changes the text**:
 a cell that does not fit its column continues on the next line, as an extra table row holding only the
