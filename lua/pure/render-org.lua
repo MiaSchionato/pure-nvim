@@ -470,9 +470,43 @@ end
 
 local reserve -- below; a finished render calls it again
 
--- The PNG for headline `h` in a text area `width` cells wide: { path, cols } when it is ready; otherwise it is started
--- in the background (reserve runs again when it is done) and nil comes back.
-local function headingImage(buf, h, width)
+-- The foreground drawn at (row, col) of buf (0-based): the last highlight with a fg among the syntax, treesitter and
+-- extmark groups there (org.nvim colours the TODO keywords with syntax groups: OrgTodo, OrgDone, orgTodoKw_SEED...).
+local function fgAt(buf, row, col)
+  local ok, info = pcall(vim.inspect_pos, buf, row, col, { syntax = true, treesitter = true, extmarks = true, semantic_tokens = false })
+  if not ok then return nil end
+  local found
+  for _, list in ipairs({ info.syntax, info.treesitter, info.extmarks }) do
+    for _, item in ipairs(list or {}) do
+      local group = item.hl_group or (item.opts and item.opts.hl_group)
+      if type(group) == 'string' then
+        local fg = vim.api.nvim_get_hl(0, { name = group, link = false }).fg
+        if fg then found = string.format('#%06x', fg) end
+      end
+    end
+  end
+  return found
+end
+
+-- The parts of headline `h` in their colours: a TODO keyword (first word, coloured apart from what follows it) in its
+-- own colour, the rest in `fg`.
+local function segmentsOf(buf, h, fg)
+  local line = scan(buf).lines[h.row + 1] or ''
+  local col, word = line:match('^%*+%s+()(%u+)')
+  local rest = word and h.text:sub(1, #word) == word and h.text:sub(#word + 1)
+  if rest and (rest == '' or rest:match('^%s')) then
+    local kw = fgAt(buf, h.row, col - 1)
+    if kw and kw ~= fgAt(buf, h.row, col - 1 + #word) then
+      return { { text = word, fg = kw }, { text = rest, fg = fg } }
+    end
+  end
+  return { { text = h.text, fg = fg } }
+end
+
+-- The PNG for `group`, headlines on consecutive lines shown one under the other, in a text area `width` cells wide:
+-- { path, cols } when it is ready; otherwise it is started in the background (reserve runs again when it is done) and
+-- nil comes back.
+local function headingImage(buf, group, width)
   local font = headingFont()
   local py = python()
   local script = vim.fn.stdpath('config') .. '/scripts/org_heading_png.py'
@@ -484,12 +518,15 @@ local function headingImage(buf, h, width)
     end
     return nil
   end
-  local rows = HEIGHT.image[h.level]
-  local fg = hex({ 'PureOrgH' .. h.level, '@markup.heading.' .. h.level .. '.markdown', 'markdownH' .. h.level, 'Title' }, 'fg') or '#ffffff'
   local bg = hex({ 'Normal' }, 'bg') or 'none'
-  local key = table.concat({ 1, font, rows, width, fg, bg, h.text }, '\0')
+  local lines = {}
+  for _, h in ipairs(group) do
+    local fg = hex({ 'PureOrgH' .. h.level, '@markup.heading.' .. h.level .. '.markdown', 'markdownH' .. h.level, 'Title' }, 'fg') or '#ffffff'
+    lines[#lines + 1] = { rows = HEIGHT.image[h.level], segments = segmentsOf(buf, h, fg) }
+  end
   local dir = vim.fn.stdpath('cache') .. '/org-headings'
-  local path = dir .. '/' .. vim.fn.sha256(key) .. '.png'
+  local job = { font = font, max_cols = width, bg = bg, lines = lines }
+  local path = dir .. '/' .. vim.fn.sha256('2\0' .. vim.json.encode(job)) .. '.png'
   local meta = path .. '.cols'
   if vim.fn.filereadable(path) == 1 and vim.fn.filereadable(meta) == 1 then
     return { path = path, cols = tonumber(vim.fn.readfile(meta)[1]) or width }
@@ -497,8 +534,9 @@ local function headingImage(buf, h, width)
   if pending[path] then return nil end
   pending[path] = true
   vim.fn.mkdir(dir, 'p')
-  local cmd = vim.list_extend(vim.deepcopy(py), { script, path, font, tostring(rows), tostring(width), fg, bg, h.text })
-  vim.system(cmd, { text = true }, vim.schedule_wrap(function(res)
+  job.out = path
+  local cmd = vim.list_extend(vim.deepcopy(py), { script })
+  vim.system(cmd, { text = true, stdin = vim.json.encode(job) }, vim.schedule_wrap(function(res)
     pending[path] = nil
     if res.code == 0 then
       vim.fn.writefile({ vim.trim(res.stdout or '') }, meta)
@@ -518,18 +556,35 @@ local function reserveImages(buf)
   local win = vim.fn.bufwinid(buf)
   if win == -1 then return end
   local width = vim.api.nvim_win_get_width(win) - (vim.fn.getwininfo(win)[1].textoff or 0)
-  local wanted = {}
+  -- Each image hangs under the nearest visible line above its headline. The line above may be another headline, hidden
+  -- itself (and Neovim does not draw the virtual lines of a hidden line), so the walk goes up past those; the first line
+  -- of the buffer has nothing above, so its headline stays visible and the image goes under it. Headlines that end up
+  -- under the same line make one image (`groups`): the order of virtual lines anchored at one place is not kept.
+  local groups, hidden = {}, {}
   for _, h in ipairs(headingsOf(buf)) do
     if heightOf(h.level) then
-      local png = headingImage(buf, h, width)
-      if png then
-        -- Under the line above; the first line has none, so its image goes under the headline (which then stays visible).
-        local above = h.row > 0
-        wanted[#wanted + 1] = { path = png.path, row = above and h.row or 1, cols = png.cols, rows = HEIGHT.image[h.level] }
-        if above and h.row + 1 ~= state.cursor then
-          vim.api.nvim_buf_set_extmark(buf, ns, h.row, 0, { conceal_lines = '' })
-        end
+      local anchor = h.row - 1 -- 0-based line the image goes under
+      while anchor >= 0 and hidden[anchor] do anchor = anchor - 1 end
+      if anchor < 0 then anchor = h.row end
+      if anchor ~= h.row and h.row + 1 ~= state.cursor then hidden[h.row] = true end
+      local last = groups[#groups]
+      if not (last and last.anchor == anchor) then
+        last = { anchor = anchor, list = {} }
+        groups[#groups + 1] = last
       end
+      table.insert(last.list, h)
+    end
+  end
+  local wanted = {}
+  for _, g in ipairs(groups) do
+    local png = headingImage(buf, g.list, width)
+    if png then
+      local rows = 0
+      for _, h in ipairs(g.list) do
+        rows = rows + HEIGHT.image[h.level]
+        if hidden[h.row] then vim.api.nvim_buf_set_extmark(buf, ns, h.row, 0, { conceal_lines = '' }) end
+      end
+      wanted[#wanted + 1] = { path = png.path, row = g.anchor + 1, cols = png.cols, rows = rows }
     end
   end
   placeImages(buf, wanted)

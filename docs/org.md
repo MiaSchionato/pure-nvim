@@ -196,7 +196,14 @@ background, with the bold face of the editor font. The image sits just above the
 whose own line is hidden (`conceal_lines`) except while the cursor is on it, so it can be
 edited; the image stays. A headline on the first line of the file keeps its line, with the
 image under it. Images belong to the buffer: scrolling redraws nothing. A title too long for
-the window gets a smaller font.
+the window gets a smaller font. A TODO keyword keeps its own colour (the one org.nvim gives
+it in the buffer, e.g. its `todo_keyword_faces` face); the rest is in the headline's colour.
+
+Headlines on consecutive lines become one image under the nearest visible line above them:
+Neovim does not draw the virtual lines of a hidden line, and does not keep the order of
+several images anchored at one line. With the cursor on one of them the group splits there
+(the headlines after it hang under its visible line), so moving into a run of headlines
+renders new PNGs once.
 
 - The PNG is made by `scripts/org_heading_png.py` (Python 3 with Pillow: `py -3` on
   Windows, else `python3`), in the background; cached in `stdpath('cache')/org-headings`
