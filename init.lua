@@ -112,6 +112,20 @@ if vim.fn.has("win32") == 1 and vim.fn.argc() == 0 then
   end
 end
 
+-- On Windows vim.ui.open runs `cmd.exe /c start <url>`, and cmd.exe cuts a URL
+-- at its first '&' (a command separator there): a YouTube link lost its
+-- `&t=4m10s`. URLs go to rundll32 instead, which hands them to the default
+-- browser untouched (as gcal.lua already did). Files keep the default opener.
+if vim.fn.has('win32') == 1 then
+  local uiOpen = vim.ui.open
+  vim.ui.open = function(path, opt)
+    if type(path) == 'string' and path:match('^%a[%w+.-]*://') and not (opt and opt.cmd) then
+      opt = vim.tbl_extend('force', opt or {}, { cmd = { 'rundll32.exe', 'url.dll,FileProtocolHandler' } })
+    end
+    return uiOpen(path, opt)
+  end
+end
+
 -- =============================================================================
 -- Automatic Recursive Module Loader
 -- =============================================================================
