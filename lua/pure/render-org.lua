@@ -1036,6 +1036,9 @@ local function applyShrink(buf)
       shrink.expand(buf, info.start)
     end
   end)
+  -- org.nvim only clears the marks inside a table that still exists: a deleted table leaves its inline cells
+  -- piled up on the line where it was. Clear the whole namespace; refresh_all redraws the live tables.
+  vim.api.nvim_buf_clear_namespace(buf, vim.api.nvim_create_namespace('org.table.shrink'), 0, -1)
   shrink.refresh_all(buf) -- the window may have changed size: the widths are worked out again
   noWrap(win, 'shrink', any)
 end
@@ -1049,6 +1052,7 @@ local function clearShrink(buf)
       shrink.expand(buf, info.start)
     end
   end)
+  vim.api.nvim_buf_clear_namespace(buf, vim.api.nvim_create_namespace('org.table.shrink'), 0, -1) -- marks of deleted tables
   for _, win in ipairs(vim.fn.win_findbuf(buf)) do noWrap(win, 'shrink', false) end
 end
 
