@@ -105,10 +105,11 @@ end, { expr = true, desc = "Smart outer quotes" })
 -- =============================================================================
 map("n", "s", function() sur.applySurround(false) end, { desc = "Surround word" })
 map("v", "s", function() sur.applySurround(true) end, { desc = "Surround selection" })
--- Function surround is on S, not sf: sf made every s wait 500 ms. The builtin
--- S is a synonym for cc, so nothing is lost.
-map("n", "S", function() sur.surroundFunction(false) end, { desc = "Surround with function" })
-map("v", "S", function() sur.surroundFunction(true) end, { desc = "Surround with function" })
+-- Sf (function) and Sl (link): S reads its next key itself (pure/surround.lua),
+-- so neither s nor S waits for a longer mapping, and s keeps every character.
+-- The builtin S is a synonym for cc, so nothing is lost.
+map("n", "S", function() sur.surroundSpecial(false) end, { desc = "Surround: f function, l link" })
+map("v", "S", function() sur.surroundSpecial(true) end, { desc = "Surround: f function, l link" })
 map("n", "ds", sur.deleteSurround, { desc = "Delete surround" })
 map("n", "cs", sur.changeSurround, { desc = "Change surround" })
 

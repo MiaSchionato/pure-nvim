@@ -183,6 +183,13 @@ local function linksIn(line)
   for s, bang, inner, e in line:gmatch('()(!?)%[%[([^%[%]]-)%]%]()') do
     table.insert(out, { kind = 'wiki', s = s, e = e - 1, inner = inner, embed = bang == '!' })
   end
+  -- An org link with a description, [[https://...][text]]: the whole link counts, so K works with the cursor on
+  -- the (concealed link's) text. Only web targets: id:/file: links stay with the org LSP hover.
+  for s, target, e in line:gmatch('()%[%[([^%[%]]-)%]%[[^%]]-%]%]()') do
+    if target:match('^%a[%w+.-]*://') then
+      table.insert(out, { kind = 'url', s = s, e = e - 1, inner = target })
+    end
+  end
   for s, dest, e in line:gmatch('()%[[^%]]*%]%(([^%)]*)%)()') do
     local inside = false
     for _, w in ipairs(out) do

@@ -6,7 +6,8 @@
 |---|---|---|
 | `s` (normal) | a character | surrounds the word under the cursor: `s(` → `(word)` |
 | `s` (visual) | a character | surrounds the selection |
-| `S` | a function name | `S` + `print` → `print(word)` (visual: the selection) |
+| `Sf` | a function name | `Sf` + `print` → `print(word)` (visual: the selection) |
+| `Sl` | the link target | `Sl` → `[[][word]]`, Insert mode in the empty target (visual: the selection) |
 | `ds` | a character | deletes the pair around the cursor: `ds"` |
 | `cs` | old, new | changes the pair: `cs"'`, `cs[{` |
 
@@ -18,6 +19,9 @@ any other character surrounds with itself on both sides (`s*` → `*word*`).
 `((word))`, `sdc` → `{{word}}`; `dq` is the exception, the double quote. The
 same keys work in `ds` and `cs`: `dsdb` removes `[[ ]]`, `csbdb` turns
 `[word]` into `[[word]]`. `ds` / `cs` look on the current line.
+
+`S` reads its next key itself instead of having `Sf` / `Sl` mappings, so neither `s` nor `S` waits for a longer
+mapping, and `s` keeps every character (`sf` → `fwordf`). `S` with any other key surrounds like `s`.
 
 ## Auto pairs (`lua/pure/pairs.lua`)
 
