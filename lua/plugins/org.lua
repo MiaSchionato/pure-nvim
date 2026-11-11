@@ -166,7 +166,8 @@ require('org').setup({
   -- The agenda reads tasks, the inbox (it may hold dated things) and every
   -- file of projects/, like `my/garden-agenda-files` in Doom.
   agenda_files = { vault .. '/tasks.org', vault .. '/' .. require('pure.vault').inbox(), vault .. '/projects/**/*.org',
-    vault .. '/garden/*.org' }, -- the notes of the garden too (Mia, 2026-11-09)
+    vault .. '/garden/**/*.org' }, -- the notes of the garden too (Mia, 2026-11-09), subfolders included:
+    -- the personal projects moved from projects/ to garden/<Name>/ (Mia, 2026-11-11)
 
   -- The agenda opens floating, in this config's window like the capture (see the window opener below the
   -- setup). Default: 'split'. (Mia, 2026-11-08.)
