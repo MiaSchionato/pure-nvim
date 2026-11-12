@@ -60,6 +60,10 @@ quit. The Quick Capture plugin of Flow Launcher (`q`, `qs`, `qt`...) captures th
 entry lands in the open note, with undo. org.nvim saves the buffer after a capture, so
 changes not saved yet are saved with it. With no server running, the capture writes the file.
 
+On Windows the address is set as `//./pipe/org.nvim.<user>`: org.nvim's default spells the same
+pipe `\\.\pipe\...`, but `serverlist()` reports it with forward slashes, so the Neovim serving it
+did not see itself as the server (`require('org.remote').is_server()` was false).
+
 ## States per note (`#+TODO:`)
 
 The config has two sets of states: the tasks' (`TODO NEXT DOING WAITING | DONE CANCELLED`) and
