@@ -49,6 +49,17 @@ and closes the window; `:q` closes it and drops the entry; `<C-c><C-k>` aborts.
 org.nvim's window modes are strings only, so `lua/plugins/org.lua` wraps its window
 opener (`org.ui.open_buffer_window`) for that one mode; every other window is org.nvim's.
 
+### Captures from outside (`remote.enabled`)
+
+`remote = { enabled = true }` (2026-11-12): the first Neovim that sets org up is org.nvim's
+session server, listening on `\\.\pipe\org.nvim.<user>` (Windows; a socket in the runtime
+directory elsewhere). The `org` command line, org-protocol URLs and `org.api.remote.call()`
+send their requests there, so they change that Neovim's buffers instead of the files behind
+its back; another Neovim takes over the address when it gets the focus after the server
+quit. The Quick Capture plugin of Flow Launcher (`q`, `qs`, `qt`...) captures this way: the
+entry lands in the open note, with undo. org.nvim saves the buffer after a capture, so
+changes not saved yet are saved with it. With no server running, the capture writes the file.
+
 ## States per note (`#+TODO:`)
 
 The config has two sets of states: the tasks' (`TODO NEXT DOING WAITING | DONE CANCELLED`) and
