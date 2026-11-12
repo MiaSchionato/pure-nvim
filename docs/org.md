@@ -13,8 +13,8 @@ independent of the Markdown modules (`notes`, `zettelkasten`): those act on
 | Task states | `TODO NEXT DOING WAITING \| DONE CANCELLED` |
 | Idea stages | `SEED SPROUT PLANT TREE FRUIT \| COMPOST` (FRUIT was FLOWER until 2026-11-08: a tree bears fruit) (keywords must be declared, or a node title would start with `PLANT`) |
 | Keyword colours | the Ethereal palette |
-| Roam directory | the whole vault, except `journal/` |
-| Daily notes | `journal/<year>.org`, one entry per day in its date tree |
+| Roam directory | the whole vault, except `journal/` and `journal.org` |
+| Daily notes | `journal.org` at the root of the vault, one entry per day in its date tree |
 
 ## Capture (`<leader>mc`, then a key)
 
@@ -40,7 +40,7 @@ private-use character and its hook puts the `%` back).
 The lists, the questions and the capture buffer share one size (`CAPTURE_RATIO`,
 0.8): the same width, left edge and top row, so each opens where the last one was;
 a question is one line at that top edge.
-| `j` | a line `* HH:MM text` in `journal/<year>.org`, under today's date |
+| `j` | a line `* HH:MM text` in `journal.org`, under today's date |
 
 The text is written in a centred floating window (`capture.window = 'pure_float'`: the
 config's `createWindow`, 80% of the screen, the same look as the terminals), not in
