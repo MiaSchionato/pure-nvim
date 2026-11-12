@@ -179,6 +179,13 @@ require('org').setup({
   -- org.nvim aligns only when a table is edited. Tables written by scripts show up straight.
   startup_align_all_tables = true,
 
+  -- org.nvim's session server (Mia, 2026-11-12): the first Neovim that sets org up listens on a fixed
+  -- address (\\.\pipe\org.nvim.<user> on Windows) and the org command line, org-protocol and
+  -- org.api.remote.call() send their requests there, so they edit its buffers instead of the files
+  -- behind its back. The Quick Capture plugin of Flow uses it: a capture lands in the open note.
+  -- org.nvim saves the buffer after a capture, changes not saved yet included.
+  remote = { enabled = true },
+
   -- org.nvim draws nothing over the text (links, stars, checkboxes...): the
   -- rendering is pure/render-org.lua's, so it can be toggled and follows the
   -- terminal (<leader>om). Its syntax colours stay.
