@@ -183,7 +183,15 @@ require('org').setup({
   -- org.api.remote.call() send their requests there, so they edit its buffers instead of the files
   -- behind its back. The Quick Capture plugin of Flow uses it: a capture lands in the open note.
   -- org.nvim saves the buffer after a capture, changes not saved yet included.
-  remote = { enabled = true },
+  -- On Windows the address is written //./pipe/...: org.nvim's default (\\.\pipe\...) is the same pipe, but
+  -- serverlist() names it with forward slashes, so org.nvim never saw itself as the server (is_server() false,
+  -- and a request made inside it would connect to itself). Clients with the default reach the same pipe.
+  remote = {
+    enabled = true,
+    address = vim.fn.has('win32') == 1
+        and ('//./pipe/org.nvim.' .. (vim.env.USERNAME or vim.env.USER or 'user'):gsub('[^%w_.-]', '_'))
+      or nil,
+  },
 
   -- org.nvim draws nothing over the text (links, stars, checkboxes...): the
   -- rendering is pure/render-org.lua's, so it can be toggled and follows the
