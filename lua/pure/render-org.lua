@@ -214,7 +214,17 @@ local last = {}
 local HEIGHT = {
   osc66 = { [1] = 3, [2] = 2 },
   decdhl = { [1] = 2, [2] = 2 },
+  image = { [1] = 3, [2] = 2 },
 }
+
+-- Is a GUI with Neovim's ext_images UI extension attached (images through vim.ui.img)?
+local function imageUi()
+  if not (vim.ui.img and vim.ui.img.set) then return false end
+  for _, ui in ipairs(vim.api.nvim_list_uis()) do
+    if ui.ext_images then return true end
+  end
+  return false
+end
 
 -- -----------------------------------------------------------------------------
 --  Which terminal
@@ -224,7 +234,8 @@ local function detect()
   if want == nil then want = vim.g.pure_md_headings end
   if want == nil then want = 'auto' end
   if want == 'off' or want == false then return nil end
-  if want == 'osc66' or want == 'decdhl' then return want end
+  if want == 'osc66' or want == 'decdhl' or want == 'image' then return want end
+  if imageUi() then return 'image' end
   if #vim.api.nvim_list_uis() == 0 or vim.g.neovide or vim.env.TMUX or vim.env.STY then return nil end
   if vim.env.KITTY_WINDOW_ID then return 'osc66' end
   if vim.env.WEZTERM_PANE or vim.env.TERM_PROGRAM == 'WezTerm' then return 'decdhl' end
@@ -392,10 +403,200 @@ local function activeFor(win)
 end
 
 -- -----------------------------------------------------------------------------
+--  'image' mode: each headline as a PNG through vim.ui.img (a GUI with ext_images)
+-- -----------------------------------------------------------------------------
+--  scripts/org_heading_png.py (Python + Pillow) renders the text with the bold face of the editor font, in the
+--  headline's colour on the Normal background; the PNGs are cached in stdpath('cache')/org-headings. The image sits in
+--  the virtual lines of the line above the headline, and the headline line itself is hidden (conceal_lines) except
+--  while the cursor is on it. The images belong to the buffer, so nothing is redrawn on scroll.
+local imgs = {}      -- buf -> { { id, path } } the images shown
+local pending = {}   -- PNG path -> true while it is being rendered
+local imageWarned = false
+
+local function hex(groups, field)
+  for _, group in ipairs(groups) do
+    local n = vim.api.nvim_get_hl(0, { name = group, link = false })[field]
+    if n then return string.format('#%06x', n) end
+  end
+end
+
+local function python()
+  if vim.fn.has('win32') == 1 and vim.fn.executable('py') == 1 then return { 'py', '-3' } end
+  if vim.fn.executable('python3') == 1 then return { 'python3' } end
+  if vim.fn.executable('python') == 1 then return { 'python' } end
+end
+
+-- The bold face of the editor font: vim.g.pure_org_heading_font, or a JetBrains Mono bold among the system fonts.
+local fontPath
+local function headingFont()
+  if vim.g.pure_org_heading_font then return vim.g.pure_org_heading_font end
+  if fontPath ~= nil then return fontPath or nil end
+  local dirs = vim.fn.has('win32') == 1
+      and { (vim.env.LOCALAPPDATA or '') .. '/Microsoft/Windows/Fonts', (vim.env.WINDIR or 'C:/Windows') .. '/Fonts' }
+      or { vim.fn.expand('~/.local/share/fonts'), vim.fn.expand('~/Library/Fonts'), '/usr/share/fonts' }
+  for _, dir in ipairs(dirs) do
+    local found = vim.fs.find(function(name) return name:match('^JetBrainsMono.*%-Bold%.ttf$') ~= nil end,
+      { path = dir, limit = 1 })[1]
+    if found then fontPath = found; return found end
+  end
+  fontPath = false
+end
+
+-- Show `wanted` ({ { path, row (1-based line the image hangs under), cols, rows } }) in buf, reusing the images already
+-- there (no PNG sent again when only the line moved) and deleting the rest.
+local function placeImages(buf, wanted)
+  local pool = {}
+  for _, e in ipairs(imgs[buf] or {}) do
+    pool[e.path] = pool[e.path] or {}
+    table.insert(pool[e.path], e)
+  end
+  local shown = {}
+  for _, w in ipairs(wanted) do
+    local opts = { buf = buf, row = w.row, col = 1, width = w.cols, height = w.rows, relative = 'buffer' }
+    local e = pool[w.path] and table.remove(pool[w.path])
+    if e then
+      pcall(vim.ui.img.set, e.id, opts)
+    else
+      local ok, id = pcall(vim.ui.img.set, vim.fn.readblob(w.path), opts)
+      if ok then e = { id = id, path = w.path } end
+    end
+    if e then shown[#shown + 1] = e end
+  end
+  for _, list in pairs(pool) do
+    for _, e in ipairs(list) do pcall(vim.ui.img.del, e.id) end
+  end
+  imgs[buf] = shown
+end
+
+local reserve -- below; a finished render calls it again
+
+-- The foreground drawn at (row, col) of buf (0-based): the last highlight with a fg among the syntax, treesitter and
+-- extmark groups there (org.nvim colours the TODO keywords with syntax groups: OrgTodo, OrgDone, orgTodoKw_SEED...).
+local function fgAt(buf, row, col)
+  local ok, info = pcall(vim.inspect_pos, buf, row, col, { syntax = true, treesitter = true, extmarks = true, semantic_tokens = false })
+  if not ok then return nil end
+  local found
+  for _, list in ipairs({ info.syntax, info.treesitter, info.extmarks }) do
+    for _, item in ipairs(list or {}) do
+      local group = item.hl_group or (item.opts and item.opts.hl_group)
+      if type(group) == 'string' then
+        local fg = vim.api.nvim_get_hl(0, { name = group, link = false }).fg
+        if fg then found = string.format('#%06x', fg) end
+      end
+    end
+  end
+  return found
+end
+
+-- The parts of headline `h` in their colours: a TODO keyword (first word, coloured apart from what follows it) in its
+-- own colour, the rest in `fg`.
+local function segmentsOf(buf, h, fg)
+  local line = scan(buf).lines[h.row + 1] or ''
+  local col, word = line:match('^%*+%s+()(%u+)')
+  local rest = word and h.text:sub(1, #word) == word and h.text:sub(#word + 1)
+  if rest and (rest == '' or rest:match('^%s')) then
+    local kw = fgAt(buf, h.row, col - 1)
+    if kw and kw ~= fgAt(buf, h.row, col - 1 + #word) then
+      return { { text = word, fg = kw }, { text = rest, fg = fg } }
+    end
+  end
+  return { { text = h.text, fg = fg } }
+end
+
+-- The PNG for `group`, headlines on consecutive lines shown one under the other, in a text area `width` cells wide:
+-- { path, cols } when it is ready; otherwise it is started in the background (reserve runs again when it is done) and
+-- nil comes back.
+local function headingImage(buf, group, width)
+  local font = headingFont()
+  local py = python()
+  local script = vim.fn.stdpath('config') .. '/scripts/org_heading_png.py'
+  if not font or not py or vim.fn.filereadable(script) == 0 then
+    if not imageWarned then
+      imageWarned = true
+      vim.notify('Org headings (image): needs Python with Pillow, scripts/org_heading_png.py and a bold font'
+        .. ' (vim.g.pure_org_heading_font)', vim.log.levels.WARN)
+    end
+    return nil
+  end
+  local bg = hex({ 'Normal' }, 'bg') or 'none'
+  local lines = {}
+  for _, h in ipairs(group) do
+    local fg = hex({ 'PureOrgH' .. h.level, '@markup.heading.' .. h.level .. '.markdown', 'markdownH' .. h.level, 'Title' }, 'fg') or '#ffffff'
+    lines[#lines + 1] = { rows = HEIGHT.image[h.level], segments = segmentsOf(buf, h, fg) }
+  end
+  local dir = vim.fn.stdpath('cache') .. '/org-headings'
+  local job = { font = font, max_cols = width, bg = bg, lines = lines }
+  local path = dir .. '/' .. vim.fn.sha256('2\0' .. vim.json.encode(job)) .. '.png'
+  local meta = path .. '.cols'
+  if vim.fn.filereadable(path) == 1 and vim.fn.filereadable(meta) == 1 then
+    return { path = path, cols = tonumber(vim.fn.readfile(meta)[1]) or width }
+  end
+  if pending[path] then return nil end
+  pending[path] = true
+  vim.fn.mkdir(dir, 'p')
+  job.out = path
+  local cmd = vim.list_extend(vim.deepcopy(py), { script })
+  vim.system(cmd, { text = true, stdin = vim.json.encode(job) }, vim.schedule_wrap(function(res)
+    pending[path] = nil
+    if res.code == 0 then
+      vim.fn.writefile({ vim.trim(res.stdout or '') }, meta)
+      if vim.api.nvim_buf_is_valid(buf) then reserve(buf) end
+    elseif not imageWarned then
+      imageWarned = true
+      vim.notify('Org headings (image): ' .. vim.trim(res.stderr or ''), vim.log.levels.WARN)
+    end
+  end))
+end
+
+local function reserveImages(buf)
+  if not eligible(buf) or not activeFor(vim.api.nvim_get_current_win()) then
+    if imgs[buf] then placeImages(buf, {}) end
+    return
+  end
+  local win = vim.fn.bufwinid(buf)
+  if win == -1 then return end
+  local width = vim.api.nvim_win_get_width(win) - (vim.fn.getwininfo(win)[1].textoff or 0)
+  -- Each image hangs under the nearest visible line above its headline. The line above may be another headline, hidden
+  -- itself (and Neovim does not draw the virtual lines of a hidden line), so the walk goes up past those; the first line
+  -- of the buffer has nothing above, so its headline stays visible and the image goes under it. Headlines that end up
+  -- under the same line make one image (`groups`): the order of virtual lines anchored at one place is not kept.
+  local groups, hidden = {}, {}
+  for _, h in ipairs(headingsOf(buf)) do
+    if heightOf(h.level) then
+      local anchor = h.row - 1 -- 0-based line the image goes under
+      while anchor >= 0 and hidden[anchor] do anchor = anchor - 1 end
+      if anchor < 0 then anchor = h.row end
+      if anchor ~= h.row and h.row + 1 ~= state.cursor then hidden[h.row] = true end
+      local last = groups[#groups]
+      if not (last and last.anchor == anchor) then
+        last = { anchor = anchor, list = {} }
+        groups[#groups + 1] = last
+      end
+      table.insert(last.list, h)
+    end
+  end
+  local wanted = {}
+  for _, g in ipairs(groups) do
+    local png = headingImage(buf, g.list, width)
+    if png then
+      local rows = 0
+      for _, h in ipairs(g.list) do
+        rows = rows + HEIGHT.image[h.level]
+        if hidden[h.row] then vim.api.nvim_buf_set_extmark(buf, ns, h.row, 0, { conceal_lines = '' }) end
+      end
+      wanted[#wanted + 1] = { path = png.path, row = g.anchor + 1, cols = png.cols, rows = rows }
+    end
+  end
+  placeImages(buf, wanted)
+end
+
+-- -----------------------------------------------------------------------------
 --  Reserve the room, draw
 -- -----------------------------------------------------------------------------
-local function reserve(buf)
+reserve = function(buf)
   vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+  if imgs[buf] and state.mode ~= 'image' then placeImages(buf, {}) end
+  if state.mode == 'image' then return reserveImages(buf) end
   if not eligible(buf) or not activeFor(vim.api.nvim_get_current_win()) then return end
   local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
   for _, h in ipairs(headingsOf(buf)) do
@@ -418,7 +619,7 @@ end
 local function render()
   local win = vim.api.nvim_get_current_win()
   local buf = vim.api.nvim_win_get_buf(win)
-  if not eligible(buf) or not activeFor(win) then return end
+  if state.mode == 'image' or not eligible(buf) or not activeFor(win) then return end
   state.drawn = {}
   -- Scrolled into the middle of a block's reserved rows (topfill) or of a wrapped line (skipcol): the rows Neovim reports
   -- for the lines are not the ones it puts on the screen (seen in Kitsu: blocks one row too low, drawn over the next
@@ -520,7 +721,7 @@ function M.setup(force)
       local now = h and lnum or nil
       if now ~= state.cursor then
         state.cursor = now
-        if h and activeFor(win) then
+        if h and activeFor(win) and state.mode ~= 'image' then
           local height = heightOf(h.level)
           local row = blockOrigin(win, lnum, height)
           if row then
@@ -539,8 +740,32 @@ function M.setup(force)
       end
     end,
   })
-  vim.api.nvim_create_autocmd('ColorScheme', { group = group, callback = function() if state.mode then scheduleRender() end end })
-  vim.api.nvim_create_autocmd('BufWipeout', { group = group, callback = function(args) cache[args.buf] = nil end })
+  vim.api.nvim_create_autocmd('ColorScheme', {
+    group = group,
+    callback = function()
+      if state.mode == 'image' then
+        reserve(vim.api.nvim_get_current_buf()) -- new colours, new PNGs
+      elseif state.mode then
+        scheduleRender()
+      end
+    end,
+  })
+  vim.api.nvim_create_autocmd('BufWipeout', {
+    group = group,
+    callback = function(args)
+      cache[args.buf] = nil
+      if imgs[args.buf] then placeImages(args.buf, {}) end
+    end,
+  })
+  -- A GUI turns ext_images on as it attaches, which can be after this file ran: look again.
+  vim.api.nvim_create_autocmd('UIEnter', {
+    group = group,
+    callback = function()
+      vim.schedule(function()
+        if detect() ~= state.mode then M.setup() end
+      end)
+    end,
+  })
   -- A window opened (before it is painted) or closed: the blocks go, and are drawn again once the screen is settled.
   vim.api.nvim_create_autocmd('WinNew', {
     group = group,
@@ -606,8 +831,8 @@ function M.setup(force)
     vim.notify('Org headings: ' .. (state.mode or 'off'))
   end, {
     nargs = '?',
-    complete = function() return { 'auto', 'osc66', 'decdhl', 'off' } end,
-    desc = 'Bigger org headlines (kitty OSC 66 / WezTerm DECDHL)',
+    complete = function() return { 'auto', 'osc66', 'decdhl', 'image', 'off' } end,
+    desc = 'Bigger org headlines (kitty OSC 66 / WezTerm DECDHL / images in a GUI with ext_images)',
   })
 
   -- The buffer that is already open has had its BufEnter, and the cursor may already be on a heading.
