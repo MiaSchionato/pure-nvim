@@ -375,6 +375,8 @@ map('n', '<leader>ti', func.toggleInlayHints, func.getOpts(opts, "Toggle inlay h
 map('n', '<leader>tp', func.toggleCopilot, func.getOpts(opts, "Toggle Copilot"))
 map('n', '<leader>th', func.toggleWordHighlight, func.getOpts(opts, "Toggle word highlight"))
 map('n', '<leader>h', func.toggleWordHighlight, func.getOpts(opts, "Toggle word highlight (short form)"))
+map({ 'n', 'x' }, '<leader>H', function() require('pure.highlights').pick() end,
+  func.getOpts(opts, "Highlight the word / selection in a colour (org; on a highlight: change, remove)"))
 map({ 'n', 'v' }, '<leader>tr', func.toggleRelativenumber, func.getOpts(opts, "Toggle relativenumber"))
 map('n', '<leader>tm', func.toggleNoteRendering, func.getOpts(opts, "Toggle note rendering (markdown, org)"))
 map('n', '<leader>tM', func.toggleBigHeadings, func.getOpts(opts, "Toggle big headings (OSC 66 / DECDHL; off by default)"))
