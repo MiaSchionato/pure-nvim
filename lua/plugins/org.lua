@@ -166,7 +166,8 @@ require('org').setup({
   -- The agenda reads tasks, the inbox (it may hold dated things) and every
   -- file of projects/, like `my/garden-agenda-files` in Doom.
   agenda_files = { vault .. '/tasks.org', vault .. '/' .. require('pure.vault').inbox(), vault .. '/projects/**/*.org',
-    vault .. '/garden/*.org' }, -- the notes of the garden too (Mia, 2026-11-09)
+    vault .. '/garden/**/*.org' }, -- the notes of the garden too (Mia, 2026-11-09), subfolders included:
+    -- the personal projects moved from projects/ to garden/<Name>/ (Mia, 2026-11-11)
 
   -- The agenda opens floating, in this config's window like the capture (see the window opener below the
   -- setup). Default: 'split'. (Mia, 2026-11-08.)
@@ -247,7 +248,8 @@ require('org').setup({
       j = {
         description = 'Journal',
         template = '* %<%H:%M> %?',
-        target = function() return 'journal/' .. os.date('%Y') .. '.org' end,
+        -- One journal file at the root of the vault (Mia, 2026-11-12; it was journal/<year>.org).
+        target = 'journal.org',
         datetree = true,
       },
     },
@@ -256,17 +258,19 @@ require('org').setup({
   extensions = {
     roam = {
       directory = vault,
-      -- The journal has no nodes, as in the custom Emacs config.
-      exclude = { 'journal/' },
-      -- Daily notes live in the year's journal file, one entry per day in its date tree.
+      -- The journal has no nodes, as in the custom Emacs config: journal.org and the
+      -- agent's day and week notes in journal/.
+      exclude = { 'journal/', '^journal\\.org$' },
+      -- Daily notes live in the journal file (journal.org at the root of the vault),
+      -- one entry per day in its date tree.
       dailies = {
-        directory = 'journal/',
+        directory = './',
         capture_templates = {
           d = {
             description = 'default',
             type = 'entry',
             template = '* %<%H:%M> %?',
-            target = '%<%Y>.org',
+            target = 'journal.org',
             datetree = true,
           },
         },

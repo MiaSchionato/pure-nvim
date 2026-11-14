@@ -38,9 +38,9 @@ end
 --- The pair named by the keys typed next. `d` first means "double": dq is
 --- the double quote, and d plus any other key doubles that pair, so db is
 --- [[ ]] (a wikilink), dp (( )), dc {{ }}. Returns the pair and the keys,
---- for messages.
-local function readPair()
-  local char = getChar()
+--- for messages. `char` is the first key when the caller already read it.
+local function readPair(char)
+  char = char or getChar()
   if char ~= 'd' then return pairOf(char), char end
   local second = getChar()
   if second == 'q' then return { '"', '"' }, 'dq' end
@@ -144,8 +144,25 @@ end
 
 function M.applySurround(isVisual)
   local pair = readPair()
-  local open, close = pair[1], pair[2]
-  feed((isVisual and "c" or "viwc") .. open .. [[<C-r>"]] .. close .. "<Esc>")
+  feed((isVisual and "c" or "viwc") .. pair[1] .. [[<C-r>"]] .. pair[2] .. "<Esc>")
+end
+
+--- S reads its next key itself (no Sf / Sl mappings, so nothing waits for
+--- 'timeoutlen'): Sf surrounds with a function, Sl with a link. Any other
+--- key surrounds like s, so s keeps every character (sf -> fwordf).
+function M.surroundSpecial(isVisual)
+  local keys = getChar()
+  if keys == 'f' then return M.surroundFunction(isVisual) end
+  if keys == 'l' then return M.surroundLink(isVisual) end
+  local pair = readPair(keys)
+  feed((isVisual and "c" or "viwc") .. pair[1] .. [[<C-r>"]] .. pair[2] .. "<Esc>")
+end
+
+--- Sl: the word or selection becomes the description of an empty org link,
+--- [[][foo bar]], and Insert mode starts in the link's empty target. `[ is
+--- where the change began (the first bracket).
+function M.surroundLink(isVisual)
+  feed((isVisual and "c" or "viwc") .. "[[][" .. [[<C-r>"]] .. "]]<Esc>`[la")
 end
 
 function M.surroundFunction(isVisual)
