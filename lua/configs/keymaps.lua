@@ -105,10 +105,11 @@ end, { expr = true, desc = "Smart outer quotes" })
 -- =============================================================================
 map("n", "s", function() sur.applySurround(false) end, { desc = "Surround word" })
 map("v", "s", function() sur.applySurround(true) end, { desc = "Surround selection" })
--- Function surround is on S, not sf: sf made every s wait 500 ms. The builtin
--- S is a synonym for cc, so nothing is lost.
-map("n", "S", function() sur.surroundFunction(false) end, { desc = "Surround with function" })
-map("v", "S", function() sur.surroundFunction(true) end, { desc = "Surround with function" })
+-- Sf (function) and Sl (link): S reads its next key itself (pure/surround.lua),
+-- so neither s nor S waits for a longer mapping, and s keeps every character.
+-- The builtin S is a synonym for cc, so nothing is lost.
+map("n", "S", function() sur.surroundSpecial(false) end, { desc = "Surround: f function, l link" })
+map("v", "S", function() sur.surroundSpecial(true) end, { desc = "Surround: f function, l link" })
 map("n", "ds", sur.deleteSurround, { desc = "Delete surround" })
 map("n", "cs", sur.changeSurround, { desc = "Change surround" })
 
@@ -146,22 +147,23 @@ map("n", "<leader>cx", "<cmd>!chmod +x %<CR>", func.getOpts(opts, "Make file exe
 -- =============================================================================
 --  Windows, splits and tabs
 -- =============================================================================
--- Window view: <leader>wv + direction. Moved from <leader>v_, which is now the
--- vault's group. Under <leader>w beside the tabs; no bare <leader>wv mapping,
--- so wvh/wvj/... never wait on a shorter key.
-map('n', "<leader>wvh", "<C-w>h", func.getOpts(opts, "Focus window left"))
-map('n', "<leader>wvj", "<C-w>j", func.getOpts(opts, "Focus window below"))
-map('n', "<leader>wvk", "<C-w>k", func.getOpts(opts, "Focus window above"))
-map('n', "<leader>wvl", "<C-w>l", func.getOpts(opts, "Focus window right"))
-map('n', "<leader>wvq", "<C-w>q", func.getOpts(opts, "Close window"))
+-- Splits
+map('n', "<leader>sh", "<C-w>h", func.getOpts(opts, "Focus split window left"))
+map('n', "<leader>sj", "<C-w>j", func.getOpts(opts, "Focus split window below"))
+map('n', "<leader>sk", "<C-w>k", func.getOpts(opts, "Focus split window above"))
+map('n', "<leader>sl", "<C-w>l", func.getOpts(opts, "Focus split window right"))
+map('n', "<leader>sq", "<C-w>q", func.getOpts(opts, "Close split window"))
+map('n', "<leader>so", "<C-w>o", func.getOpts(opts, "Close all other split window"))
+map('n', "<leader>sn", "<C-w>n", func.getOpts(opts, "New split horizontally"))
+map('n', "<leader>sv", "<C-w>v", func.getOpts(opts, "New split vertically"))
 
-map('n', "<leader>sv", "<cmd>vsplit<CR>", func.getOpts(opts, "Split vertically"))
-map('n', "<leader>sh", "<cmd>split<CR>", func.getOpts(opts, "Split horizontally"))
-map('n', "<leader>+", "<cmd>resize +5<CR>", func.getOpts(opts, "Taller window"))
-map('n', "<leader>-", "<cmd>resize -5<CR>", func.getOpts(opts, "Shorter window"))
-map('n', "<leader>,", "<cmd>vertical resize +5<CR>", func.getOpts(opts, "Wider window"))
-map('n', "<leader>.", "<cmd>vertical resize -5<CR>", func.getOpts(opts, "Narrower window"))
+-- Resize splits
+map('n', "<leader>s=", "<cmd>resize +5<CR>", func.getOpts(opts, "Taller split window"))
+map('n', "<leader>s-", "<cmd>resize -5<CR>", func.getOpts(opts, "Shorter split window"))
+map('n', "<leader>s,", "<cmd>vertical resize -5<CR>", func.getOpts(opts, "Wider split window"))
+map('n', "<leader>s.", "<cmd>vertical resize +5<CR>", func.getOpts(opts, "Narrower split window"))
 
+-- Tabs
 map('n', "<leader>wn", "<cmd>tabnew<CR>", func.getOpts(opts, "New tab"))
 map('n', "<leader>wl", "<cmd>tabnext<CR>", func.getOpts(opts, "Next tab"))
 map('n', "<leader>wh", "<cmd>tabprevious<CR>", func.getOpts(opts, "Previous tab"))
@@ -262,6 +264,7 @@ map('n', '<leader>vN', vault.newNote, func.getOpts(opts, "New note in its own fi
 -- Doom's grow and compost; a new seed is the capture's `n` (node; n was "new seed"). The quick edit of the
 -- linked note, which was <leader>vq, was removed.
 map('n', '<leader>vq', vault.capture, func.getOpts(opts, "Quick capture: node (by its :TYPE:), task, link, journal"))
+map('n', '<leader>q', vault.capture, func.getOpts(opts, "Quick capture: seed, task, link, journal, source"))
 -- <leader>a: the org agenda's menu (a week, t every open item, m match, s search), the same as org.nvim's
 -- <leader>ma; it opens floating (lua/plugins/org.lua). The AI was <leader>a and is <leader>l; the LSP was
 -- <leader>l and is <leader>L. (Mia, 2026-11-08.)

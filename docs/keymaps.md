@@ -280,8 +280,8 @@ options and says "Line numbers on/off" once.
 | `<Down>` | Move line down |
 | `<Up>` | Move line up |
 | `J` | Join lines, keep cursor |
-| `K` | Follow link, else LSP hover |
-| `S` | Surround with function |
+| `K` | Follow link (also an org [[url][text]] link), else LSP hover |
+| `S` | Surround: f function, l link |
 | `U` | Redo |
 | `Y` | Yank to end of line |
 | `[<Space>` | Add empty line above cursor |
@@ -319,7 +319,7 @@ options and says "Line numbers on/off" once.
 | `>` | Indent and reselect |
 | `J` | Down 5 lines |
 | `K` | Up 5 lines |
-| `S` | Surround with function |
+| `S` | Surround: f function, l link |
 | `[N` | Select previous sibling node |
 | `[i` | Indent scope top |
 | `[n` | Select previous node |
