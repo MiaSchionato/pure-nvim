@@ -222,6 +222,33 @@ What that found and fixed (the same engine draws the Markdown headings):
   inline virtual text is counted on top of the raw width); big headlines showed the `*bold*` marks
   and the link syntax of their text.
 
+## Coloured highlights (`<leader>H`, `lua/pure/highlights.lua`)
+
+A highlight marks a word or a phrase with a colour behind it. It is an org link of its own type,
+so it is saved in the note and comes back when the note is opened again (Emacs keeps it as a link):
+
+```org
+#+HL: idea #7d82d9 doubt #F99957
+#+HL: #92a593
+
+A [[hl:idea][phrase to remember]], a [[hl:yellow][word]] and [[hl:#92a593][any colour]].
+```
+
+- The render hides the brackets and the target as for any link; the text gets the colour behind it,
+  with black or white text on top by brightness (with the render on or off).
+- The palette: `yellow green blue pink orange purple` (the Ethereal colours; `vim.g.pure_highlights`,
+  a list of `{ name, '#rrggbb' }`, replaces them), plus the note's own `#+HL:` lines, anywhere in the
+  note. A name before a hex code names it; a bare hex code is its own name; a note's name replaces a
+  default of the same name. Changing a colour in `#+HL:` recolours every highlight of that name.
+  A name the palette does not know is drawn with `Search` (group `PureHighlightUnknown`).
+- `<leader>H` in normal mode highlights the word under the cursor, in visual mode the selection (one
+  line; `V` takes the line without its indent). A list asks the colour: the note's, the defaults, or
+  "other colour" (type a hex code). On a highlight it changes the colour or removes it (the text stays).
+- A highlight cannot go over a link (org has no link inside a link) nor hold `[[` / `]]`.
+- `<CR>` on a highlight tells its colour. HTML export writes `<mark style="background-color:...">`,
+  the other backends the plain text (org.nvim `links.types.hl`).
+- `<leader>h` (the word highlight of the search, `<leader>th`) is not this.
+
 ## Pasted links get their name (`lua/pure/urltitle.lua`)
 
 Paste a bare `http(s)` URL into an org or markdown note (a terminal paste: Ctrl+V, Win+V, middle

@@ -24,7 +24,7 @@ local api = vim.api
 
 local ns = api.nvim_create_namespace('pure_hexcolors')
 local on = true
-local groups = {} -- 'rrggbb' -> highlight group, created when first seen
+local groups = {} -- 'bg' / 'fg' .. 'rrggbb' -> highlight group, created when first seen
 
 local function filetypes()
   local list = vim.g.pure_hexcolors_filetypes or { 'markdown', 'org', 'text' }
@@ -57,19 +57,28 @@ function M.spans(line, short)
 end
 
 -- The group for a colour: the colour behind the code and black or white text on top, by brightness.
-local function groupFor(hex)
-  local name = groups[hex]
+-- `style` ('background' | 'foreground') defaults to vim.g.pure_hexcolors_style. Also used by pure/highlights.lua.
+local function groupFor(hex, style)
+  style = style or vim.g.pure_hexcolors_style
+  local fg_only = style == 'foreground'
+  local key = (fg_only and 'fg' or 'bg') .. hex
+  local name = groups[key]
   if name then return name end
-  name = 'PureHex' .. hex
+  name = 'PureHex' .. (fg_only and 'Fg' or '') .. hex
   local r, g, b = tonumber(hex:sub(1, 2), 16), tonumber(hex:sub(3, 4), 16), tonumber(hex:sub(5, 6), 16)
-  if vim.g.pure_hexcolors_style == 'foreground' then
+  if fg_only then
     api.nvim_set_hl(0, name, { fg = tonumber(hex, 16) })
   else
     local bright = (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.5
     api.nvim_set_hl(0, name, { bg = tonumber(hex, 16), fg = bright and 0x000000 or 0xffffff })
   end
-  groups[hex] = name
+  groups[key] = name
   return name
+end
+
+--- The highlight group of 'rrggbb' (no '#'): its colour as background ('background') or as text ('foreground').
+function M.group(hex, style)
+  return groupFor(hex:lower(), style)
 end
 
 local function hasColorServer(buf)

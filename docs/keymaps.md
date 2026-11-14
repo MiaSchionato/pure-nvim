@@ -18,6 +18,7 @@ Generated from the running config; the source is `lua/configs/keymaps.lua`.
 | `<leader>D` | n, x | Delete without yanking |
 | `<leader>E` | n | Explore home |
 | `<leader>h` | n | Toggle word highlight (short form) |
+| `<leader>H` | n, x | Highlight the word / selection in a colour, org notes (on a highlight: change, remove); see [org](org.md#coloured-highlights-leaderh-luapurehighlightslua) |
 | `<leader>in` | n, x | Inspect highlight under cursor |
 | `<leader>n` | x | Run normal command on selection |
 | `<leader>p` | x | Paste over without yanking |
