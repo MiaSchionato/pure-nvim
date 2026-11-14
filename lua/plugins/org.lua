@@ -175,6 +175,9 @@ require('org').setup({
 
   todo_keywords = todo_keywords,
 
+  -- [[hl:colour][text]]: coloured highlights in notes (pure/highlights.lua, <leader>H). Mia, 2026-11-14.
+  links = { types = { hl = require('pure.highlights').linkType } },
+
   -- Align every table when a note is opened (Emacs: #+STARTUP: align); by default
   -- org.nvim aligns only when a table is edited. Tables written by scripts show up straight.
   startup_align_all_tables = true,

@@ -137,6 +137,7 @@ where to change them.
 | `vim.g.pure_fuzzy_ignore_extra` | node_modules, `__pycache__`, `.venv`, `venv`, `site-packages`, `**/pkg/mod` | [fuzzy](fuzzy.md) |
 | `vim.g.pure_dashboard_scale` | `'auto'` | [ui](ui.md) |
 | `vim.g.pure_hexcolors_filetypes` | `{ 'markdown', 'org', 'text' }` | [ui](ui.md) |
+| `vim.g.pure_highlights` | yellow green blue pink orange purple (Ethereal) | [org](org.md) |
 | `vim.g.pure_terminal_shell` | nu, pwsh or powershell on Windows; `'shell'` elsewhere | [ui](ui.md) |
 | `vim.b.pure_indentscope_disable` | off | [editing](editing.md) |
 | `vim.g.pure_inbox` | `'0-Inbox'` | [zettelkasten](zettelkasten.md) |

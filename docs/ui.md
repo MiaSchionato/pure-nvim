@@ -231,6 +231,9 @@ filetypes (default markdown, org, text), `vim.g.pure_hexcolors_style = 'foregrou
 instead of the background, `vim.g.pure_hexcolors_short = true` also draws `#rgb` (off by default:
 it would catch tags like `#bad`).
 
+`require('pure.hexcolors').group('rrggbb', style)` returns the group of a colour; the coloured highlights of
+org notes ([org](org.md)) use it.
+
 ## Highlighted comments
 
 A line with `TODO:` gets a grey background in file buffers.
