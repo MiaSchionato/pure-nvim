@@ -1034,7 +1034,8 @@ local function links(buf, row, text, from, raw_col, mark)
           local bar = desc:find('||', 1, true)
           if bar and bar + 1 < #desc then shown = shown + bar + 1 end
           mark(row, start - 1, { end_col = shown, conceal = '' })
-          mark(row, shown, { end_col = stop - 3, hl_group = 'PureMdLink' })
+          -- [[hl:colour][text]]: a highlight, painted by pure/highlights.lua, not a link colour.
+          if not target:match('^hl:') then mark(row, shown, { end_col = stop - 3, hl_group = 'PureMdLink' }) end
         else
           -- [[Note#Heading||alias]] (no target apart from the text): the same, the alias only.
           local bar = inner:find('||', 1, true)
