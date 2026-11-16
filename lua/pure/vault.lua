@@ -39,9 +39,27 @@ local function warn(msg) vim.notify('Vault: ' .. msg, vim.log.levels.WARN) end
 --- The inbox: the note where new things land (seeds, links, sources with no type), from the vault's root.
 --- The setting vim.g.orgls_inbox (configs.lua); it was seedbed.org from 2026-11-08 to 2026-11-09.
 function M.inbox() return vim.g.orgls_inbox or 'inbox.org' end
---- The nursery: where the sprouts grow (garden/<year>.org until 2026-11-08). Plants, trees and fruits have a
---- note of their own in garden/.
-M.NURSERY = 'garden/nursery.org'
+--- The notes one opens often, by name, from the vault's root: the setting vim.g.pure_vault_notes (configs.lua);
+--- a name it leaves out keeps the default here.
+local NOTE_DEFAULTS = {
+  -- Where the sprouts grow (garden/<year>.org until 2026-11-08). Plants, trees and fruits have a note of
+  -- their own in garden/.
+  nursery  = 'garden/nursery.org',
+  tasks    = 'tasks.org',
+  books    = 'sources/books.org',
+  quotes   = 'sources/quotes.org',
+  concepts = 'sources/concepts.org',
+}
+
+--- The path of the note `name` from the vault's root ('inbox' is M.inbox()), or nil for an unknown name.
+function M.note(name)
+  if name == 'inbox' then return M.inbox() end
+  local notes = vim.g.pure_vault_notes
+  return (type(notes) == 'table' and notes[name]) or NOTE_DEFAULTS[name]
+end
+
+--- The nursery, where grow moves a sprout.
+function M.nursery() return M.note('nursery') end
 
 --- The vault folder (normalized), or nil when no setting names one. No check, no warning.
 function M.dir()
@@ -611,7 +629,7 @@ function M.grow()
   local title = vim.trim(ok and plain or '')
   require('org.todo').change_state(nil, nextStage)
   if state == 'SEED' and sameFile(vim.api.nvim_buf_get_name(0), M.path() .. '/' .. M.inbox()) then
-    if refileTo(M.NURSERY, 'Nursery', nil, NOTE_TODO) then vim.notify(nextStage .. ': moved to the nursery') end
+    if refileTo(M.nursery(), 'Nursery', nil, NOTE_TODO) then vim.notify(nextStage .. ': moved to the nursery') end
   elseif state == 'SPROUT' then
     local rel = ownNote(title)
     if refileTo(rel, title, nil, NOTE_TODO) then vim.notify(nextStage .. ': a note of its own, ' .. rel) end
@@ -709,8 +727,8 @@ function M.routeNode(lines)
       return out, 'archive/compost.org'
     end
     if place == 'nursery' then
-      ensureNote(M.NURSERY, { '#+TITLE: Nursery', unpack(NOTE_TODO) })
-      return out, M.NURSERY
+      ensureNote(M.nursery(), { '#+TITLE: Nursery', unpack(NOTE_TODO) })
+      return out, M.nursery()
     end
     -- A note of its own, named after the title (a new name when one is taken: _2, _3...).
     local title = heading and vim.trim(out[heading]:gsub('^%*+%s+', ''):gsub('^%u+%s+', '', 1)) or ''

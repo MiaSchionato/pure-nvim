@@ -204,6 +204,20 @@ g.pure_vault = '~/Flora'
 -- Default (lsp/orgls.lua): 'inbox.org'.
 g.orgls_inbox = 'inbox.org'
 
+-- The notes of the vault one opens often, by name, relative to the vault. <leader>o_ opens them
+-- (configs/functions.lua, openVaultNote; the inbox is g.orgls_inbox above). nursery is also where
+-- grow (<leader>vn, pure/vault.lua) moves a sprout. A name left out keeps its default.
+-- Default (pure/vault.lua): nursery = 'garden/nursery.org', tasks = 'tasks.org',
+-- books = 'sources/books.org', quotes = 'sources/quotes.org', concepts = 'sources/concepts.org'.
+-- Changed: nothing (written here so the paths are in one place).
+g.pure_vault_notes = {
+  nursery  = 'garden/nursery.org',
+  tasks    = 'tasks.org',
+  books    = 'sources/books.org',
+  quotes   = 'sources/quotes.org',
+  concepts = 'sources/concepts.org',
+}
+
 -- Folder of the templates, inside the vault. Default: 'Templates'.
 -- Changed: the vault's (the org versions of the Markdown templates).
 g.pure_templates = 'archive/templates'
