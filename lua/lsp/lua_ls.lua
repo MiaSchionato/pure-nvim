@@ -18,7 +18,10 @@ return function(lang_settings_group)
   return {
     cmd = { 'lua-language-server' },
     filetypes = { 'lua' },
-    root_markers = {
+    -- One nested list: every marker has the same priority, so the nearest folder holding any of them is the root.
+    -- In a flat list each marker is tried in order up the whole tree, so a stray .luarc.json in the home folder
+    -- beat this repository's .git and the server indexed the whole home (thousands of files; it never finished).
+    root_markers = { {
       '.emmyrc.json',
       '.luarc.json',
       '.luarc.jsonc',
@@ -28,7 +31,7 @@ return function(lang_settings_group)
       'selene.toml',
       'selene.yml',
       '.git',
-    },
+    } },
     settings = {
       Lua = {
         codeLens = { enable = true },
