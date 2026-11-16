@@ -162,7 +162,7 @@ vim.api.nvim_create_autocmd({ 'CursorMoved', 'BufEnter' }, {
     if vim.g.lsp_auto_hover == false then return end
     local win = vim.api.nvim_get_current_win()
     local pos = vim.api.nvim_win_get_cursor(win)
-    hoverTimer:start(vim.g.lsp_auto_hover_delay or 2000, 0, vim.schedule_wrap(function()
+    hoverTimer:start(vim.g.lsp_auto_hover_delay or 500, 0, vim.schedule_wrap(function()
       autoHoverNow(args.buf, win, pos[1], pos[2])
     end))
   end,
