@@ -218,6 +218,18 @@ g.pure_vault_notes = {
   concepts = 'sources/concepts.org',
 }
 
+-- The folders the explore (<leader>e_), find (<leader>f_) and new file (<leader>n_) keys go to, by name
+-- (configs/functions.lua, dir and dirs). '~' is the home folder. The vault is g.pure_vault above, not
+-- here. A name left out keeps its default; a new name is there for keymaps.lua as dirs.<name>.
+-- Default (configs/functions.lua): home = '~', config = '~/.config', nvim = '~/.config/nvim',
+-- projects = '~/Projects'. Changed: nothing (written here so the paths are in one place).
+g.pure_dirs = {
+  home     = '~',
+  config   = '~/.config',
+  nvim     = '~/.config/nvim',
+  projects = '~/Projects',
+}
+
 -- Folder of the templates, inside the vault. Default: 'Templates'.
 -- Changed: the vault's (the org versions of the Markdown templates).
 g.pure_templates = 'archive/templates'

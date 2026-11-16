@@ -183,11 +183,11 @@ map('n', "<leader>bo", "<cmd>%bd|e#<cr>", func.getOpts(opts, "Close all but curr
 --  Explore  (<leader>e)
 -- =============================================================================
 map('n', '<leader>ee', func.explore(here), func.getOpts(opts, "Explore current directory"))
-map('n', '<leader>E' , func.explore(dirs['~']), func.getOpts(opts, "Explore home"))
-map('n', '<leader>e.', func.explore(dirs['.']), func.getOpts(opts, "Explore ~/.config"))
-map('n', '<leader>en', func.explore(dirs.n), func.getOpts(opts, "Explore nvim config"))
-map('n', '<leader>ev', func.explore(dirs.v), func.getOpts(opts, "Explore the vault"))
-map('n', '<leader>ep', func.explore(dirs.p), func.getOpts(opts, "Explore the Projects directory"))
+map('n', '<leader>E' , func.explore(dirs.home), func.getOpts(opts, "Explore home"))
+map('n', '<leader>e.', func.explore(dirs.config), func.getOpts(opts, "Explore ~/.config"))
+map('n', '<leader>en', func.explore(dirs.nvim), func.getOpts(opts, "Explore nvim config"))
+map('n', '<leader>ev', func.explore(dirs.vault), func.getOpts(opts, "Explore the vault"))
+map('n', '<leader>ep', func.explore(dirs.projects), func.getOpts(opts, "Explore the Projects directory"))
 -- oil is required on use: plugins/oil.lua loads after this file, so the module is not there yet.
 map('n', '<leader>eo', function() require('oil').toggle_float() end, func.getOpts(opts, "Oil Float"))
 
@@ -196,10 +196,10 @@ map('n', '<leader>eo', function() require('oil').toggle_float() end, func.getOpt
 -- =============================================================================
 map('n', '<leader>ff', function() fzf.fuzzySearch(file["4p"]()) end, func.getOpts(opts, "Find files, four levels up"))
 map('n', '<leader><leader>', function() fzf.fuzzySearch(file.pp()) end, func.getOpts(opts, "Find files, two levels up"))
-map('n', '<leader>f~', inDir(fzf.fuzzySearch, dirs['~']), func.getOpts(opts, "Find in home"))
-map('n', '<leader>f.', inDir(fzf.fuzzySearch, dirs['.']), func.getOpts(opts, "Find in ~/.config"))
-map('n', '<leader>fn', inDir(fzf.fuzzySearch, dirs.n), func.getOpts(opts, "Find in nvim config"))
-map('n', '<leader>fp', inDir(fzf.fuzzySearch, dirs.p), func.getOpts(opts, "Find in Projects"))
+map('n', '<leader>f~', inDir(fzf.fuzzySearch, dirs.home), func.getOpts(opts, "Find in home"))
+map('n', '<leader>f.', inDir(fzf.fuzzySearch, dirs.config), func.getOpts(opts, "Find in ~/.config"))
+map('n', '<leader>fn', inDir(fzf.fuzzySearch, dirs.nvim), func.getOpts(opts, "Find in nvim config"))
+map('n', '<leader>fp', inDir(fzf.fuzzySearch, dirs.projects), func.getOpts(opts, "Find in Projects"))
 -- <leader>fv is the same picker as <leader>vf (defined with the vault keys below).
 
 map('n', "<leader>fe", function() inDir(fzf.fuzzyExplorer, here())() end,
@@ -226,9 +226,9 @@ map("n", "<leader>nf", function() fzf.NewFile(up(1)) end,
 func.getOpts(opts, "New file, pick the folder (from two levels up)"))
 map("n", "<leader>ne", function() fzf.NewFileIn(here()) end, func.getOpts(opts, "New file here"))
 map("n", "<leader>ns", function() require('pure.scratch').open() end, func.getOpts(opts, "Scratch note"))
-map("n", "<leader>nh", inDir(fzf.NewFileIn, dirs['~']), func.getOpts(opts, "New file in home"))
-map("n", "<leader>n.", inDir(fzf.NewFileIn, dirs['.']), func.getOpts(opts, "New file in ~/.config"))
-map("n", "<leader>nn", inDir(fzf.NewFileIn, dirs.n), func.getOpts(opts, "New file in nvim config"))
+map("n", "<leader>nh", inDir(fzf.NewFileIn, dirs.home), func.getOpts(opts, "New file in home"))
+map("n", "<leader>n.", inDir(fzf.NewFileIn, dirs.config), func.getOpts(opts, "New file in ~/.config"))
+map("n", "<leader>nn", inDir(fzf.NewFileIn, dirs.nvim), func.getOpts(opts, "New file in nvim config"))
 -- A seed in the vault's inbox: the node capture with no :TYPE: (<leader>vq n).
 map("n", "<leader>nv", function() require('pure.vault').newSeed() end, func.getOpts(opts, "New seed in the vault's inbox"))
 map("n", "<leader>nd", function() fzf.NewFolder(here()) end, func.getOpts(opts, "New folder here"))
