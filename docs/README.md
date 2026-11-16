@@ -43,7 +43,9 @@ When a module changes, update its page here in the same commit.
   `LLVM.clangd`; it asks a compiler for the system headers: MSYS2's `gcc` is put on Neovim's own
   PATH by `configs/environment.lua`), `pyright` (Python, `npm install -g pyright`), `bashls` (bash,
   `npm install -g bash-language-server`; it also uses `shellcheck` when installed),
-  `markdown_oxide`, `csharp_ls`, `scls`.
+  `markdown_oxide`, `csharp_ls`, `scls`. `lua_ls` takes as its root the nearest folder holding any of
+  its markers (`.luarc.json`, `.git`, …, all of equal priority), so a `.luarc.json` higher up, e.g. in
+  the home folder, does not make it index the whole home.
 - `lua/configs/environment.lua` – what `:checkhealth` reports about the environment: the locale
   (the shell exports `LANG=C.UTF-8`, which Windows does not know, so Neovim sat in the "C" locale;
   it switches to the system's UTF-8 one), the remote-plugin providers nothing uses (node, perl,
