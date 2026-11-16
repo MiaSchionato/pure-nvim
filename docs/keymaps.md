@@ -80,6 +80,10 @@ See [llm.md](llm.md).
 
 ## `<leader>e` – Explore
 
+The folders of `<leader>e_`, `<leader>f_` and `<leader>n_` (home, `~/.config`, the nvim config, Projects)
+are `vim.g.pure_dirs` in `configs.lua` (defaults in `configs/functions.lua`, `dir`); the vault is
+`vim.g.pure_vault`.
+
 | Key | Mode | What |
 |---|---|---|
 | `<leader>e.` | n | Explore ~/.config |

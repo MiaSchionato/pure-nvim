@@ -725,27 +725,33 @@ end
 --  Helpers of the keymaps (moved from keymaps.lua, the logic as it was)
 -- =============================================================================
 
-local home = vim.uv.os_homedir():gsub("\\", "/") .. "/"
+--- The folders of the explore (<leader>e_), find (<leader>f_) and new file (<leader>n_) keys: the setting
+--- vim.g.pure_dirs (configs.lua); a name it leaves out keeps the default here.
+local DIR_DEFAULTS = {
+  home     = '~',
+  config   = '~/.config',
+  nvim     = '~/.config/nvim',
+  projects = '~/Projects',
+}
 
---- The vault folder with a trailing slash.
-local function vaultDir()
-  local vault = require('pure.vault').dir()
-  return vault and (vault .. '/') or nil
+--- The folder `name`, with a trailing slash, or nil for an unknown name (or no vault). 'vault' is
+--- vim.g.pure_vault (pure/vault.lua); the others come from vim.g.pure_dirs.
+function M.dir(name)
+  if name == 'vault' then
+    local vault = require('pure.vault').dir()
+    return vault and (vault .. '/') or nil
+  end
+  local dirs = vim.g.pure_dirs
+  local dir = (type(dirs) == 'table' and dirs[name]) or DIR_DEFAULTS[name]
+  if not dir then return nil end
+  return vim.fs.normalize(vim.fn.expand(dir)):gsub('/$', '') .. '/'
 end
 
---- One table feeds explore (<leader>e_), find (<leader>f_) and new file
---- (<leader>n_), so each directory is written once instead of three times in
---- three near-identical blocks.
----
---TODO:Make those global variables and put it on configs.lua
-M.dirs = {
-  ['~'] = home,
-  ['.'] = home .. '.config/',
-  n     = home .. '.config/nvim/',
-  -- The vault (org): vim.g.pure_vault (pure/vault.lua).
-  v     = vaultDir,
-  p     = home .. 'Projects',
-}
+--- dirs.<name> is a function giving M.dir(name), for explore, inDir and the like: the setting is read
+--- when the key is pressed, so a changed one counts without a restart, and an unknown name only warns.
+M.dirs = setmetatable({}, {
+  __index = function(_, name) return function() return M.dir(name) end end,
+})
 
 --- A function that opens the vault's note `name` (<leader>o_): 'inbox' is vim.g.orgls_inbox, the others come
 --- from vim.g.pure_vault_notes (configs.lua; defaults in pure/vault.lua). Read when the key is pressed, so a
