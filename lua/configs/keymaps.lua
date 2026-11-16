@@ -467,19 +467,14 @@ map('n', '<leader>oD', '<cmd>Todoist today | overdue<cr>', func.getOpts(opts, "T
 
 -- Vault
 -- The notes of the vault one opens often. The descriptions name what a note is for, not its file, so they stay
--- true when a file is renamed (the paths are in pure/vault.lua and here). (Mia, 2026-11-08.)
-local function openNote(rel)
-  return function()
-    local root = vault.path()
-    if root then vim.cmd('edit ' .. vim.fn.fnameescape(root .. '/' .. (type(rel) == 'function' and rel() or rel))) end
-  end
-end
-map('n', '<leader>oi', function() vim.cmd('edit ' .. vim.fn.fnameescape(dirs.inbox())) end, func.getOpts(opts, "Open the vault's inbox (where new things land)"))
-map('n', '<leader>on', openNote(vault.NURSERY), func.getOpts(opts, "Open the sprouts' note (where young ideas grow)"))
-map('n', '<leader>ot', openNote('tasks.org'), func.getOpts(opts, "Open the tasks"))
-map('n', '<leader>ob', openNote('sources/books.org'), func.getOpts(opts, "Open the books (sources)"))
-map('n', '<leader>oq', openNote('sources/quotes.org'), func.getOpts(opts, "Open the quotes (sources)"))
-map('n', '<leader>oc', openNote('sources/concepts.org'), func.getOpts(opts, "Open the concepts (sources)"))
+-- true when a file is renamed (the paths are in configs.lua: g.orgls_inbox and g.pure_vault_notes). (Mia, 2026-11-08.)
+local openNote = func.openVaultNote
+map('n', '<leader>oi', openNote('inbox'), func.getOpts(opts, "Open the vault's inbox (where new things land)"))
+map('n', '<leader>on', openNote('nursery'), func.getOpts(opts, "Open the sprouts' note (where young ideas grow)"))
+map('n', '<leader>ot', openNote('tasks'), func.getOpts(opts, "Open the tasks"))
+map('n', '<leader>ob', openNote('books'), func.getOpts(opts, "Open the books (sources)"))
+map('n', '<leader>oq', openNote('quotes'), func.getOpts(opts, "Open the quotes (sources)"))
+map('n', '<leader>oc', openNote('concepts'), func.getOpts(opts, "Open the concepts (sources)"))
 
 -- =============================================================================
 --  Debug
