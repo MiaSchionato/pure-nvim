@@ -170,6 +170,10 @@ See [manim.md](manim.md).
 
 ## `<leader>o` – Open
 
+The vault's notes below open by name (`configs/functions.lua` openVaultNote): the inbox is
+`vim.g.orgls_inbox`, the others `vim.g.pure_vault_notes` in `configs.lua` (defaults in `pure/vault.lua`);
+the paths in the table are the defaults.
+
 | Key | Mode | What |
 |---|---|---|
 | `<leader>oi` | n | The vault's inbox, where new things land (`inbox.org`) |

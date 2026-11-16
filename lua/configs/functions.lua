@@ -745,12 +745,24 @@ M.dirs = {
   -- The vault (org): vim.g.pure_vault (pure/vault.lua).
   v     = vaultDir,
   p     = home .. 'Projects',
-  -- The file new notes go to (<leader>oi opens it): vim.g.orgls_inbox (inbox.org here), as in lsp/orgls.lua.
-  inbox = function()
-    local vault = vaultDir()
-    return vault and (vault .. (vim.g.orgls_inbox or 'inbox.org')) or nil
-  end,
 }
+
+--- A function that opens the vault's note `name` (<leader>o_): 'inbox' is vim.g.orgls_inbox, the others come
+--- from vim.g.pure_vault_notes (configs.lua; defaults in pure/vault.lua). Read when the key is pressed, so a
+--- changed setting counts without a restart. Warns when there is no vault folder or no such name.
+function M.openVaultNote(name)
+  return function()
+    local vault = require('pure.vault')
+    local root = vault.path()
+    if not root then return end
+    local rel = vault.note(name)
+    if not rel then
+      vim.notify('Vault: no note named ' .. name .. ' in vim.g.pure_vault_notes', vim.log.levels.WARN)
+      return
+    end
+    vim.cmd('edit ' .. vim.fn.fnameescape(root .. '/' .. rel))
+  end
+end
 
 --- Directory `levels` up from the current file, always with a trailing slash.
 --- A function, not a string: a string would be expanded once at startup and
