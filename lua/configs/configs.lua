@@ -626,8 +626,10 @@ end
 -- -----------------------------------------------------------------------------
 --  Lsp
 -- -----------------------------------------------------------------------------
--- Default auto hover 500 ms
-g.lsp_auto_hover = 1500
+-- How long the cursor rests before the automatic hover shows, in ms (configs/lspConfigs.lua).
+-- Default: 500. Changed: 1500. It was set as g.lsp_auto_hover until 2026-11-16, which only says on / off
+-- (<leader>tk), so the delay stayed at the code's default.
+g.lsp_auto_hover_delay = 1500
 
 -- Remote-plugin providers nothing here uses. Neither a plugin nor this configuration talks to Neovim
 -- through Node, Perl, Python or Ruby hosts (copilot.vim runs its own node server), so the providers
