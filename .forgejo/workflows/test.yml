@@ -1,0 +1,22 @@
+# The tests (tests/run.lua) on every push to main, on the Raspberry Pi's runner (label `linux`, a Debian
+# container), with Neovim nightly. The Windows-only tests run on the Windows machine's runner (windows branch).
+# Forgejo reads this folder instead of .github/workflows (GitHub's single-file Action stays GitHub's).
+name: Tests
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: linux
+    steps:
+      - uses: actions/checkout@v4
+      - name: Neovim nightly
+        run: |
+          arch=$(uname -m); [ "$arch" = aarch64 ] && arch=arm64
+          curl -fsSL "https://github.com/neovim/neovim/releases/download/nightly/nvim-linux-$arch.tar.gz" | tar xz -C /opt
+          ln -sf /opt/nvim-linux-$arch/bin/nvim /usr/local/bin/nvim
+          nvim --version | head -3
+      - name: Tests
+        run: nvim -l tests/run.lua
