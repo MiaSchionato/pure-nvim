@@ -656,3 +656,10 @@ g.copilot_npx_command = 0
 --   ['NvimTree'] = false,
 -- }
 
+
+-- -----------------------------------------------------------------------------
+--  Tests
+-- -----------------------------------------------------------------------------
+-- tests/run.lua starts Neovim with PURE_TEST_SETTINGS naming tests/settings.lua: it points the settings
+-- above that name folders (the vault, the actions...) at the test's own copies. Unset in normal use.
+if vim.env.PURE_TEST_SETTINGS then dofile(vim.env.PURE_TEST_SETTINGS) end

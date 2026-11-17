@@ -210,3 +210,16 @@ Undo history is in `stdpath('state')/undo`; the model picked with `<leader>lm` i
 | `:Notifications` | history of messages |
 | `:PureUpdate` | pull new commits of this configuration, then update the plugins (`u` on the dashboard) |
 | `:Oil [dir]` | file browser |
+
+## Tests
+
+`nvim -l tests/run.lua` runs every `tests/spec/*_spec.lua` (`nvim -l tests/run.lua vault` only those whose
+name holds `vault`). Each spec runs in its own headless Neovim that loads this whole configuration, sealed off
+from the machine: `HOME` is a temporary folder holding fresh copies of `tests/fixtures/` (example vaults),
+the data folder is `tests/.cache/data` (no tokens; the plugins are kept there between runs), org.nvim's
+session pipe is named for a `pure-test` user, and `pure.protonpass` is a stub, so no secret is read and
+nothing reaches Todoist or Google. `tests/settings.lua` points the vault settings at the copies (run at the
+end of `configs.lua` when `PURE_TEST_SETTINGS` is set). The first line printed is the Neovim version.
+
+A spec calls `T.test(name, fn)`; `tests/helper.lua` lists the helpers (`T.eq`, `T.edit`, `T.answers`...).
+Before each test the fixture copies are made again and every buffer is wiped.
