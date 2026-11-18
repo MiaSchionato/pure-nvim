@@ -254,3 +254,17 @@ The `<leader>v` keys in a vault with `format = 'md'` work on the Markdown its Ob
 - `<leader>vf` find: a note is its file name, its aliases those of the front matter. `<leader>vJ` today's
   heading in the journal. `<leader>vr` rename, `<leader>vb` backlinks: `pure/notes.lua`. `<leader>vN` a new
   note at the root. The agenda is org's only.
+
+### Renamed headings: the vault's Obsidian fixes their links (`pure/vault/obsidian.lua`)
+
+A heading renamed or moved by hand keeps its links through its `id::` line, but the rewrite is the vault's
+Obsidian's (`files/config/scripts/headlinks.js` there): one implementation, not two. Obsidian open sees a note
+saved here at once. With Obsidian closed, a save that changes a heading with an id is noted, and
+`:VaultFixLinks`, or quitting Neovim, starts Obsidian on the vault, waits until it has written its state file
+(the end of its start: the links are fixed; at most a minute) and closes it again (only when it was started
+here). grow, compost and move rewrite the links of what they move themselves, and tell the state file, so
+they start nothing. The vault's entry names Obsidian's vault and its state file:
+
+```lua
+md = { dir = '~/folder', format = 'md', obsidian = { vault = 'Name', state = 'files/config/headlinks.json' } },
+```

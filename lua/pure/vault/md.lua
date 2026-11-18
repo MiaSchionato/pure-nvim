@@ -276,7 +276,13 @@ local function moveOut(h, rel, block)
   vim.api.nvim_buf_set_lines(h.buf, h.sec.line - 1, h.sec.last, false, {})
   vim.api.nvim_buf_call(h.buf, function() vim.cmd('silent write') end)
   appendTo(rel, toTopLevel(block, h.sec.level))
-  return relink(h.rel, rel, h.sec.title)
+  local n = relink(h.rel, rel, h.sec.title)
+  -- The links are rewritten: the vault's Obsidian must not take the move for one of its own to fix.
+  pcall(function()
+    local obsidian = require('pure.vault.obsidian')
+    obsidian.moved(obsidian.idsOf(block), rel)
+  end)
+  return n
 end
 
 --- Only the heading's tag line is rewritten (the rest of the section, the cursor too, stays as it is).

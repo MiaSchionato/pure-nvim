@@ -209,6 +209,7 @@ Undo history is in `stdpath('state')/undo`; the model picked with `<leader>lm` i
 | `:TodoistToken` | set the Todoist token (hidden input) |
 | `:ZettelVault` | choose the Obsidian vault folder |
 | `:VaultSync` | save, commit, pull, then push the vault ([zettelkasten](zettelkasten.md)) |
+| `:VaultFixLinks` | have the vault's Obsidian fix the links to renamed headings (starts it when closed, then closes it) |
 | `:Notifications` | history of messages |
 | `:PureUpdate` | pull new commits of this configuration, then update the plugins (`u` on the dashboard) |
 | `:Oil [dir]` | file browser |

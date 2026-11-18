@@ -113,6 +113,15 @@ function H.main()
   _G.T = H
   -- What the configuration left for later (vim.schedule, as the insert mode keys) runs first.
   vim.wait(200, function() return false end)
+  -- The vault's Obsidian is never started from a test (pure/vault/obsidian.lua): a stub that is always open,
+  -- which a spec may replace.
+  local okO, obsidian = pcall(require, 'pure.vault.obsidian')
+  local function noObsidian()
+    if not okO then return end
+    obsidian.sys = { running = function() return true end, open = function() end, close = function() end }
+    obsidian.pending = {}
+  end
+  noObsidian()
   local out = {}
   local ok, err = xpcall(dofile, debug.traceback, vim.env.PURE_TEST_SPEC)
   if not ok then
@@ -132,6 +141,7 @@ function H.main()
     end
   end
   vim.fn.writefile(out, vim.env.PURE_TEST_RESULT)
+  noObsidian() -- before VimLeavePre, which would ask Obsidian to fix what is pending
   vim.cmd('qa!')
 end
 

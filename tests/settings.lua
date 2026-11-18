@@ -6,7 +6,7 @@ local g = vim.g
 -- The two example vaults: org (the default) and Markdown.
 g.pure_vaults = {
   org = { dir = home .. '/vault-org', format = 'org' },
-  md = { dir = home .. '/vault-md', format = 'md' },
+  md = { dir = home .. '/vault-md', format = 'md', obsidian = { vault = 'test-vault' } },
 }
 g.pure_vault_default = 'org'
 g.pure_vault = nil
