@@ -588,8 +588,9 @@ g.pure_indentscope_disable = false
 --  Terminal
 -- -----------------------------------------------------------------------------
 -- The shell. Unset (default): on Windows the first of nu, pwsh, powershell
--- found; elsewhere 'shell'.
-g.pure_terminal_shell = 'nu.exe'
+-- found; elsewhere 'shell'. Changed: Nushell on Windows; the default elsewhere (nu.exe made the
+-- floating terminal fail on Linux, found by the tests on 2026-11-18).
+g.pure_terminal_shell = vim.fn.has('win32') == 1 and 'nu.exe' or nil
 
 -- The bare floating terminal (<leader>of): <Esc> leaves terminal mode at once,
 -- and a second <Esc> within this many milliseconds closes it. <A-Esc> sends a
