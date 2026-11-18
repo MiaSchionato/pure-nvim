@@ -398,8 +398,9 @@ g.pure_todoist_archive_format = 'md'
 
 -- Write the tasks of each ```todoist block into its note as text, refreshed
 -- every `interval` minutes. false (default): drawn, not written.
--- Changed: every 10 minutes.
-g.pure_todoist_sync = { interval = 10 }
+-- Changed: nothing since 2026-11-18 (Mia): it wrote the tasks into the periodic notes of the Markdown vault,
+-- whose blocks the vault's Obsidian (Todoist plugin) draws itself. It was every 10 minutes.
+g.pure_todoist_sync = false
 
 -- A synced list starts folded: 'subtasks' (each task with subtasks as one
 -- line), 'list' (the whole list as one line) or false (nothing folded).
