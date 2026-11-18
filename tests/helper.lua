@@ -130,8 +130,10 @@ function H.main()
   end
   for _, t in ipairs(tests) do
     reset()
+    local started = vim.uv.hrtime()
     local passed, msg = xpcall(t.fn, debug.traceback)
-    out[#out + 1] = (passed and 'ok - ' or 'not ok - ') .. t.name
+    local secs = (vim.uv.hrtime() - started) / 1e9
+    out[#out + 1] = (passed and 'ok - ' or 'not ok - ') .. t.name .. (secs > 2 and ('  (%.1fs)'):format(secs) or '')
     if not passed then
       for l in tostring(msg):gmatch('[^\n]+') do
         if not l:find('tests/helper.lua', 1, true) and not l:find('[C]: in function', 1, true) then
