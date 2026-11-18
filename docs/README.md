@@ -103,7 +103,9 @@ where to change them.
 
 | Setting | Default | Page |
 |---|---|---|
-| `vim.g.pure_vault` | asked on first start (set in configs.lua; also read by `pure/vault.lua`, `plugins/org.lua`, `lsp/orgls.lua`) | [zettelkasten](zettelkasten.md) |
+| `vim.g.pure_vaults` | none (one entry per vault: `dir`, `format` org or md, `notes` by name without extension, `readonly`; read by `pure/vault.lua` and through it `plugins/org.lua`, `lsp/orgls.lua`, `pure/zettelkasten.lua`, `pure/notes.lua`) | [zettelkasten](zettelkasten.md) |
+| `vim.g.pure_vault_default` | the first by name (the vault used outside every vault's folder) | [zettelkasten](zettelkasten.md) |
+| `vim.g.pure_vault` | the older single-vault setting (an org vault), used when `pure_vaults` is unset; else asked on first start | [zettelkasten](zettelkasten.md) |
 | `vim.g.pure_templates` | `'Templates'` (`'archive/templates'` in configs.lua) | [zettelkasten](zettelkasten.md) |
 | `vim.g.pure_folder_templates` | `{}` | [notes](notes.md) |
 | `vim.g.pure_outside_folders` | `{}` (name = folder outside the vault, or `{ dir, cipher, idle, fido2 }` for an encrypted one) | [notes](notes.md) |
@@ -114,7 +116,7 @@ where to change them.
 | `vim.g.pure_daily_on_start` | off (the daily alone; older) | [zettelkasten](zettelkasten.md) |
 | `vim.g.pure_todoist_confirm` | `'all'` | [todoist](todoist.md) |
 | `vim.g.pure_todoist_archive` | off (`'archive/Todoist/'` in configs.lua) | [todoist](todoist.md) |
-| `vim.g.pure_todoist_archive_format` | `'md'` (`'org'` in configs.lua) | [todoist](todoist.md) |
+| `vim.g.pure_todoist_archive_format` | `'md'` | [todoist](todoist.md) |
 | `vim.g.pure_todoist_sync` | off (`{ interval = 10 }` in configs.lua) | [todoist](todoist.md) |
 | `vim.g.pure_todoist_fold` | `'subtasks'` | [todoist](todoist.md) |
 | `vim.g.pure_calendar_cell_width` | `25` (grid 197 columns) | [calendar](calendar.md) |
@@ -207,6 +209,20 @@ Undo history is in `stdpath('state')/undo`; the model picked with `<leader>lm` i
 | `:TodoistToken` | set the Todoist token (hidden input) |
 | `:ZettelVault` | choose the Obsidian vault folder |
 | `:VaultSync` | save, commit, pull, then push the vault ([zettelkasten](zettelkasten.md)) |
+| `:VaultFixLinks` | have the vault's Obsidian fix the links to renamed headings (starts it when closed, then closes it) |
 | `:Notifications` | history of messages |
 | `:PureUpdate` | pull new commits of this configuration, then update the plugins (`u` on the dashboard) |
 | `:Oil [dir]` | file browser |
+
+## Tests
+
+`nvim -l tests/run.lua` runs every `tests/spec/*_spec.lua` (`nvim -l tests/run.lua vault` only those whose
+name holds `vault`). Each spec runs in its own headless Neovim that loads this whole configuration, sealed off
+from the machine: `HOME` is a temporary folder holding fresh copies of `tests/fixtures/` (example vaults),
+the data folder is `tests/.cache/data` (no tokens; the plugins are kept there between runs), org.nvim's
+session pipe is named for a `pure-test` user, and `pure.protonpass` is a stub, so no secret is read and
+nothing reaches Todoist or Google. `tests/settings.lua` points the vault settings at the copies (run at the
+end of `configs.lua` when `PURE_TEST_SETTINGS` is set). The first line printed is the Neovim version.
+
+A spec calls `T.test(name, fn)`; `tests/helper.lua` lists the helpers (`T.eq`, `T.edit`, `T.answers`...).
+Before each test the fixture copies are made again and every buffer is wiped.

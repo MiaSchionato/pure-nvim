@@ -1,0 +1,22 @@
+:PROPERTIES:
+:ID:       aaaaaaaa-0000-4000-8000-000000000001
+:END:
+#+TITLE: Inbox
+#+TODO: SEED(s) SPROUT(p) PLANT(l) TREE(r) FRUIT(f) | COMPOST(c)
+
+* SEED First seed :tag:
+:PROPERTIES:
+:ID:       aaaaaaaa-0000-4000-8000-000000000011
+:CREATED:  [2026-10-20 Tue 20:20]
+:END:
+Body of the first seed.
+** A child of the first seed
+* SEED Second seed
+:PROPERTIES:
+:CREATED:  [2026-10-21 Wed 09:00]
+:END:
+* Book with a type
+:PROPERTIES:
+:TYPE:     books
+:AUTHOR:   Someone
+:END:

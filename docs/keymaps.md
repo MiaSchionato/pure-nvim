@@ -9,10 +9,6 @@ Generated from the running config; the source is `lua/configs/keymaps.lua`.
 
 | Key | Mode | What |
 |---|---|---|
-| `<leader>+` | n | Taller window |
-| `<leader>,` | n | Wider window |
-| `<leader>-` | n | Shorter window |
-| `<leader>.` | n | Narrower window |
 | `<leader><leader>` | n | Find files, two levels up |
 | `<leader>a` | n | Agenda: the org agenda's menu (`a` week, `t` open items, `m` match, `s` search), floating; same as `<leader>ma`. Until 2026-11-08 `<leader>a` was the AI (now `<leader>l`) and `<leader>l` the LSP (now `<leader>L`) |
 | `<leader>D` | n, x | Delete without yanking |
@@ -23,8 +19,11 @@ Generated from the running config; the source is `lua/configs/keymaps.lua`.
 | `<leader>n` | x | Run normal command on selection |
 | `<leader>p` | x | Paste over without yanking |
 | `<leader>p` | n | Paste from clipboard |
+| `<leader>q` | n | Quick capture: the template menu (same as `<leader>vq`) |
 | `<leader>r` | n | Rename word under cursor |
+| `<leader>r` | x | Rename the selection in the whole buffer |
 | `<leader>s` | x | Substitute inside selection |
+| `<leader>T` | n | TODO state menu (short form of `<leader>vt`) |
 | `<leader>u` | n | Undotree |
 | `<leader>v` | x | Substitute, very magic |
 | `<leader>y` | n, x | Yank to clipboard |
@@ -81,14 +80,15 @@ See [llm.md](llm.md).
 ## `<leader>e` – Explore
 
 The folders of `<leader>e_`, `<leader>f_` and `<leader>n_` (home, `~/.config`, the nvim config, Projects)
-are `vim.g.pure_dirs` in `configs.lua` (defaults in `configs/functions.lua`, `dir`); the vault is
-`vim.g.pure_vault`.
+are `vim.g.pure_dirs` in `configs.lua` (defaults in `configs/functions.lua`, `dir`); the vault is the
+current one of `vim.g.pure_vaults`.
 
 | Key | Mode | What |
 |---|---|---|
 | `<leader>e.` | n | Explore ~/.config |
 | `<leader>ee` | n | Explore current directory |
 | `<leader>en` | n | Explore nvim config |
+| `<leader>ep` | n | Explore the Projects directory |
 | `<leader>eo` | n | Oil Float |
 | `<leader>ev` | n | Explore Obsidian vault |
 
@@ -107,8 +107,10 @@ are `vim.g.pure_dirs` in `configs.lua` (defaults in `configs/functions.lua`, `di
 | `<leader>fj` | n | Jump list |
 | `<leader>ft` | n | Every `TODO:` of the repo (or the folder), searchable, with preview |
 | `<leader>f"` | n | Registers (Enter: make it the register p pastes) |
+| `<leader>f'` | n | Registers (the same as `<leader>f"`) |
 | `<leader>fl` | n | Notes linking here (backlinks, also <leader>vb) |
 | `<leader>fn` | n | Find in nvim config |
+| `<leader>fp` | n | Find in Projects |
 | `<leader>fv` | n | Find a note, heading or alias in the vault (same as `<leader>vf`) |
 | `<leader>f~` | n | Find in home |
 
@@ -174,9 +176,9 @@ See [manim.md](manim.md).
 
 ## `<leader>o` – Open
 
-The vault's notes below open by name (`configs/functions.lua` openVaultNote): the inbox is
-`vim.g.orgls_inbox`, the others `vim.g.pure_vault_notes` in `configs.lua` (defaults in `pure/vault.lua`);
-the paths in the table are the defaults.
+The vault's notes below open by name (`configs/functions.lua` openVaultNote): the `notes` of the vault's
+entry in `vim.g.pure_vaults` (`configs.lua`; defaults in `pure/vault.lua`, without extension: the vault's
+format adds it); the paths in the table are the defaults of an org vault.
 
 | Key | Mode | What |
 |---|---|---|
@@ -189,7 +191,8 @@ the paths in the table are the defaults.
 | `<leader>of` | n | Toggle the floating terminal (was `<leader>ot`) |
 | `<leader>oC` | n | Toggle the Claude terminal (was `<leader>oc`) |
 | `<leader>om` | n | New tab in terminal mode |
-| `<leader>od` / `<leader>oD` | n | Todoist: all tasks / today and overdue |
+| `<leader>od` | n | Todoist: all tasks |
+| `<leader>oD` | n | Todoist: today and overdue |
 
 The descriptions say what a note is for, not its file name, so they stay true when a file is renamed.
 
@@ -197,8 +200,18 @@ The descriptions say what a note is for, not its file name, so they stay true wh
 
 | Key | Mode | What |
 |---|---|---|
-| `<leader>sh` | n | Split horizontally |
-| `<leader>sv` | n | Split vertically |
+| `<leader>sh` | n | Focus split window left |
+| `<leader>sj` | n | Focus split window below |
+| `<leader>sk` | n | Focus split window above |
+| `<leader>sl` | n | Focus split window right |
+| `<leader>sn` | n | New split horizontally |
+| `<leader>sv` | n | New split vertically |
+| `<leader>sq` | n | Close split window |
+| `<leader>so` | n | Close all other split windows |
+| `<leader>s=` | n | Taller split window |
+| `<leader>s-` | n | Shorter split window |
+| `<leader>s,` | n | Wider split window |
+| `<leader>s.` | n | Narrower split window |
 
 ## `<leader>t` – Toggles
 
@@ -262,10 +275,6 @@ options and says "Line numbers on/off" once.
 | `<leader>wn` | n | New tab |
 | `<leader>wo` | n | Close other tabs |
 | `<leader>wq` | n | Close tab |
-| `<leader>wvh` | n | Focus window left |
-| `<leader>wvj` | n | Focus window below |
-| `<leader>wvk` | n | Focus window above |
-| `<leader>wvl` | n | Focus window right |
 
 ## `<leader>z` – Folds
 
@@ -369,6 +378,5 @@ options and says "Line numbers on/off" once.
 |---|---|
 | `<Esc>` then `<Esc>` again (250 ms) | Leave terminal mode, then close the floating terminal (not the one in a tab); `<A-Esc>` sends a real `<Esc>`. See [ui.md](ui.md) |
 | `<Esc><Esc>` | Close a floating terminal that runs a command |
-| `<S-Esc>` | Leave terminal mode |
 
 Text objects (`is`, `ic`, `iq`, `ii`, `in` …): see [editing.md](editing.md).

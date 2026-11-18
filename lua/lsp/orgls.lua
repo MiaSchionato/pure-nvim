@@ -42,10 +42,19 @@ local style = require('pure.pickerstyle')
 -- =============================================================================
 local function warn(msg) vim.notify('orgls: ' .. msg, vim.log.levels.WARN) end
 
---- The vault folder, normalized: vim.g.orgls_vault, else the setting this config already has (vim.g.pure_vault).
---- A separate project drops the second one.
+--- The vault folder, normalized: vim.g.orgls_vault, else the org vault of this config (pure/vault.lua, from
+--- vim.g.pure_vaults). A separate project drops the second one.
 local function vaultDir()
-  return vim.fs.normalize(vim.fn.expand(vim.g.orgls_vault or vim.g.pure_vault or ''))
+  if vim.g.orgls_vault then return vim.fs.normalize(vim.fn.expand(vim.g.orgls_vault)) end
+  local ok, vault = pcall(require, 'pure.vault')
+  return (ok and vault.dir('org')) or ''
+end
+
+--- The inbox, from the vault: vim.g.orgls_inbox, else the org vault's inbox (pure/vault.lua).
+local function inboxRel()
+  if vim.g.orgls_inbox then return vim.g.orgls_inbox end
+  local ok, vault = pcall(require, 'pure.vault')
+  return (ok and vault.inbox('org')) or 'inbox.org'
 end
 
 --- The vault folder, or nil (with a warning) when it is not there.
@@ -397,7 +406,7 @@ end
 local function createSeed(title)
   local root = M.path()
   if not root then return nil end
-  local inbox = root .. '/' .. (vim.g.orgls_inbox or 'inbox.org')
+  local inbox = root .. '/' .. inboxRel()
   local buf = vim.fn.bufnr(inbox)
   local lines
   if buf ~= -1 and api.nvim_buf_is_loaded(buf) then

@@ -829,11 +829,22 @@ local function privateFolders()
   if type(list) ~= 'table' then return {} end
   local ok, zet = pcall(require, 'pure.zettelkasten')
   local vault = ok and zet.vaultPath() or nil
+  -- A name that is not a path is a folder of the vault: of every vault of vim.g.pure_vaults (pure/vault.lua),
+  -- so a private folder stays private whichever vault holds it.
+  local roots = { vault }
+  local okv, vaults = pcall(require, 'pure.vault')
+  for _, v in ipairs(okv and vaults.list() or {}) do
+    if not vim.tbl_contains(roots, v.dir) then roots[#roots + 1] = v.dir end
+  end
   local out = {}
   for _, p in ipairs(list) do
     local absolute = p:match('^%a:[/\\]') or p:match('^[/\\~]')
-    local abs = absolute and p or (vault and (vault .. '/' .. p))
-    if abs then table.insert(out, { key = dirKey(abs), rel = (p:gsub('[/\\]+$', '')) }) end
+    local rel = (p:gsub('[/\\]+$', ''))
+    if absolute then
+      table.insert(out, { key = dirKey(p), rel = rel })
+    else
+      for _, root in ipairs(roots) do table.insert(out, { key = dirKey(root .. '/' .. p), rel = rel }) end
+    end
   end
   return out, vault
 end
