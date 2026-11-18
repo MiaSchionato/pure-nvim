@@ -283,6 +283,18 @@ local function shortest(idx, rel, from)
   return (rel:gsub('%.md$', ''))
 end
 
+--- For pure/vault/md.lua (moving a heading keeps its links): the note a link target leads to from the note
+--- `from` (relative paths of the vault), and the link text for `rel` seen from `from`. `fresh` reads the
+--- vault again (a note was just made).
+function M.resolveLink(target, from, fresh)
+  local idx = M.index(fresh)
+  return resolve(idx, target, from)
+end
+function M.linkText(rel, from, fresh)
+  local idx = M.index(fresh)
+  return idx and shortest(idx, rel, from) or (rel:gsub('%.md$', ''))
+end
+
 -- -----------------------------------------------------------------------------
 --  Following links
 -- -----------------------------------------------------------------------------

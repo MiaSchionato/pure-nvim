@@ -1,0 +1,10 @@
+#+title: Old plant
+#+TODO: SEED(s) SPROUT(p) PLANT(l) TREE(r) FRUIT(f) | COMPOST(c)
+#+TODO: TODO(t) NEXT(n) DOING(d) WAITING(w@) | DONE(x!) CANCELLED(c@)
+
+* PLANT Old plant
+:PROPERTIES:
+:ID:       aaaaaaaa-0000-4000-8000-000000000031
+:ROAM_ALIASES: "Ancient plant"
+:END:
+Links to [[id:aaaaaaaa-0000-4000-8000-000000000011][First seed]].

@@ -1,0 +1,10 @@
+#+TITLE: Nursery
+#+TODO: SEED(s) SPROUT(p) PLANT(l) TREE(r) FRUIT(f) | COMPOST(c)
+#+TODO: TODO(t) NEXT(n) DOING(d) WAITING(w@) | DONE(x!) CANCELLED(c@)
+
+* SPROUT A sprout to grow :idea:
+:PROPERTIES:
+:ID:       aaaaaaaa-0000-4000-8000-000000000021
+:CREATED:  [2026-09-21 Mon]
+:END:
+What the sprout is about.

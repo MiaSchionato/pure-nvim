@@ -1,7 +1,7 @@
 # Org notes (`lua/plugins/org.lua`)
 
-[org.nvim](https://github.com/xheisenbugx/org.nvim) on the vault
-(`vim.g.pure_vault`), set up to behave like the Doom Emacs of the same vault. It is
+[org.nvim](https://github.com/xheisenbugx/org.nvim) on the org vault
+(the entry of `vim.g.pure_vaults` with `format = 'org'`; `pure/vault.lua`), set up to behave like the Doom Emacs of the same vault. It is
 independent of the Markdown modules (`notes`, `zettelkasten`): those act on
 `markdown` buffers, org.nvim on `org` ones. Neovim 0.11 or newer.
 
@@ -419,5 +419,6 @@ The module has no side effects when loaded, so it can be required next to `pure.
 `pure/links.lua` runs at load (the `[[` menu, alias saving) is `require('lsp.orgls')._module.setup()`, **not
 called yet**: `pure.links` stays the one in use for it. Settings: `vim.g.orgls_vault` (the vault folder; the
 personal default lives in one function, `vaultDir`), `vim.g.orgls_inbox`, `vim.g.orgls_new_keyword`.
-`pure/vault.lua` also reads `vim.g.pure_vault_notes` (the notes `<leader>o_` opens by name; `nursery` is
-where grow moves a sprout; `vault.note(name)`, `vault.nursery()`).
+Without `vim.g.orgls_vault` / `vim.g.orgls_inbox` it asks `pure/vault.lua`: `vault.dir('org')`,
+`vault.inbox('org')`. The notes `<leader>o_` opens by name are the `notes` of the vault's entry in
+`vim.g.pure_vaults` (`nursery` is where grow moves a sprout; `vault.note(name, 'org')`, `vault.nursery()`).

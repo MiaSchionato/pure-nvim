@@ -10,12 +10,38 @@ Asked for on the first start (Yes / Later / Never ask) and remembered in
 `stdpath('data')/obsidian_vault`, outside the repository. In order of
 precedence:
 
-1. `vim.g.pure_vault` in the config;
-2. the `OBSIDIAN_VAULT` environment variable;
-3. the saved answer.
+1. the Markdown vault of `vim.g.pure_vaults` (the entry with `format = 'md'`);
+2. `vim.g.pure_vault`, the older single-vault setting;
+3. the default vault of `vim.g.pure_vaults` (`vim.g.pure_vault_default`);
+4. the `OBSIDIAN_VAULT` environment variable;
+5. the saved answer.
 
-In this configuration it is an org vault (`g.pure_vault` in `configs.lua`),
-the same folder as [org.md](org.md); until 2026-11-05 it was a Markdown vault.
+## Several vaults (`vim.g.pure_vaults`, `pure/vault.lua`)
+
+One entry per vault, in `configs.lua`:
+
+```lua
+g.pure_vaults = {
+  name = {
+    dir = '~/folder',
+    format = 'org',            -- or 'md'
+    notes = { inbox = 'inbox', nursery = 'garden/nursery' },  -- without extension
+    readonly = false,          -- true: nothing writes into it
+  },
+}
+g.pure_vault_default = 'name'  -- the vault outside every vault's folder
+```
+
+A command (`<leader>v_`, `<leader>o_`) works in the vault holding the current file, else in the default
+one. The notes are named without extension (the format adds `.org` or `.md`; a name ending in `/` is a
+folder) and a name left out keeps its default: `inbox`, `garden/nursery`, `tasks`, `journal`,
+`archive/compost`, `sources/books`, `sources/quotes`, `sources/concepts`, the folders `garden/`, `sources/`
+and `archive/trash/`. In a read-only vault find, grep and open work; grow, compost, move, capture, rename and
+delete say it is read-only. What is a format's own is in `pure/vault/org.lua` (org.nvim, `:ID:` links) and
+`pure/vault/md.lua`. A folder of `vim.g.pure_llm_private` named without a path is private in every vault.
+
+In this configuration the vault in use is a Markdown vault (`g.pure_vaults.md`, read by its Obsidian too),
+and the org vault ([org.md](org.md)) is kept read-only next to it (`g.pure_vaults.org`); it was the one in use from 2026-11-05 to 2026-11-18.
 The templates, periodic notes and trash below were made for the Markdown vault;
 with the org one their automatic parts are off (`pure_periodic_on_start = {}`,
 `pure_trash_cleanup = false`).
@@ -195,3 +221,50 @@ It never touches a note open in that Neovim, never runs in `--headless`
 Following, completing and renaming links, and backlinks, are in
 [notes.md](notes.md) (`pure/notes.lua`). A new note made from `[[Title]]`
 is named `Title.md` (`zettelkasten.noteId`).
+
+## A Markdown vault (`pure/vault/md.lua`)
+
+The `<leader>v` keys in a vault with `format = 'md'` work on the Markdown its Obsidian reads (the vault's
+`garden.js` and `capture.js` are the same commands there):
+
+- **The atom is a heading.** Its state is a tag on the line right under it (`#seed`, `#sprout`, `#plant`,
+  `#tree`, `#fruit`, `#compost`; other tags stay on that line), then `key:: value` properties, then the body.
+  An `id::` line under a linked heading is never changed or copied: it moves with its heading.
+- `<leader>vn` grow: a `#seed` of the inbox becomes a `#sprout` and moves to the nursery; a `#sprout` becomes a
+  `#plant` in a note of its own (`garden/<title>.md`); a plant becomes a tree in place.
+- `<leader>vc` compost (asks, No by default): a seed or sprout moves to `archive/compost.md`; a plant, tree or
+  fruit stays in its note, only `#compost`.
+- `<leader>vm` move: to the note of `sources/` its `type::` names, else one picked in the list.
+- A heading moved by these takes its links along: every `[[note#Heading]]` of the vault (embeds, `|text`
+  kept) is rewritten to its new note. A heading renamed by hand is the vault's Obsidian's (`headlinks.js`).
+- `<leader>vt` the state menu: on a heading the six garden states and "no state"; on a checkbox the six task
+  states.
+- **Tasks are checkboxes** of the Tasks plugin. In a note of a Markdown vault the checkbox keys (`<leader>x`,
+  the state menu, a selection) write its dates: done adds ` ✅ <today>`, cancelled ` ❌ <today>`, leaving them
+  takes the date away (before a ` ^block` id; `⏳ 📅 ➕ 🔁` untouched). The Todoist list and Markdown outside the
+  vaults keep only the box.
+- `<leader>vq` captures, in a floating draft (`:w` or `<C-c><C-c>` stores, `<C-c><C-k>` drops; a draft left
+  empty is dropped): `n` node (`type::` says where it goes: seed or none the inbox, sprout the nursery, plant /
+  tree / fruit a note of its own, compost the compost note, the name of a note of `sources/` that note; empty
+  properties are dropped, `created::` added), `t` task and `T` task + deadline (a checkbox in the tasks note:
+  `- [ ] title ➕ <today> ⏳ <scheduled> 📅 <deadline>`, dates in words: today, amanhã, domani, fri, +3d,
+  2026-11-20; a time goes in an indented `scheduled::` line, the body indented under the task), `l` link (the
+  clipboard's address, to the inbox), `j` journal (`journal.md`: `# year` / `## YYYY-MM Month` /
+  `### YYYY-MM-DD Weekday`, made when missing, the entry at the end of its day).
+- `<leader>vf` find: a note is its file name, its aliases those of the front matter. `<leader>vJ` today's
+  heading in the journal. `<leader>vr` rename, `<leader>vb` backlinks: `pure/notes.lua`. `<leader>vN` a new
+  note at the root. The agenda is org's only.
+
+### Renamed headings: the vault's Obsidian fixes their links (`pure/vault/obsidian.lua`)
+
+A heading renamed or moved by hand keeps its links through its `id::` line, but the rewrite is the vault's
+Obsidian's (`files/config/scripts/headlinks.js` there): one implementation, not two. Obsidian open sees a note
+saved here at once. With Obsidian closed, a save that changes a heading with an id is noted, and
+`:VaultFixLinks`, or quitting Neovim, starts Obsidian on the vault, waits until it has written its state file
+(the end of its start: the links are fixed; at most a minute) and closes it again (only when it was started
+here). grow, compost and move rewrite the links of what they move themselves, and tell the state file, so
+they start nothing. The vault's entry names Obsidian's vault and its state file:
+
+```lua
+md = { dir = '~/folder', format = 'md', obsidian = { vault = 'Name', state = 'files/config/headlinks.json' } },
+```

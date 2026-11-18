@@ -1,0 +1,6 @@
+#+TITLE: Books
+
+* A book already here
+:PROPERTIES:
+:TYPE:     books
+:END:

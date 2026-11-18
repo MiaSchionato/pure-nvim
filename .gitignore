@@ -3,3 +3,6 @@ nvim-pack-lock.json
 opt/
 /pure.lua
 Claude.md
+
+# Plugins and data of the test runs (tests/run.lua)
+tests/.cache/

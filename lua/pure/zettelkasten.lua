@@ -289,10 +289,17 @@ end
 --- may not exist (yet).
 --- @return string|nil
 local function configuredVault()
+  -- The Markdown vault of vim.g.pure_vaults (pure/vault.lua), then the older single setting, then the default
+  -- vault of vim.g.pure_vaults, then the answers below.
+  local ok, vaults = pcall(require, 'pure.vault')
+  local md = ok and vaults.configuredDir('md') or nil
+  if md then return md end
   local configured = vim.g.pure_vault
   if configured and configured ~= '' then
     return vim.fs.normalize(vim.fn.expand(configured))
   end
+  local default = ok and vaults.configuredDir() or nil
+  if default then return default end
 
   local env = vim.env.OBSIDIAN_VAULT
   if env and env ~= '' then

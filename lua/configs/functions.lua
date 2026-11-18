@@ -346,6 +346,18 @@ function M.gitDiffToggle(from, to)
   end
 end
 
+--- In a note of a Markdown vault the checkbox states carry the dates of the Tasks plugin: done adds " ✅ <today>",
+--- cancelled " ❌ <today>", leaving them takes the date away (pure/vault/md.lua taskLine). Elsewhere (the Todoist
+--- list, Markdown outside the vaults) only the box changes.
+local function withState(line, prefix, state, rest)
+  local ok, md = pcall(require, 'pure.vault.md')
+  if ok and md.writesTaskDates(0) then
+    local dated = md.taskLine(line, state)
+    if dated then return dated end
+  end
+  return prefix .. '[' .. state .. ']' .. rest
+end
+
 --- Toggle the checkbox of the list item on the cursor line: [ ] -> [x] -> [ ].
 --- Obsidian's other states ([~] [!] [>] [-]) count as not done, so they go to
 --- [x]. A plain '- item' gets an empty box.
@@ -359,7 +371,7 @@ function M.toggleCheckbox()
   local prefix, state, rest = line:match('^(%s*[-*+]%s+)%[(.?)%](.*)$')
   local new_line
   if prefix then
-    new_line = prefix .. (state:match('[xX]') and '[ ]' or '[x]') .. rest
+    new_line = withState(line, prefix, state:match('[xX]') and ' ' or 'x', rest)
   else
     local bullet, text = line:match('^(%s*[-*+]%s+)(.*)$')
     if not bullet then return end
@@ -383,7 +395,7 @@ function M.cycleCheckbox()
     for i, s in ipairs(order) do
       if s == state then next_state = order[i % #order + 1] end
     end
-    new_line = prefix .. '[' .. next_state .. ']' .. rest
+    new_line = withState(line, prefix, next_state, rest)
   else
     local bullet, text = line:match('^(%s*[-*+]%s+)(.*)$')
     if not bullet then return end
@@ -419,7 +431,7 @@ function M.cycleCheckboxRange()
   for i, line in ipairs(lines) do
     local prefix, rest = line:match('^(%s*[-*+]%s+)%[.?%](.*)$')
     if prefix then
-      lines[i] = prefix .. '[' .. target .. ']' .. rest
+      lines[i] = withState(line, prefix, target, rest)
     else
       local bullet, text = line:match('^(%s*[-*+]%s+)(.*)$')
       if bullet then lines[i] = bullet .. '[' .. target .. '] ' .. text end
@@ -763,7 +775,7 @@ function M.openVaultNote(name)
     if not root then return end
     local rel = vault.note(name)
     if not rel then
-      vim.notify('Vault: no note named ' .. name .. ' in vim.g.pure_vault_notes', vim.log.levels.WARN)
+      vim.notify('Vault: no note named ' .. name .. ' in the notes of vim.g.pure_vaults', vim.log.levels.WARN)
       return
     end
     vim.cmd('edit ' .. vim.fn.fnameescape(root .. '/' .. rel))
