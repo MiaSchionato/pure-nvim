@@ -116,7 +116,7 @@ where to change them.
 | `vim.g.pure_daily_on_start` | off (the daily alone; older) | [zettelkasten](zettelkasten.md) |
 | `vim.g.pure_todoist_confirm` | `'all'` | [todoist](todoist.md) |
 | `vim.g.pure_todoist_archive` | off (`'archive/Todoist/'` in configs.lua) | [todoist](todoist.md) |
-| `vim.g.pure_todoist_archive_format` | `'md'` (`'org'` in configs.lua) | [todoist](todoist.md) |
+| `vim.g.pure_todoist_archive_format` | `'md'` | [todoist](todoist.md) |
 | `vim.g.pure_todoist_sync` | off (`{ interval = 10 }` in configs.lua) | [todoist](todoist.md) |
 | `vim.g.pure_todoist_fold` | `'subtasks'` | [todoist](todoist.md) |
 | `vim.g.pure_calendar_cell_width` | `25` (grid 197 columns) | [calendar](calendar.md) |

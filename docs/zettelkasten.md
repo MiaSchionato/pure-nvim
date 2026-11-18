@@ -40,8 +40,8 @@ and `archive/trash/`. In a read-only vault find, grep and open work; grow, compo
 delete say it is read-only. What is a format's own is in `pure/vault/org.lua` (org.nvim, `:ID:` links) and
 `pure/vault/md.lua`. A folder of `vim.g.pure_llm_private` named without a path is private in every vault.
 
-In this configuration the vault is an org vault (`g.pure_vaults.org` in `configs.lua`),
-the same folder as [org.md](org.md); until 2026-11-05 it was a Markdown vault.
+In this configuration the vault in use is a Markdown vault (`g.pure_vaults.md`, read by its Obsidian too),
+and the org vault ([org.md](org.md)) is kept read-only next to it (`g.pure_vaults.org`); it was the one in use from 2026-11-05 to 2026-11-18.
 The templates, periodic notes and trash below were made for the Markdown vault;
 with the org one their automatic parts are off (`pure_periodic_on_start = {}`,
 `pure_trash_cleanup = false`).

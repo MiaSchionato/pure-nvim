@@ -201,25 +201,26 @@ g.pure_links_complete = true
 -- tasks = 'tasks', journal = 'journal', compost = 'archive/compost', books = 'sources/books',
 -- quotes = 'sources/quotes', concepts = 'sources/concepts'; folders garden = 'garden/',
 -- sources = 'sources/', trash = 'archive/trash/'. A name left out keeps its default.
--- Changed: the org vault (it was the single setting g.pure_vault = '~/Flora' until 2026-11-18; a Markdown
--- vault until 2026-11-05). The Markdown note engine's automatic parts (templates, periodic notes, trash)
--- stay off below (pure_trash_cleanup, pure_periodic_on_start).
+-- obsidian (Markdown vaults): the vault's name in Obsidian and its headlinks state file, so a heading renamed
+-- here has its links fixed by Obsidian (:VaultFixLinks, or on quitting; pure/vault/obsidian.lua).
+-- Changed (2026-11-18): the Markdown vault ~/Flora is the one in use, the vault's Obsidian reads it; the org
+-- vault is kept read-only in ~/Flora.org (the folders were renamed that day: the Markdown vault was ~/Atlas,
+-- the org one ~/Flora, the single setting g.pure_vault). The Markdown note engine's automatic parts
+-- (templates, periodic notes, trash) stay off below (pure_trash_cleanup, pure_periodic_on_start).
 g.pure_vaults = {
-  org = {
+  md = {
     dir = '~/Flora',
+    format = 'md',
+    obsidian = { vault = 'Flora', state = 'files/config/headlinks.json' },
+  },
+  org = {
+    dir = '~/Flora.org',
     format = 'org',
-    notes = {
-      inbox    = 'inbox',
-      nursery  = 'garden/nursery',
-      tasks    = 'tasks',
-      books    = 'sources/books',
-      quotes   = 'sources/quotes',
-      concepts = 'sources/concepts',
-    },
+    readonly = true,
   },
 }
 -- The vault outside every vault's folder (a buffer that is no note, the dashboard). Default: the first by name.
-g.pure_vault_default = 'org'
+g.pure_vault_default = 'md'
 
 -- The folders the explore (<leader>e_), find (<leader>f_) and new file (<leader>n_) keys go to, by name
 -- (configs/functions.lua, dir and dirs). '~' is the home folder. The vault is g.pure_vaults above, not
@@ -392,8 +393,8 @@ g.pure_todoist_confirm = 'never'
 g.pure_todoist_archive = 'archive/Todoist/'
 
 -- Syntax of that archive: 'md' (tasks.md, history.md) or 'org' (tasks.org,
--- history.org). Default: 'md'. Changed: 'org', the vault's.
-g.pure_todoist_archive_format = 'org'
+-- history.org). Default: 'md'. Changed: 'md' again since 2026-11-18, the vault's ('org' while the vault was org).
+g.pure_todoist_archive_format = 'md'
 
 -- Write the tasks of each ```todoist block into its note as text, refreshed
 -- every `interval` minutes. false (default): drawn, not written.
