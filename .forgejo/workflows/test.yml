@@ -12,6 +12,8 @@ jobs:
     runs-on: linux
     steps:
       - uses: actions/checkout@v4
+      - name: Tools the configuration calls (ripgrep for the links of the notes)
+        run: apt-get update -qq && apt-get install -y -qq ripgrep >/dev/null && rg --version | head -1
       - name: Neovim nightly
         run: |
           arch=$(uname -m); [ "$arch" = aarch64 ] && arch=arm64
