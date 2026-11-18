@@ -81,7 +81,9 @@ vim.ui.input = function(_, cb) cb(answers.input) end
 vim.ui.select = function(items, _, cb)
   local pick = answers.select
   if type(pick) == 'function' then pick = pick(items) end
-  cb(pick)
+  local index
+  if pick ~= nil then for i, it in ipairs(items) do if it == pick then index = i break end end end
+  cb(pick, index)
 end
 
 -- Messages are collected (a test can look at them) instead of drawn.

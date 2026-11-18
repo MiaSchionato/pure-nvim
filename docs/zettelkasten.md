@@ -221,3 +221,36 @@ It never touches a note open in that Neovim, never runs in `--headless`
 Following, completing and renaming links, and backlinks, are in
 [notes.md](notes.md) (`pure/notes.lua`). A new note made from `[[Title]]`
 is named `Title.md` (`zettelkasten.noteId`).
+
+## A Markdown vault (`pure/vault/md.lua`)
+
+The `<leader>v` keys in a vault with `format = 'md'` work on the Markdown its Obsidian reads (the vault's
+`garden.js` and `capture.js` are the same commands there):
+
+- **The atom is a heading.** Its state is a tag on the line right under it (`#seed`, `#sprout`, `#plant`,
+  `#tree`, `#fruit`, `#compost`; other tags stay on that line), then `key:: value` properties, then the body.
+  An `id::` line under a linked heading is never changed or copied: it moves with its heading.
+- `<leader>vn` grow: a `#seed` of the inbox becomes a `#sprout` and moves to the nursery; a `#sprout` becomes a
+  `#plant` in a note of its own (`garden/<title>.md`); a plant becomes a tree in place.
+- `<leader>vc` compost (asks, No by default): a seed or sprout moves to `archive/compost.md`; a plant, tree or
+  fruit stays in its note, only `#compost`.
+- `<leader>vm` move: to the note of `sources/` its `type::` names, else one picked in the list.
+- A heading moved by these takes its links along: every `[[note#Heading]]` of the vault (embeds, `|text`
+  kept) is rewritten to its new note. A heading renamed by hand is the vault's Obsidian's (`headlinks.js`).
+- `<leader>vt` the state menu: on a heading the six garden states and "no state"; on a checkbox the six task
+  states.
+- **Tasks are checkboxes** of the Tasks plugin. In a note of a Markdown vault the checkbox keys (`<leader>x`,
+  the state menu, a selection) write its dates: done adds ` ✅ <today>`, cancelled ` ❌ <today>`, leaving them
+  takes the date away (before a ` ^block` id; `⏳ 📅 ➕ 🔁` untouched). The Todoist list and Markdown outside the
+  vaults keep only the box.
+- `<leader>vq` captures, in a floating draft (`:w` or `<C-c><C-c>` stores, `<C-c><C-k>` drops; a draft left
+  empty is dropped): `n` node (`type::` says where it goes: seed or none the inbox, sprout the nursery, plant /
+  tree / fruit a note of its own, compost the compost note, the name of a note of `sources/` that note; empty
+  properties are dropped, `created::` added), `t` task and `T` task + deadline (a checkbox in the tasks note:
+  `- [ ] title ➕ <today> ⏳ <scheduled> 📅 <deadline>`, dates in words: today, amanhã, domani, fri, +3d,
+  2026-11-20; a time goes in an indented `scheduled::` line, the body indented under the task), `l` link (the
+  clipboard's address, to the inbox), `j` journal (`journal.md`: `# year` / `## YYYY-MM Month` /
+  `### YYYY-MM-DD Weekday`, made when missing, the entry at the end of its day).
+- `<leader>vf` find: a note is its file name, its aliases those of the front matter. `<leader>vJ` today's
+  heading in the journal. `<leader>vr` rename, `<leader>vb` backlinks: `pure/notes.lua`. `<leader>vN` a new
+  note at the root. The agenda is org's only.
