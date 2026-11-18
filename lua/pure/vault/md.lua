@@ -175,12 +175,15 @@ local function writeNote(path, lines)
   end
 end
 
---- Append `block` at the end of the note `rel` (made when missing), one empty line before it.
-local function appendTo(rel, block)
+--- Append `block` at the end of the note `rel` (made when missing), one empty line before it; with `list`, a list
+--- item right after another one (or after the lines indented under it) joins that list, no empty line between.
+local function appendTo(rel, block, list)
   local path = root() .. '/' .. rel
   local lines = readNote(path)
   while #lines > 0 and vim.trim(lines[#lines]) == '' do table.remove(lines) end
-  if #lines > 0 then lines[#lines + 1] = '' end
+  local last = lines[#lines] or ''
+  local inList = list and (last:match('^%s*[-*+]%s') or last:match('^%s*%d+[.)]%s') or last:match('^%s+%S'))
+  if #lines > 0 and not inList then lines[#lines + 1] = '' end
   while #block > 0 and vim.trim(block[#block]) == '' do table.remove(block) end
   vim.list_extend(lines, block)
   writeNote(path, lines)
@@ -682,7 +685,7 @@ local function storeTask(lines, withDeadline)
   local out = { '- [ ] ' .. title .. ' ' .. table.concat(fields, ' ') }
   vim.list_extend(out, extra)
   for _, l in ipairs(body) do out[#out + 1] = '  ' .. l end
-  appendTo(V().note('tasks', 'md'), out)
+  appendTo(V().note('tasks', 'md'), out, true)
   return true
 end
 

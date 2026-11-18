@@ -288,6 +288,13 @@ T.test('capture task: a checkbox of the Tasks plugin, dates in words, a time on 
   T.eq(tasks[at + 1], '  scheduled:: ' .. tomorrow .. ' 10:00')
   T.eq(tasks[at + 2], '  Ask about the card.')
   T.ok(not has(tasks, '#todo'), 'no tag: tasks are checkboxes')
+  T.match(tasks[at - 1], '^  Notes of the task%.$', 'no empty line: the new task joins the list')
+end)
+
+T.test('capture task: into a note that ends in text, an empty line first', function()
+  T.write('tasks.md', { '# Tasks', 'Some text.' }, MD)
+  md.store('task', { '# After text', 'scheduled:: ' })
+  T.eq(read('tasks.md'), { '# Tasks', 'Some text.', '', '- [ ] After text ➕ ' .. os.date('%Y-%m-%d') })
 end)
 
 T.test('capture task: an empty scheduled is no date; a deadline must be filled; a date that cannot be read keeps it open', function()
