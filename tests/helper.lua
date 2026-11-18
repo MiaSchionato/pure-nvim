@@ -109,6 +109,8 @@ end
 
 function H.main()
   _G.T = H
+  -- What the configuration left for later (vim.schedule, as the insert mode keys) runs first.
+  vim.wait(200, function() return false end)
   local out = {}
   local ok, err = xpcall(dofile, debug.traceback, vim.env.PURE_TEST_SPEC)
   if not ok then
