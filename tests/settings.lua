@@ -3,8 +3,14 @@
 local home = vim.env.PURE_TEST_HOME
 local g = vim.g
 
-g.pure_vault = home .. '/vault-org'
-g.orgls_inbox = 'inbox.org'
+-- The two example vaults: org (the default) and Markdown.
+g.pure_vaults = {
+  org = { dir = home .. '/vault-org', format = 'org' },
+  md = { dir = home .. '/vault-md', format = 'md' },
+}
+g.pure_vault_default = 'org'
+g.pure_vault = nil
+g.orgls_inbox = nil
 g.pure_vault_notes = nil
 g.pure_llm_actions = home .. '/vault-org/ai/actions'
 g.pure_llm_personas = home .. '/vault-org/ai/personas'

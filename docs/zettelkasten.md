@@ -10,11 +10,37 @@ Asked for on the first start (Yes / Later / Never ask) and remembered in
 `stdpath('data')/obsidian_vault`, outside the repository. In order of
 precedence:
 
-1. `vim.g.pure_vault` in the config;
-2. the `OBSIDIAN_VAULT` environment variable;
-3. the saved answer.
+1. the Markdown vault of `vim.g.pure_vaults` (the entry with `format = 'md'`);
+2. `vim.g.pure_vault`, the older single-vault setting;
+3. the default vault of `vim.g.pure_vaults` (`vim.g.pure_vault_default`);
+4. the `OBSIDIAN_VAULT` environment variable;
+5. the saved answer.
 
-In this configuration it is an org vault (`g.pure_vault` in `configs.lua`),
+## Several vaults (`vim.g.pure_vaults`, `pure/vault.lua`)
+
+One entry per vault, in `configs.lua`:
+
+```lua
+g.pure_vaults = {
+  name = {
+    dir = '~/folder',
+    format = 'org',            -- or 'md'
+    notes = { inbox = 'inbox', nursery = 'garden/nursery' },  -- without extension
+    readonly = false,          -- true: nothing writes into it
+  },
+}
+g.pure_vault_default = 'name'  -- the vault outside every vault's folder
+```
+
+A command (`<leader>v_`, `<leader>o_`) works in the vault holding the current file, else in the default
+one. The notes are named without extension (the format adds `.org` or `.md`; a name ending in `/` is a
+folder) and a name left out keeps its default: `inbox`, `garden/nursery`, `tasks`, `journal`,
+`archive/compost`, `sources/books`, `sources/quotes`, `sources/concepts`, the folders `garden/`, `sources/`
+and `archive/trash/`. In a read-only vault find, grep and open work; grow, compost, move, capture, rename and
+delete say it is read-only. What is a format's own is in `pure/vault/org.lua` (org.nvim, `:ID:` links) and
+`pure/vault/md.lua`. A folder of `vim.g.pure_llm_private` named without a path is private in every vault.
+
+In this configuration the vault is an org vault (`g.pure_vaults.org` in `configs.lua`),
 the same folder as [org.md](org.md); until 2026-11-05 it was a Markdown vault.
 The templates, periodic notes and trash below were made for the Markdown vault;
 with the org one their automatic parts are off (`pure_periodic_on_start = {}`,

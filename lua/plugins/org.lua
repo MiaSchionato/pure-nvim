@@ -4,8 +4,9 @@
 -- is C:\doom\config\config.el; the vault layout is the vault's CLAUDE.md.
 vim.pack.add({ { src = 'https://github.com/xheisenbugx/org.nvim', name = 'org' } })
 
--- The vault folder: the one setting vim.g.pure_vault (configs.lua, loaded before this file).
-local vault = require('pure.vault').dir() or '~'
+-- The vault folder: the org vault of vim.g.pure_vaults (configs.lua, loaded before this file). org.nvim knows
+-- one org directory.
+local vault = require('pure.vault').dir('org') or '~'
 
 -- Task states, then the idea stages of the garden (SEED > SPROUT > PLANT > TREE,
 -- FRUIT, a tree that bore fruit (FLOWER until 2026-11-08); COMPOST is let go). Keys and logging marks as in Doom. A note can keep only
@@ -81,7 +82,7 @@ local TASK_TEMPLATE = '* TODO %?\nSCHEDULED: \n' .. CREATED
 local function link_target()
   local clip = vim.trim((vim.fn.getreg('+') or ''):match('[^\r\n]*') or '')
   answers.link = { url = ask('Link: ', clip), title = ask('Title: ') }
-  return require('pure.vault').inbox()
+  return require('pure.vault').inbox('org')
 end
 
 local function link_template()
@@ -158,14 +159,14 @@ end
 
 require('org').setup({
   org_directory = vault,
-  default_notes_file = vault .. '/' .. require('pure.vault').inbox(),
+  default_notes_file = vault .. '/' .. require('pure.vault').inbox('org'),
 
   -- org.nvim's keys live under <leader>m (its default is <leader>o, the Toggles group); Manim is <leader>M.
   mappings = { prefix = '<leader>m' },
 
   -- The agenda reads tasks, the inbox (it may hold dated things) and every
   -- file of projects/, like `my/garden-agenda-files` in Doom.
-  agenda_files = { vault .. '/tasks.org', vault .. '/' .. require('pure.vault').inbox(), vault .. '/projects/**/*.org',
+  agenda_files = { vault .. '/tasks.org', vault .. '/' .. require('pure.vault').inbox('org'), vault .. '/projects/**/*.org',
     vault .. '/garden/**/*.org' }, -- the notes of the garden too (Mia, 2026-11-09), subfolders included:
     -- the personal projects moved from projects/ to garden/<Name>/ (Mia, 2026-11-11)
 
@@ -221,7 +222,7 @@ require('org').setup({
       n = {
         description = 'Node',
         template = node_template,
-        target = require('pure.vault').inbox(),
+        target = require('pure.vault').inbox('org'),
         route_node = true,
         empty_lines = 1,
       },
@@ -312,7 +313,7 @@ end
 -- says "Updated N dynamic block(s)" every time). Notes outside the vault are left alone, as in Emacs.
 -- (Mia, 2026-11-08.)
 local function inVaultFile(path)
-  local dir = require('pure.vault').dir()
+  local dir = require('pure.vault').dir('org')
   if not dir or path == '' then return false end
   local p, d = vim.fs.normalize(path), vim.fs.normalize(dir)
   if vim.fn.has('win32') == 1 then p, d = p:lower(), d:lower() end

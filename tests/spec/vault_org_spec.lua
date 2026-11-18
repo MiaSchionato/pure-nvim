@@ -22,18 +22,23 @@ T.test('notes: defaults, inbox, and a setting that overrides one', function()
   T.eq(vault.note('tasks'), 'tasks.org')
   T.eq(vault.note('books'), 'sources/books.org')
   T.eq(vault.note('nope'), nil)
-  vim.g.pure_vault_notes = { nursery = 'garden/other.org' }
+  local saved = vim.g.pure_vaults
+  local v = vim.deepcopy(saved)
+  v.org.notes = { nursery = 'garden/other' }
+  vim.g.pure_vaults = v
   T.eq(vault.nursery(), 'garden/other.org')
   T.eq(vault.note('tasks'), 'tasks.org', 'a name left out keeps its default')
-  vim.g.pure_vault_notes = nil
+  vim.g.pure_vaults = saved
 end)
 
 T.test('path: nil with a warning when the folder is missing', function()
-  local saved = vim.g.pure_vault
-  vim.g.pure_vault = T.vault('nowhere')
+  local saved = vim.g.pure_vaults
+  local v = vim.deepcopy(saved)
+  v.org.dir = T.vault('nowhere')
+  vim.g.pure_vaults = v
   T.eq(vault.path(), nil)
   T.match(T.lastMessage(), 'folder not found')
-  vim.g.pure_vault = saved
+  vim.g.pure_vaults = saved
   T.eq(vault.path(), vim.fs.normalize(T.vault()))
 end)
 

@@ -189,37 +189,40 @@ g.pure_links_complete = true
 -- -----------------------------------------------------------------------------
 --  Vault and notes  (pure/zettelkasten.lua, pure/notes.lua, <leader>v)
 -- -----------------------------------------------------------------------------
--- The vault. Unset (default): asked for on a fresh install and remembered in
--- stdpath('data'); :ZettelVault changes it. Setting it here overrides that.
--- Changed: the org vault; pure/vault.lua, lua/plugins/org.lua and lsp/orgls.lua
--- read this one setting. It was a Markdown vault until 2026-11-05.
--- The LLM tools, backlinks, vault sync, the Todoist archive and the pickers
--- use it. The Markdown note engine (pure/zettelkasten.lua: templates,
--- periodic notes, trash) was made for the Markdown vault; its automatic parts are off
--- below (pure_trash_cleanup, pure_periodic_on_start).
-g.pure_vault = '~/Flora'
-
--- The note of the vault where new things land: seeds, links, sources with no type (seedbed.org from
--- 2026-11-08 to 2026-11-09). Read by pure/vault.lua (the captures, the seeds, grow), lsp/orgls.lua and <leader>oi.
--- Default (lsp/orgls.lua): 'inbox.org'.
-g.orgls_inbox = 'inbox.org'
-
--- The notes of the vault one opens often, by name, relative to the vault. <leader>o_ opens them
--- (configs/functions.lua, openVaultNote; the inbox is g.orgls_inbox above). nursery is also where
--- grow (<leader>vn, pure/vault.lua) moves a sprout. A name left out keeps its default.
--- Default (pure/vault.lua): nursery = 'garden/nursery.org', tasks = 'tasks.org',
--- books = 'sources/books.org', quotes = 'sources/quotes.org', concepts = 'sources/concepts.org'.
--- Changed: nothing (written here so the paths are in one place).
-g.pure_vault_notes = {
-  nursery  = 'garden/nursery.org',
-  tasks    = 'tasks.org',
-  books    = 'sources/books.org',
-  quotes   = 'sources/quotes.org',
-  concepts = 'sources/concepts.org',
+-- The vaults: one entry each (pure/vault.lua). dir: the folder; format: 'org' or 'md' (what the notes are
+-- written in); notes: the notes and folders the commands use, by name, from the folder and without the
+-- extension (the format adds .org / .md; a name ending in '/' is a folder); readonly: true and nothing
+-- writes into it. The vault of a command is the one holding the current file, else g.pure_vault_default.
+-- <leader>v, <leader>o_ (the notes by name), lua/plugins/org.lua and lsp/orgls.lua (the org vault), the
+-- Markdown links and engine (pure/notes.lua, pure/zettelkasten.lua: the md vault), the LLM tools, vault
+-- sync and the Todoist archive read it. Unset: the older one-vault settings g.pure_vault (an org vault),
+-- g.orgls_inbox and g.pure_vault_notes; neither: the folder is asked on a fresh install (:ZettelVault).
+-- Defaults of the notes (pure/vault.lua NOTE_DEFAULTS): inbox = 'inbox', nursery = 'garden/nursery',
+-- tasks = 'tasks', journal = 'journal', compost = 'archive/compost', books = 'sources/books',
+-- quotes = 'sources/quotes', concepts = 'sources/concepts'; folders garden = 'garden/',
+-- sources = 'sources/', trash = 'archive/trash/'. A name left out keeps its default.
+-- Changed: the org vault (it was the single setting g.pure_vault = '~/Flora' until 2026-11-18; a Markdown
+-- vault until 2026-11-05). The Markdown note engine's automatic parts (templates, periodic notes, trash)
+-- stay off below (pure_trash_cleanup, pure_periodic_on_start).
+g.pure_vaults = {
+  org = {
+    dir = '~/Flora',
+    format = 'org',
+    notes = {
+      inbox    = 'inbox',
+      nursery  = 'garden/nursery',
+      tasks    = 'tasks',
+      books    = 'sources/books',
+      quotes   = 'sources/quotes',
+      concepts = 'sources/concepts',
+    },
+  },
 }
+-- The vault outside every vault's folder (a buffer that is no note, the dashboard). Default: the first by name.
+g.pure_vault_default = 'org'
 
 -- The folders the explore (<leader>e_), find (<leader>f_) and new file (<leader>n_) keys go to, by name
--- (configs/functions.lua, dir and dirs). '~' is the home folder. The vault is g.pure_vault above, not
+-- (configs/functions.lua, dir and dirs). '~' is the home folder. The vault is g.pure_vaults above, not
 -- here. A name left out keeps its default; a new name is there for keymaps.lua as dirs.<name>.
 -- Default (configs/functions.lua): home = '~', config = '~/.config', nvim = '~/.config/nvim',
 -- projects = '~/Projects'. Changed: nothing (written here so the paths are in one place).

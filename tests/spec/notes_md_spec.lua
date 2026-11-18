@@ -1,6 +1,5 @@
 -- pure/notes.lua, the links between Markdown notes (Obsidian's rules), on tests/fixtures/vault-md.
--- notes.lua finds the vault through pure/zettelkasten.lua (vim.g.pure_vault): here the Markdown fixture.
-vim.g.pure_vault = T.vault(nil, 'vault-md')
+-- notes.lua finds the vault through pure/zettelkasten.lua: the Markdown vault of vim.g.pure_vaults.
 local notes = require('pure.notes')
 local MD = 'vault-md'
 

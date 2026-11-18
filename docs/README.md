@@ -103,7 +103,9 @@ where to change them.
 
 | Setting | Default | Page |
 |---|---|---|
-| `vim.g.pure_vault` | asked on first start (set in configs.lua; also read by `pure/vault.lua`, `plugins/org.lua`, `lsp/orgls.lua`) | [zettelkasten](zettelkasten.md) |
+| `vim.g.pure_vaults` | none (one entry per vault: `dir`, `format` org or md, `notes` by name without extension, `readonly`; read by `pure/vault.lua` and through it `plugins/org.lua`, `lsp/orgls.lua`, `pure/zettelkasten.lua`, `pure/notes.lua`) | [zettelkasten](zettelkasten.md) |
+| `vim.g.pure_vault_default` | the first by name (the vault used outside every vault's folder) | [zettelkasten](zettelkasten.md) |
+| `vim.g.pure_vault` | the older single-vault setting (an org vault), used when `pure_vaults` is unset; else asked on first start | [zettelkasten](zettelkasten.md) |
 | `vim.g.pure_templates` | `'Templates'` (`'archive/templates'` in configs.lua) | [zettelkasten](zettelkasten.md) |
 | `vim.g.pure_folder_templates` | `{}` | [notes](notes.md) |
 | `vim.g.pure_outside_folders` | `{}` (name = folder outside the vault, or `{ dir, cipher, idle, fido2 }` for an encrypted one) | [notes](notes.md) |

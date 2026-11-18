@@ -87,7 +87,7 @@ end
 -- -----------------------------------------------------------------------------
 local function allEntries()
   local vault = require('pure.vault')
-  local root = vault.path()
+  local root = vault.path('org')
   if not root then return {} end
   return vault._find.entries(root)
 end
@@ -249,9 +249,9 @@ end
 
 --- A SEED called `title` at the end of the inbox, without opening it: (file, lnum).
 local function createSeed(title)
-  local root = require('pure.vault').path()
+  local root = require('pure.vault').path('org')
   if not root then return nil end
-  local inbox = root .. '/' .. require('pure.vault').inbox()
+  local inbox = root .. '/' .. require('pure.vault').inbox('org')
   local buf = vim.fn.bufnr(inbox)
   local lines
   if buf ~= -1 and api.nvim_buf_is_loaded(buf) then
@@ -1032,7 +1032,7 @@ end
 -- -----------------------------------------------------------------------------
 function M.pick()
   local vault = require('pure.vault')
-  local root = vault.path()
+  local root = vault.path('org')
   if not root then return end
   local buf, win = api.nvim_get_current_buf(), api.nvim_get_current_win()
   local cursor = api.nvim_win_get_cursor(win)

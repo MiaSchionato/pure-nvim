@@ -119,3 +119,11 @@ T.test('the statusline draws for a note, a scratch buffer and a terminal-less wi
   T.eq(type(sl.MyStatusLine()), 'string')
   T.eq(type(require('configs.functions').MyTabline()), 'string')
 end)
+
+T.test('private: a folder named without a path is private in every vault', function()
+  vim.fn.mkdir(T.vault('secret', 'vault-md'), 'p')
+  withPrivate({ 'secret' }, function()
+    T.eq(private.isPrivate(T.vault('secret/x.org')), true, 'in the org vault')
+    T.eq(private.isPrivate(T.vault('secret/x.md', 'vault-md')), true, 'in the Markdown vault')
+  end)
+end)

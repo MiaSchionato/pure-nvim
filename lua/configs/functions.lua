@@ -763,7 +763,7 @@ function M.openVaultNote(name)
     if not root then return end
     local rel = vault.note(name)
     if not rel then
-      vim.notify('Vault: no note named ' .. name .. ' in vim.g.pure_vault_notes', vim.log.levels.WARN)
+      vim.notify('Vault: no note named ' .. name .. ' in the notes of vim.g.pure_vaults', vim.log.levels.WARN)
       return
     end
     vim.cmd('edit ' .. vim.fn.fnameescape(root .. '/' .. rel))

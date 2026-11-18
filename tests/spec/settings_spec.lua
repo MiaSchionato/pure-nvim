@@ -84,13 +84,18 @@ end)
 -- ---------------------------------------------------------------------------
 --  pure/zettelkasten.lua: where the Markdown engine finds the vault, its dates
 -- ---------------------------------------------------------------------------
-T.test('zettelkasten: the vault is vim.g.pure_vault while it is set and exists', function()
+T.test('zettelkasten: the vault is the Markdown vault of the settings, else the older setting, else the default', function()
   local z = require('pure.zettelkasten')
-  T.eq(z.vaultPath(), vim.fs.normalize(T.vault()))
-  local saved = vim.g.pure_vault
+  T.eq(z.vaultPath(), vim.fs.normalize(T.vault(nil, 'vault-md')))
+  local saved = vim.g.pure_vaults
+  vim.g.pure_vaults = { org = saved.org }
+  T.eq(z.vaultPath(), vim.fs.normalize(T.vault()), 'no md vault: the default one')
+  vim.g.pure_vault = T.vault(nil, 'vault-md')
+  T.eq(z.vaultPath(), vim.fs.normalize(T.vault(nil, 'vault-md')), 'the older setting before the default')
   vim.g.pure_vault = T.vault('nowhere')
   T.eq(z.vaultPath(), nil, 'a folder that does not exist is no vault')
-  vim.g.pure_vault = saved
+  vim.g.pure_vault = nil
+  vim.g.pure_vaults = saved
 end)
 
 T.test('zettelkasten: Moment.js formats of the templates, in English and Portuguese', function()

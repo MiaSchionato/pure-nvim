@@ -80,8 +80,8 @@ See [llm.md](llm.md).
 ## `<leader>e` – Explore
 
 The folders of `<leader>e_`, `<leader>f_` and `<leader>n_` (home, `~/.config`, the nvim config, Projects)
-are `vim.g.pure_dirs` in `configs.lua` (defaults in `configs/functions.lua`, `dir`); the vault is
-`vim.g.pure_vault`.
+are `vim.g.pure_dirs` in `configs.lua` (defaults in `configs/functions.lua`, `dir`); the vault is the
+current one of `vim.g.pure_vaults`.
 
 | Key | Mode | What |
 |---|---|---|
@@ -176,9 +176,9 @@ See [manim.md](manim.md).
 
 ## `<leader>o` – Open
 
-The vault's notes below open by name (`configs/functions.lua` openVaultNote): the inbox is
-`vim.g.orgls_inbox`, the others `vim.g.pure_vault_notes` in `configs.lua` (defaults in `pure/vault.lua`);
-the paths in the table are the defaults.
+The vault's notes below open by name (`configs/functions.lua` openVaultNote): the `notes` of the vault's
+entry in `vim.g.pure_vaults` (`configs.lua`; defaults in `pure/vault.lua`, without extension: the vault's
+format adds it); the paths in the table are the defaults of an org vault.
 
 | Key | Mode | What |
 |---|---|---|
