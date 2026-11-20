@@ -227,6 +227,12 @@ is named `Title.md` (`zettelkasten.noteId`).
 The `<leader>v` keys in a vault with `format = 'md'` work on the Markdown its Obsidian reads (the vault's
 `garden.js` and `capture.js` are the same commands there):
 
+- **A seed is a line** (since 2026-11-20): one list item at the end of `inbox.md`, date and time first, its tags
+  inline, its body (if any) a paragraph of its own: an empty line, then the lines indented with a tab. A block id
+  `^xxxxxx` ends the first line only when something links to it (the captures add none):
+  `- 2026-11-20 14:05 The idea #tag1 #tag2`. A captured note is `garden/<Title>.md` with YAML properties
+  (`tags:` its state and the title's `#tags`, `created: YYYY-MM-DD HH:mm`). The captures below write these;
+  grow, compost and move still work on the older shape:
 - **The atom is a heading.** Its state is a tag on the line right under it (`#seed`, `#sprout`, `#plant`,
   `#tree`, `#fruit`, `#compost`; other tags stay on that line), then `key:: value` properties, then the body.
   An `id::` line under a linked heading is never changed or copied: it moves with its heading.
@@ -244,12 +250,14 @@ The `<leader>v` keys in a vault with `format = 'md'` work on the Markdown its Ob
   takes the date away (before a ` ^block` id; `⏳ 📅 ➕ 🔁` untouched). The Todoist list and Markdown outside the
   vaults keep only the box.
 - `<leader>vq` captures, in a floating draft (`:w` or `<C-c><C-c>` stores, `<C-c><C-k>` drops; a draft left
-  empty is dropped): `n` node (`type::` says where it goes: seed or none the inbox, sprout the nursery, plant /
-  tree / fruit a note of its own, compost the compost note, the name of a note of `sources/` that note; empty
-  properties are dropped, `created::` added), `t` task and `T` task + deadline (a checkbox in the tasks note:
+  empty is dropped): `n` node (`type::` says where it goes: seed or none a seed line in the inbox (properties
+  filled in go into its body as `key: value` lines), sprout / plant / tree / fruit a note of its own
+  `garden/<Title>.md` (` 2`, ` 3`... when the name is taken; filled properties become YAML properties),
+  compost a seed line in the compost note, the name of a note of `sources/` that note (still a heading with
+  `key::` lines and `created::`); empty properties are dropped), `t` task and `T` task + deadline (a checkbox in the tasks note:
   `- [ ] title ➕ <today> ⏳ <scheduled> 📅 <deadline>`, dates in words: today, amanhã, domani, fri, +3d,
   2026-11-20; a time goes in an indented `scheduled::` line, the body indented under the task), `l` link (the
-  clipboard's address, to the inbox), `j` journal (`journal.md`: `# year` / `## YYYY-MM Month` /
+  clipboard's address, a seed line in the inbox), `j` journal (`journal.md`: `# year` / `## YYYY-MM Month` /
   `### YYYY-MM-DD Weekday`, made when missing, the entry at the end of its day).
 - `<leader>vf` find: a note is its file name, its aliases those of the front matter. `<leader>vJ` today's
   heading in the journal. `<leader>vr` rename, `<leader>vb` backlinks: `pure/notes.lua`. `<leader>vN` a new

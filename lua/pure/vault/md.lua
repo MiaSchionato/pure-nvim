@@ -3,9 +3,22 @@
 -- =============================================================================
 --  The same garden as the org vault (pure/vault/org.lua), in the Markdown the
 --  vault's Obsidian reads (files/config/scripts/garden.js and capture.js there
---  are the same commands):
+--  are the same commands).
 --
---    # The idea                  the atom is a heading
+--  A seed is one list line at the end of the inbox (since 2026-11-20), what the
+--  captures write: its date first, its tags inline, its body a paragraph of its
+--  own indented under it with a tab. A block id ^xxxxxx ends the first line
+--  only when something links to it (the captures add none):
+--
+--    - 2026-11-20 14:05 The idea #Devaneios
+--
+--    	The body.
+--
+--  A captured note is garden/<Title>.md with YAML properties (tags: its state,
+--  created:). Grow, compost and move still work on the older shape, where the
+--  atom is a heading:
+--
+--    # The idea                 the atom is a heading
 --    #seed #Devaneios            its state: a tag on the line right under it
 --    created:: 2026-11-18 14:05  its properties: key:: value lines
 --    id:: 3f9a2c                 the id a linked heading carries (never changed,
@@ -485,17 +498,30 @@ function B.parse(path)
   return info
 end
 
+--- A seed: one list line, "- YYYY-MM-DD HH:mm title" (its #tags inline, in the title), and its body, when there
+--- is one, as a paragraph of its own: an empty line, then every line indented with a tab (the empty line lets a
+--- block id at the end of the first line point at the whole item in Obsidian).
+function B.seedLine(title, body)
+  local out = { '- ' .. stamp() .. ' ' .. vim.trim(title) }
+  if body and #body > 0 then
+    out[#out + 1] = ''
+    for _, l in ipairs(body) do out[#out + 1] = vim.trim(l) == '' and '' or '\t' .. l end
+  end
+  return out
+end
+
 --- A new seed called `title` at the end of the inbox, then open it at the seed.
 function B.newTitle(title)
   local r = V().path('md')
   if not r then return end
   local inbox = V().inbox('md')
-  appendTo(inbox, { '# ' .. title, '#seed', 'created:: ' .. stamp() })
+  local line = B.seedLine(title)[1]
+  appendTo(inbox, { line }, true)
   vim.cmd('edit ' .. vim.fn.fnameescape(r .. '/' .. inbox))
   vim.cmd('silent! checktime')
   local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
   for i = #lines, 1, -1 do
-    if lines[i] == '# ' .. title then pcall(vim.api.nvim_win_set_cursor, 0, { i, 0 }) break end
+    if lines[i] == line then pcall(vim.api.nvim_win_set_cursor, 0, { i, #line - 1 }) break end
   end
 end
 B.ext = 'md'
@@ -634,34 +660,77 @@ local function entry(title, tag, props, body)
   return out
 end
 
+--- A YAML value as it may be written bare, else in double quotes.
+local function yamlValue(v)
+  if v:match('^%w[%w %-_./]*$') and not v:match('%s$') then return v end
+  return '"' .. v:gsub('\\', '\\\\'):gsub('"', '\\"') .. '"'
+end
+
+--- A new note of the garden folder named after `title` ("<Title>.md"; " 2", " 3"... when the name is taken).
+local function gardenNote(title)
+  local base = vim.trim((title:gsub('[\\/:*?"<>|#^%[%]]', ' '):gsub('%s+', ' ')))
+  if base == '' then base = os.date('%Y%m%d%H%M%S') end
+  local garden = V().note('garden', 'md')
+  local rel, n = garden .. base .. '.md', 1
+  while vim.uv.fs_stat(root() .. '/' .. rel) do
+    n = n + 1
+    rel = ('%s%s %d.md'):format(garden, base, n)
+  end
+  return rel
+end
+
+--- A captured note: its YAML properties (tags: the state, then the #tags written in the title; created:; the
+--- other properties that are not empty), then the body. Also the title without its #tags (the file's name).
+function B.noteLines(title, state, props, body)
+  local tags = { state }
+  local name = (' ' .. title):gsub('%s#([^%s#]+)', function(t) tags[#tags + 1] = t return '' end)
+  local out = { '---', 'tags:' }
+  for _, t in ipairs(tags) do out[#out + 1] = '  - ' .. yamlValue(t) end
+  out[#out + 1] = 'created: ' .. stamp()
+  for _, p in ipairs(props) do
+    if p[2] ~= '' then out[#out + 1] = p[1] .. ': ' .. yamlValue(p[2]) end
+  end
+  out[#out + 1] = '---'
+  vim.list_extend(out, body)
+  return out, vim.trim(name)
+end
+
 local function storeNode(lines)
   local title, props, body = parseDraft(lines)
   local type = prop(props, 'type') or ''
   local key = type:lower()
-  local function list(withType)
-    local out = {}
-    if withType then out[1] = { 'type', type } end
-    for _, p in ipairs(props) do if p[1] ~= 'type' then out[#out + 1] = p end end
-    out[#out + 1] = { 'created', stamp() }
-    return out
+  local others = {}
+  for _, p in ipairs(props) do if p[1] ~= 'type' and p[2] ~= '' then others[#others + 1] = p end end
+  -- A seed has no properties: the ones filled in go into its body, one "key: value" line each.
+  local function seed(withType)
+    local extra = {}
+    if withType then extra[1] = 'type: ' .. type end
+    for _, p in ipairs(others) do extra[#extra + 1] = p[1] .. ': ' .. p[2] end
+    if #extra > 0 and #body > 0 then extra[#extra + 1] = '' end
+    return B.seedLine(title, vim.list_extend(extra, body))
   end
   local garden = GARDEN_TYPES[key]
   if garden then
     local state, place = garden[1], garden[2]
-    local block = entry(title, state, list(false), body)
-    if place == 'inbox' then return appendTo(V().inbox('md'), block) end
-    if place == 'nursery' then return appendTo(V().nursery('md'), block) end
-    if place == 'compost' then return appendTo(V().note('compost', 'md'), block) end
-    local rel = ownNote(title)
-    appendTo(rel, block)
+    if place == 'inbox' then return appendTo(V().inbox('md'), seed(false), true) end
+    if place == 'compost' then return appendTo(V().note('compost', 'md'), seed(false), true) end
+    -- sprout, plant, tree, fruit: a note of its own (the nursery lists the sprouts by their tag).
+    local note, name = B.noteLines(title, state, others, body)
+    local rel = gardenNote(name)
+    writeNote(root() .. '/' .. rel, note)
     return vim.notify(state .. ': a note of its own, ' .. rel)
   end
   local source = key ~= '' and B.sourceFile(type) or nil
-  if source then return appendTo(source, entry(title, nil, list(true), body)) end
+  if source then
+    local list = { { 'type', type } }
+    vim.list_extend(list, others)
+    list[#list + 1] = { 'created', stamp() }
+    return appendTo(source, entry(title, nil, list, body))
+  end
   if key ~= '' then
     warn(('no note %s%s.md: the entry goes to the inbox as a seed'):format(V().note('sources', 'md'), key))
   end
-  appendTo(V().inbox('md'), entry(title, 'seed', list(key ~= ''), body))
+  appendTo(V().inbox('md'), seed(key ~= ''), true)
 end
 
 --- A task: a checkbox of the Tasks plugin in the tasks note, "- [ ] title ➕ created ⏳ scheduled 📅 due"; a
@@ -699,7 +768,7 @@ local function storeLink(lines)
   local title, _, body = parseDraft(lines)
   -- An address with spaces works only inside < >.
   title = title:gsub('%]%(([^<)][^)]*%s[^)]*)%)', '](<%1>)')
-  appendTo(V().inbox('md'), entry(title, nil, { { 'created', stamp() } }, body))
+  appendTo(V().inbox('md'), B.seedLine(title, body), true)
 end
 
 --- The journal: # YYYY / ## YYYY-MM Month / ### YYYY-MM-DD Weekday / the entry (#### HH:mm text and its lines),
